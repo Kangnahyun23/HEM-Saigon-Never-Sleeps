@@ -11,7 +11,7 @@ test('game khởi động, dựng khu phố và render không lỗi', async ({ p
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() === 'error' && !/fonts\.(googleapis|gstatic)/.test(m.location().url)) errors.push(m.text());
   });
 
   await page.goto('/');
@@ -23,7 +23,7 @@ test('game khởi động, dựng khu phố và render không lỗi', async ({ p
   expect(stats.colliders).toBeGreaterThan(1000);
   test.info().annotations.push({ type: 'stats', description: JSON.stringify(stats) });
 
-  await expect(page.locator('#hud h1')).toHaveText('HẺM');
+  await expect(page.locator('.hud-location .brand')).toHaveText('HẺM');
   await page.screenshot({ path: 'tests/e2e/__screenshots__/start.png' });
   expect(errors).toEqual([]);
 });

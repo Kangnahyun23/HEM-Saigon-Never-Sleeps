@@ -1,12 +1,13 @@
 import * as THREE from 'three/webgpu';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { FixedStepAccumulator } from '@/core/fixedStep';
+import { Input } from '@/core/input';
+import { Game } from '@/game/game';
 import { createPhysics } from '@/physics/physics';
 import { createRenderer } from '@/render/renderer';
 import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { Hud } from '@/ui/hud';
 import type { DebugInfo } from '@/debug';
+
 
 async function main(): Promise<void> {
   const app = document.getElementById('app') as HTMLElement;
@@ -16,19 +17,12 @@ async function main(): Promise<void> {
   const [{ renderer, backend }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2500);
+  const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2500);
   const env = await createEnvironment(scene, renderer);
   const city = buildCity(scene, physics);
-  const { spawn } = city.layout;
-
-  camera.position.set(spawn.x + 30, 25, spawn.z + 30);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(spawn.x, 2, spawn.z);
-  controls.enableDamping = true;
-  controls.update();
-
+  const input = new Input(window, renderer.domElement);
   const hud = new Hud(hudRoot, backend);
-  const stepper = new FixedStepAccumulator(1 / 60, 5);
+  const game = new Game(scene, camera, physics, city, input, hud, env);
   const timer = new THREE.Timer();
 
   const debug: DebugInfo = {
@@ -38,12 +32,21 @@ async function main(): Promise<void> {
     physicsSteps: 0,
     stats: { ...city.stats, lots: city.layout.lots.length },
     setCamera(px, py, pz, tx, ty, tz) {
+      game.freeCamera = true;
       camera.position.set(px, py, pz);
-      controls.target.set(tx, ty, tz);
-      controls.update();
+      camera.lookAt(tx, ty, tz);
     },
   };
   debug.layout = city.layout;
+  debug.game = game;
+  /** Chạy nhanh logic game (không render) — cho test e2e trên máy không GPU. */
+  debug.simulate = (seconds: number) => {
+    for (let i = 0; i < Math.round(seconds * 60); i++) {
+      game.update(1 / 60);
+      input.endFrame();
+    }
+  };
+  debug.input = input;
   window.__HEM__ = debug;
 
   window.addEventListener('resize', () => {
@@ -54,15 +57,13 @@ async function main(): Promise<void> {
 
   renderer.setAnimationLoop((time) => {
     timer.update(time);
-    const dt = timer.getDelta();
-    const steps = stepper.advance(dt);
-    for (let i = 0; i < steps; i++) physics.step();
-    debug.physicsSteps += steps;
-    controls.update();
-    env.update(controls.target);
+    const dt = Math.min(timer.getDelta(), 0.1);
+    game.update(dt);
     renderer.render(scene, camera);
     hud.update(dt);
+    input.endFrame();
     debug.frames++;
+    debug.physicsSteps = game.physicsSteps;
   });
 
   loading.classList.add('done');
