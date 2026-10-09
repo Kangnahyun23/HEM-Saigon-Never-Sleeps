@@ -7,7 +7,11 @@ declare global {
   }
 }
 
+test.use({ viewport: { width: 960, height: 540 } });
+
 test('game khởi động, dựng khu phố và render không lỗi', async ({ page }) => {
+  // Máy CI không có GPU: mỗi khung hình render bằng CPU mất vài giây.
+  test.setTimeout(300_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {

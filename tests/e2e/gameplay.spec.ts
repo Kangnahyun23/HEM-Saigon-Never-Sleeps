@@ -73,15 +73,25 @@ test('đi bộ, lên xe, chạy xe, cua, phanh, xuống xe', async ({ page }) =>
   await nextFrames(page);
   await page.screenshot({ path: 'tests/e2e/__screenshots__/play-4-lean.png' });
 
-  // Phanh tới khi dừng rồi xuống xe.
-  await page.evaluate(() => ((window.__HEM__!.game as G).autopilot = { throttle: -1, steer: 0 }));
-  for (let i = 0; i < 10 && Math.abs((await game(page)).speed) > 2; i++) await simulate(page, 0.5);
-  await page.evaluate(() => ((window.__HEM__!.game as G).autopilot = { throttle: 0, steer: 0 }));
-  await simulate(page, 0.5);
-  await page.keyboard.press('f');
-  await nextFrames(page, 1);
-  await simulate(page, 0.5);
-  expect((await game(page)).mode).toBe('foot');
+  // Phanh tới khi dừng hẳn (không để xe lùi), rồi nhấn F xuống xe.
+  // Mọi thao tác chạy trong cùng một lệnh evaluate để khung hình render thật (chậm trên CI) không chen vào giữa.
+  const stopped = await page.evaluate(() => {
+    const g = window.__HEM__!.game as G;
+    const sim = window.__HEM__!.simulate as (n: number) => void;
+    for (let i = 0; i < 40; i++) {
+      const v = g.riding ? g.riding.phys.speed : 0;
+      g.autopilot = v > 0.8 ? { throttle: -1, steer: 0, handbrake: false } : { throttle: 0, steer: 0, handbrake: true };
+      sim(0.2);
+    }
+    g.autopilot = { throttle: 0, steer: 0, handbrake: true };
+    const input = window.__HEM__!.input as { setKey(c: string, d: boolean): void };
+    input.setKey('KeyF', true);
+    sim(1 / 60);
+    input.setKey('KeyF', false);
+    sim(0.5);
+    return g.mode;
+  });
+  expect(stopped).toBe('foot');
   await nextFrames(page);
   await page.screenshot({ path: 'tests/e2e/__screenshots__/play-5-dismounted.png' });
 });
