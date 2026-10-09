@@ -344,6 +344,11 @@ export class Game {
     }
     this.env.update(this.tmp);
 
+    // Bản đồ nhỏ xoay theo camera.
+    const look = this.camera.forward();
+    const yaw = this.riding ? this.riding.phys.heading() : this.character.yaw;
+    this.hud.minimap?.update(dt, this.tmp.x, this.tmp.z, look.x, look.z, yaw, this.mode === 'ride');
+
     // Địa điểm trên HUD (4 lần/giây là đủ).
     this.locateTimer -= dt;
     if (this.locateTimer <= 0) {

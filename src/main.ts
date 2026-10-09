@@ -22,6 +22,7 @@ async function main(): Promise<void> {
   const city = buildCity(scene, physics);
   const input = new Input(window, renderer.domElement);
   const hud = new Hud(hudRoot, backend);
+  hud.createMinimap(city.layout);
   // ?gio=21 để vào game lúc 21 giờ (thử cảnh đêm).
   const gio = new URLSearchParams(location.search).get('gio');
   const startHour = gio === null ? NaN : Number(gio);
