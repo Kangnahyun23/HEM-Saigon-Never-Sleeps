@@ -4,6 +4,8 @@ export interface DebugInfo {
   backend: string;
   frames: number;
   physicsSteps: number;
+  /** Dừng logic game theo thời gian thực (vẫn render); test e2e bật lên rồi tự chạy bằng `simulate` cho tất định. */
+  paused: boolean;
   stats: Record<string, number>;
   /** Đặt camera tự do (dùng chụp ảnh kiểm tra). */
   setCamera(px: number, py: number, pz: number, tx: number, ty: number, tz: number): void;

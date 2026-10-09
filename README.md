@@ -9,12 +9,17 @@ bị cuốn vào vòng nợ tín dụng đen, lách xe máy qua phố đông và
 ![Chợ Trung Tâm nhìn từ mái nhà](docs/screenshots/m1-cho-trung-tam.png)
 
 ## Chạy thử
-Yêu cầu Node ≥ 22.12 và npm ≥ 11 (`npm i -g npm@11`).
+**Chơi ngay, không cần cài gì:** https://kangnahyun23.github.io/HEM-Saigon-Never-Sleeps/
+(bản mới nhất trên nhánh `main`, tự deploy qua GitHub Pages).
+
+**Chạy trên máy mình:** cần [Node](https://nodejs.org) ≥ 22.12, rồi chỉ một lệnh:
 ```bash
-npm install
-npm run dev
+npm start
 ```
-Mở http://localhost:5173 rồi bấm vào màn hình để điều khiển camera bằng chuột.
+Lệnh này tự cài thư viện ở lần đầu (và mỗi khi `package-lock.json` đổi; các lần sau bỏ qua, mất chưa tới 1 giây),
+rồi mở game trong trình duyệt tại http://localhost:5173. Máy còn npm 10 cũng không sao — script tự mượn npm 11 qua `npx`.
+
+Bấm vào màn hình để điều khiển camera bằng chuột.
 
 | Phím | Đi bộ | Trên xe |
 | --- | --- | --- |

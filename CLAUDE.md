@@ -6,12 +6,13 @@ Thiết kế đầy đủ: `docs/gdd.md`. Đọc file đó trước khi làm tí
 ## Stack
 - TypeScript strict · Vite 8 · Three.js r186 (`three/webgpu`, `WebGPURenderer` tự lùi về WebGL2) · Rapier (`@dimforge/rapier3d-compat`)
 - Vitest (unit) · Playwright (e2e + ảnh chụp màn hình) · ESLint (typescript-eslint)
-- Node ≥ 22.12, **npm ≥ 11** (npm 10.9 có lỗi `edgesOut` khi cài vitest 4)
+- Node ≥ 22.12, **npm ≥ 11** (npm 10.9 có lỗi `edgesOut` khi cài vitest 4; `scripts/setup.mjs` tự dùng `npx npm@11` nếu máy còn npm cũ)
+- Phiên Claude trên cloud: hook `.claude/hooks/session-start.sh` cài thư viện sẵn khi mở phiên.
 
 ## Lệnh
 ```bash
-npm install
-npm run dev        # http://localhost:5173  (thêm ?webgl để ép WebGL2)
+npm start          # tự cài thư viện nếu cần (scripts/setup.mjs) rồi mở game ở http://localhost:5173
+npm run dev        # như trên nhưng không mở trình duyệt (thêm ?webgl để ép WebGL2)
 npm run check      # lint + typecheck + unit test — chạy trước mỗi commit
 npm run build      # tsc + vite build → dist/
 npm run e2e        # build, chạy preview, Playwright mở game và chụp tests/e2e/__screenshots__/
