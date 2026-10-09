@@ -59,12 +59,13 @@ src/
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
                      trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
+                     pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe — có unit test), pedestrianView
   audio/             còi xe WebAudio
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, gợi ý phím, thông báo), minimap (+ minimapMath có unit test)
                      phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn) — thuần logic, có unit test
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
-tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay, traffic, dayNight, phone, weather
+tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay, traffic, dayNight, phone, weather, pedestrians
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).

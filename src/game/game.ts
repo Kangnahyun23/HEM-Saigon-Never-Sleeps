@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
+import { PedestrianSim, type Threat } from '@/ai/pedestrians';
+import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
@@ -44,6 +46,8 @@ export class Game {
   readonly camera: FollowCamera;
   readonly bikes: Bike[] = [];
   readonly traffic: TrafficSystem;
+  readonly pedestrians: PedestrianSim;
+  private readonly pedestrianView: PedestrianView;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
   readonly weather: WeatherSim;
@@ -119,6 +123,9 @@ export class Game {
     this.camera.yaw = spawn.yaw + Math.PI;
 
     this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z });
+    this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z });
+    this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
+    scene.add(this.pedestrianView.root);
   }
 
   /** Hẹn một việc sau `seconds` giây chơi. */
@@ -315,6 +322,13 @@ export class Game {
     for (let i = 0; i < steps; i++) {
       const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
       this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
+      // Người đi bộ né xe của người chơi khi xe lao tới.
+      const threats: Threat[] = [];
+      if (this.riding) {
+        const v = this.riding.phys.body.linvel();
+        threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
+      }
+      this.pedestrians.step(STEP, me, threats);
       for (const h of this.traffic.sim.honks) {
         const d = Math.hypot(h.x - me.x, h.z - me.z);
         this.trafficHorn.beep(1 / (1 + d / 8), 0.85 + ((h.id * 37) % 40) / 100);
@@ -360,6 +374,7 @@ export class Game {
     const alpha = this.stepper.alpha;
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
     this.traffic.render(alpha);
+    this.pedestrianView.update(this.pedestrians.walkers, alpha);
     let speedKmh: number | null = null;
     const cp = this.character.prev;
     const cc = this.character.curr;
