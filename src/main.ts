@@ -63,6 +63,8 @@ async function main(): Promise<void> {
     }
     if (debug.paused) game.update(0);
   };
+  /** Đặt Độ Nóng 0–3 (bị truy đuổi). */
+  debug.setHeat = (level: number) => game.heat.set(level);
   /** Đặt giờ trong game (0–24). */
   debug.setHour = (h: number) => {
     game.clock.hour = h;

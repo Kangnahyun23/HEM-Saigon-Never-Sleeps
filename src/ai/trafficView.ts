@@ -3,7 +3,22 @@ import { abs, float, mix, smoothstep, uv, vec3 } from 'three/tsl';
 import { createRng, pick } from '@/core/random';
 import { BIKE_BODY_COLORS, BIKE_PARTS, BIKE_ROLE_COLORS } from '@/vehicles/bikeModel';
 import { nightUniform } from '@/world/nightGlow';
-import type { TrafficAgent } from './traffic';
+/** Tư thế một xe để vẽ (xe NPC, xe truy đuổi đều dùng). */
+export interface BikePose {
+  id: number;
+  x: number;
+  z: number;
+  yaw: number;
+  lean: number;
+  prevX: number;
+  prevZ: number;
+  prevYaw: number;
+  prevLean: number;
+  generation: number;
+}
+
+/** 'civilian': dân thường đủ màu; 'gang': đàn em của Phát — xe đen, áo đen, mũ đỏ. */
+export type RiderStyle = 'civilian' | 'gang';
 
 /**
  * Hình dòng xe NPC: mọi xe + người lái gom vào vài InstancedMesh (hộp, trụ, đèn, vệt đèn pha) ⇒ 4 draw call cho cả đàn xe.
@@ -106,7 +121,10 @@ export class TrafficView {
   private readonly beams: THREE.InstancedMesh;
   private readonly looks: AgentLook[] = [];
 
-  constructor(private readonly capacity: number) {
+  constructor(
+    private readonly capacity: number,
+    private readonly style: RiderStyle = 'civilian',
+  ) {
     this.boxParts = this.parts.filter((p) => p.shape === 'box' && !p.lamp);
     this.cylParts = this.parts.filter((p) => p.shape === 'cyl' && !p.lamp);
     this.lampParts = this.parts.filter((p) => p.lamp);
@@ -146,19 +164,20 @@ export class TrafficView {
   }
 
   /** Diện mạo (màu xe, áo, mũ, có chở hàng không) suy ra từ id + lượt thả ⇒ ổn định, không cần lưu. */
-  private lookFor(agent: TrafficAgent): AgentLook {
+  private lookFor(agent: BikePose): AgentLook {
     let look = this.looks[agent.id];
     if (look && look.generation === agent.generation) return look;
     const rng = createRng(agent.id * 7919 + agent.generation * 104729);
+    const gang = this.style === 'gang';
     look = {
       generation: agent.generation,
-      cargo: rng() < CARGO_CHANCE,
+      cargo: !gang && rng() < CARGO_CHANCE,
       colors: {
-        body: pick(rng, BIKE_BODY_COLORS),
-        shirt: pick(rng, SHIRTS),
-        pants: pick(rng, PANTS),
+        body: gang ? '#151515' : pick(rng, BIKE_BODY_COLORS),
+        shirt: gang ? '#1d1d1f' : pick(rng, SHIRTS),
+        pants: gang ? '#2a2a30' : pick(rng, PANTS),
         skin: pick(rng, SKINS),
-        helmet: pick(rng, HELMETS),
+        helmet: gang ? '#c4161c' : pick(rng, HELMETS),
         shoe: '#24211e',
         visor: '#1b2229',
         cargo: pick(rng, CARGO),
@@ -184,10 +203,10 @@ export class TrafficView {
   }
 
   /** Ghi ma trận cho mọi xe; `alpha` nội suy giữa bước mô phỏng trước và sau. */
-  update(agents: readonly TrafficAgent[], alpha: number): void {
+  update(agents: readonly BikePose[], alpha: number): void {
     const n = Math.min(agents.length, this.capacity);
     for (let i = 0; i < n; i++) {
-      const a = agents[i] as TrafficAgent;
+      const a = agents[i] as BikePose;
       const look = this.lookFor(a);
       const dyaw = Math.atan2(Math.sin(a.yaw - a.prevYaw), Math.cos(a.yaw - a.prevYaw));
       const yaw = a.prevYaw + dyaw * alpha;

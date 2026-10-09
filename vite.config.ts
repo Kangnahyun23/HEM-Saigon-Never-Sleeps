@@ -32,5 +32,7 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts'],
     environment: 'node',
+    // Vài test mô phỏng / kiểm tra bố cục chạy vài giây; máy CI bận có thể chậm gấp đôi.
+    testTimeout: 20_000,
   },
 });

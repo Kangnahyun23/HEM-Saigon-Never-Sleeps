@@ -121,3 +121,21 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
   .hud-phone { width: calc(100% - 24px); right: 12px; bottom: 12px; }
   .hud-phone-hint { bottom: 150px; right: 12px; }
 }
+
+/* Mục tiêu nhiệm vụ (giữa trên) */
+.hud-objective { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; align-items: baseline; gap: 14px; padding: 9px 16px; max-width: min(620px, calc(100% - 520px)); border-bottom: 3px solid #ffd23f; font-size: 15px; font-weight: 600; }
+.hud-objective[hidden] { display: none; }
+.hud-objective span { min-width: 0; }
+.hud-objective b { font-variant-numeric: tabular-nums; font-size: 17px; color: #ffd23f; }
+.hud-objective b.late { color: #ff6b5e; }
+.card .ghost { background: none; color: #8a7f8e; padding: 6px 4px; }
+@media (max-width: 900px) { .hud-objective { top: auto; bottom: 150px; max-width: calc(100% - 24px); } }
+
+/* Độ Nóng (dưới tiền mặt) */
+.hud-heat { position: absolute; top: 68px; right: 18px; display: flex; align-items: center; gap: 4px; }
+.hud-heat[hidden] { display: none; }
+.hud-heat span { width: 22px; height: 22px; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: rgba(255,255,255,.22); }
+.hud-heat span.on { background: #ff4b3e; filter: drop-shadow(0 0 6px rgba(255,75,62,.8)); }
+.hud-heat.hiding span.on { animation: blink .7s steps(2) infinite; }
+.hud-heat small { order: -1; margin-right: 8px; font-size: 12px; font-weight: 700; color: #ffb3ab; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+@keyframes blink { 50% { opacity: .25; } }

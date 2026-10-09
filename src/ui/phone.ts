@@ -34,6 +34,7 @@ export class Phone {
   private thread: Contact | null = null;
   private jobs: PhoneJob[] = [];
   private onAccept: ((id: string) => void) | null = null;
+  private onCancel: (() => void) | null = null;
   private readonly screen: HTMLElement;
   private readonly clock: HTMLElement;
   private readonly tabBar: HTMLElement;
@@ -79,6 +80,7 @@ export class Phone {
       }
       const job = el.closest('[data-accept]') as HTMLElement | null;
       if (job) this.onAccept?.(job.dataset.accept as string);
+      if (el.closest('[data-cancel]')) this.onCancel?.();
       const pay = el.closest('[data-pay]') as HTMLElement | null;
       if (pay) {
         this.wallet.payDebt(Number(pay.dataset.pay));
@@ -108,9 +110,10 @@ export class Phone {
     this.dirty = true;
   }
 
-  setJobs(jobs: PhoneJob[], onAccept: (id: string) => void): void {
+  setJobs(jobs: PhoneJob[], onAccept: (id: string) => void, onCancel: (() => void) | null = null): void {
     this.jobs = jobs;
     this.onAccept = onAccept;
+    this.onCancel = onCancel;
     this.dirty = true;
   }
 
@@ -153,7 +156,7 @@ export class Phone {
                 .map(
                   (j) => `<div class="card${j.active ? ' active' : ''}"><b>${esc(j.title)}</b><span>${esc(j.detail)}</span>
                     <div class="row"><em>${formatVnd(j.pay)}</em>${
-                      j.active ? '<span class="tag">Đang chạy</span>' : `<button type="button" data-accept="${esc(j.id)}">Nhận kèo</button>`
+                      j.active ? '<span class="tag">Đang chạy</span><button type="button" class="ghost" data-cancel>Huỷ</button>' : `<button type="button" data-accept="${esc(j.id)}">Nhận kèo</button>`
                     }</div></div>`,
                 )
                 .join('')

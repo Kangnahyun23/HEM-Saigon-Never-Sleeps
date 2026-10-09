@@ -34,6 +34,11 @@ export class Hud {
   minimap: Minimap | null = null;
   phone: Phone | null = null;
   private readonly cash: HTMLElement;
+  private readonly heat: HTMLElement;
+  private lastHeat = '';
+  private readonly objective: HTMLElement;
+  private readonly objectiveText: HTMLElement;
+  private readonly objectiveTimer: HTMLElement;
   private readonly phoneHint: HTMLElement;
   private lastCash = NaN;
   private lastUnread = -1;
@@ -73,6 +78,8 @@ export class Hud {
       </div>
       <div class="hud-fps" data-fps></div>
       <div class="hud-cash" data-cash></div>
+      <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
+      <div class="hud-objective panel" data-objective hidden><span data-objective-text></span><b data-objective-timer></b></div>
       <div class="hud-phone-hint panel" data-phone-hint><kbd>P</kbd> Điện thoại</div>`;
     const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as T;
     this.place = q('[data-place]');
@@ -87,6 +94,36 @@ export class Hud {
     this.clock = q('[data-clock]');
     this.cash = q('[data-cash]');
     this.phoneHint = q('[data-phone-hint]');
+    this.heat = q('[data-heat]');
+    this.objective = q('[data-objective]');
+    this.objectiveText = q('[data-objective-text]');
+    this.objectiveTimer = q('[data-objective-timer]');
+  }
+
+  /** Độ Nóng: sao đỏ dưới tiền mặt; khuất tầm nhìn thì sao nhấp nháy và chữ đổi thành tiến độ cắt đuôi. */
+  setHeat(level: number, escape: number, seen: boolean): void {
+    const key = `${level}|${seen}|${Math.round(escape * 10)}`;
+    if (key === this.lastHeat) return;
+    this.lastHeat = key;
+    this.heat.hidden = level === 0;
+    if (level === 0) return;
+    this.heat.querySelectorAll('span').forEach((s, i) => s.classList.toggle('on', i < level));
+    this.heat.classList.toggle('hiding', !seen);
+    (this.heat.querySelector('small') as HTMLElement).textContent = seen ? 'Đang bị bám đuôi' : `Đang cắt đuôi… ${Math.round(escape * 100)}%`;
+  }
+
+  /** Mục tiêu nhiệm vụ đang làm (giữa trên) + đồng hồ đếm ngược (giây). null = ẩn. */
+  setObjective(text: string | null, remaining: number | null): void {
+    this.objective.hidden = text === null;
+    if (text === null) return;
+    if (this.objectiveText.textContent !== text) this.objectiveText.textContent = text;
+    let t = '';
+    if (remaining !== null) {
+      const s = Math.max(0, Math.ceil(remaining));
+      t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    if (this.objectiveTimer.textContent !== t) this.objectiveTimer.textContent = t;
+    this.objectiveTimer.classList.toggle('late', remaining !== null && remaining <= 0);
   }
 
   createPhone(inbox: Inbox, wallet: Wallet): Phone {

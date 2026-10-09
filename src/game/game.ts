@@ -1,9 +1,13 @@
 import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
+import { ChaseSystem } from '@/ai/chaseSystem';
+import { buildTrafficNetwork } from '@/ai/trafficNetwork';
 import { PedestrianSim, type Threat } from '@/ai/pedestrians';
+import { Heat, SightGrid } from '@/systems/heat';
 import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
+import { MissionDirector } from '@/missions/director';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
@@ -55,6 +59,10 @@ export class Game {
   private readonly rainSound = new RainSound();
   readonly wallet = new Wallet();
   readonly inbox = new Inbox();
+  readonly missions: MissionDirector;
+  readonly heat = new Heat();
+  readonly chase: ChaseSystem;
+  private caughtThisStep = false;
   /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
   playTime = 0;
   private readonly scheduled: Array<{ at: number; run: () => void }> = [];
@@ -104,6 +112,9 @@ export class Game {
       this.hud.phone?.invalidate();
       if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
     };
+    this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
+    const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
+    this.chase = new ChaseSystem(scene, physics, buildTrafficNetwork(city.layout), sight, city.layout.seed + 11);
     this.scheduleIntro();
     const { spawn } = city.layout;
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
@@ -128,6 +139,15 @@ export class Game {
     scene.add(this.pedestrianView.root);
   }
 
+  /** Bị đàn em của Phát chặn đầu: bị "lục túi" (mất 30 % tiền mặt, ít nhất 50.000 đ), hết truy đuổi. */
+  private caught(): void {
+    const lost = this.wallet.spend(Math.max(50_000, this.wallet.cash * 0.3), 'Bị đàn em Phát chặn đầu', this.clock.hour);
+    this.heat.set(0);
+    this.chase.sim.disperse();
+    this.hud.showToast(lost > 0 ? `Bị chặn đầu! Mất ${formatVnd(lost)}` : 'Bị chặn đầu! May mà túi rỗng', 3);
+    this.schedule(3, () => this.inbox.receive('Phát CEO', 'Chạy đâu cho thoát hả tài xế? Lo mà trả nợ đúng hạn đi.', this.clock.hour));
+  }
+
   /** Hẹn một việc sau `seconds` giây chơi. */
   schedule(seconds: number, run: () => void): void {
     this.scheduled.push({ at: this.playTime + seconds, run });
@@ -140,6 +160,7 @@ export class Game {
     say(7, 'Ngân', 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...');
     say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán 5.000.000 đ trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
     say(20, 'Chú Sáu', 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.');
+    say(30, 'Tổng đài kèo', 'Có kèo giao hàng mới quanh bạn. Mở điện thoại (P) › Kèo để nhận. Giao đúng giờ được boa thêm!');
   }
 
   /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */
@@ -329,6 +350,14 @@ export class Game {
         threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
       }
       this.pedestrians.step(STEP, me, threats);
+
+      // Truy đuổi: xe đàn em bám theo khi có Độ Nóng; khuất tầm nhìn đủ lâu thì cắt đuôi.
+      const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
+      if (this.chase.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.heat.level)) this.caughtThisStep = true;
+      if (this.heat.update(STEP, this.chase.sim.seen)) {
+        this.chase.sim.disperse();
+        this.hud.showToast('Cắt đuôi thành công!', 2.4);
+      }
       for (const h of this.traffic.sim.honks) {
         const d = Math.hypot(h.x - me.x, h.z - me.z);
         this.trafficHorn.beep(1 / (1 + d / 8), 0.85 + ((h.id * 37) % 40) / 100);
@@ -374,6 +403,13 @@ export class Game {
     const alpha = this.stepper.alpha;
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
     this.traffic.render(alpha);
+    this.chase.render(alpha);
+    if (this.caughtThisStep) {
+      this.caughtThisStep = false;
+      this.caught();
+    }
+    this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
+    this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
     this.pedestrianView.update(this.pedestrians.walkers, alpha);
     let speedKmh: number | null = null;
     const cp = this.character.prev;
@@ -427,6 +463,10 @@ export class Game {
     }
     this.env.update(this.tmp);
     this.rain.update(dt, this.camera.camera.position, this.weather.state.rain);
+
+    // Nhiệm vụ / kèo: kiểm tra mục tiêu theo vị trí người chơi.
+    const pos = this.riding ? this.riding.phys.body.translation() : this.character.feet();
+    this.missions.update(dt, { x: pos.x, z: pos.z, riding: this.mode === 'ride', heat: this.heat.level });
 
     // Bản đồ nhỏ xoay theo camera.
     const look = this.camera.forward();
