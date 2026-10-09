@@ -47,6 +47,10 @@ Vòng lặp: nhận kèo trên điện thoại → chạy tới điểm hẹn �
 
 Không làm trong MVP: ô tô lái được, vũ khí, đánh tay đôi, multiplayer, lồng tiếng, radio, độ xe, khu khác.
 
+## Tiến độ
+- [x] M0 khung dự án (2026-10-09)
+- [x] M1 thế giới + di chuyển: bộ sinh khu phố có hẻm, nhân vật đi bộ, camera góc nhìn 3, xe máy (2026-10-09)
+
 ## Lộ trình
 | Mốc | Ngày | Nội dung |
 | --- | --- | --- |
