@@ -121,6 +121,8 @@ export class TrafficSim {
   private readonly rng: Rng;
   /** Đếm số lần thả lại (thống kê / test). */
   respawns = 0;
+  /** Nhân với tốc độ mọi xe (trời mưa chạy chậm lại). */
+  speedFactor = 1;
   /** Các tiếng còi trong bước vừa chạy (xoá đầu mỗi bước). */
   readonly honks: Honk[] = [];
 
@@ -380,7 +382,7 @@ export class TrafficSim {
       const lane = this.lane(agent.lane);
       const nextLane = this.lane(agent.next);
       const kind = turnKind(lane, nextLane);
-      let desired = lane.speedLimit * agent.temper;
+      let desired = lane.speedLimit * agent.temper * this.speedFactor;
       const turnSpeed = Math.min(desired, TURN_SPEED[kind]);
       if (agent.turn) desired = turnSpeed;
       else desired = Math.min(desired, Math.sqrt(turnSpeed * turnSpeed + 2 * COMFORT_DECEL * Math.max(0, lane.length - agent.s)));

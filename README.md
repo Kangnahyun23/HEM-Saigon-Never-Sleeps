@@ -33,7 +33,7 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | `Tab` | ẩn/hiện bảng phím | |
 
 Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:30. Muốn xem ngay cảnh đêm: mở
-http://localhost:5173/?gio=21
+http://localhost:5173/?gio=21 (thêm `&mua=1` để xem phố đêm mưa). Trời Sài Gòn hay đổ mưa rào chiều tối.
 
 ## Công nghệ
 TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics · Vitest · Playwright.

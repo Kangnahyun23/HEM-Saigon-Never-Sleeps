@@ -26,7 +26,9 @@ async function main(): Promise<void> {
   // ?gio=21 để vào game lúc 21 giờ (thử cảnh đêm).
   const gio = new URLSearchParams(location.search).get('gio');
   const startHour = gio === null ? NaN : Number(gio);
-  const game = new Game(scene, camera, physics, city, input, hud, env, Number.isFinite(startHour) ? startHour : undefined);
+  // ?mua=1 để vào game giữa cơn mưa (ép mưa suốt).
+  const forceRain = new URLSearchParams(location.search).get('mua') === '1';
+  const game = new Game(scene, camera, physics, city, input, hud, env, Number.isFinite(startHour) ? startHour : undefined, forceRain ? 'rain' : null);
   const timer = new THREE.Timer();
 
   const debug: DebugInfo = {
@@ -52,6 +54,15 @@ async function main(): Promise<void> {
     }
   };
   debug.input = input;
+  /** Ép thời tiết: 'clear' | 'cloudy' | 'rain', hoặc null để tự nhiên. */
+  debug.setWeather = (sky: 'clear' | 'cloudy' | 'rain' | null) => {
+    game.weather.forced = sky;
+    if (sky) {
+      const full = { clear: [0, 0], cloudy: [0.6, 0], rain: [1, 1] }[sky];
+      Object.assign(game.weather.state, { sky, cloud: full[0], rain: full[1], wet: full[1] });
+    }
+    if (debug.paused) game.update(0);
+  };
   /** Đặt giờ trong game (0–24). */
   debug.setHour = (h: number) => {
     game.clock.hour = h;

@@ -20,7 +20,11 @@ import type { City } from '@/world/city/buildCity';
 import { PAD_HEIGHT } from '@/world/city/layout';
 import { locate } from '@/world/city/locate';
 import type { Environment } from '@/world/environment';
+import { RainSound } from '@/audio/rainSound';
+import { wetUniform } from '@/world/nightGlow';
+import { Rain } from '@/world/rain';
 import { GameClock, lightingAt } from '@/world/timeOfDay';
+import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 
 const STEP = 1 / 60;
 const MOUNT_RANGE = 2.4;
@@ -42,6 +46,9 @@ export class Game {
   readonly traffic: TrafficSystem;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
+  readonly weather: WeatherSim;
+  private readonly rain = new Rain();
+  private readonly rainSound = new RainSound();
   readonly wallet = new Wallet();
   readonly inbox = new Inbox();
   /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
@@ -76,8 +83,12 @@ export class Game {
     private readonly hud: Hud,
     private readonly env: Environment,
     startHour = 16.5,
+    startSky: Sky | null = null,
   ) {
     this.clock = new GameClock(startHour);
+    this.weather = new WeatherSim(city.layout.seed + 7, startSky ?? 'clear');
+    this.weather.forced = startSky;
+    scene.add(this.rain.mesh);
     // Đèn luôn nằm trong cảnh (cường độ 0 khi tắt) để không phải biên dịch lại shader khi bật/tắt.
     this.headlamp.position.set(0, 0.98, 0.62);
     this.headlamp.target.position.set(0, -0.6, 12);
@@ -260,9 +271,13 @@ export class Game {
 
     // Giờ trong ngày ⇒ trời, nắng, sương, đèn ban đêm.
     this.clock.advance(dt);
-    const light = lightingAt(this.clock.hour);
+    const sky = this.weather.update(dt * this.clock.rate, this.clock.hour);
+    const light = applyWeather(lightingAt(this.clock.hour), sky);
     this.env.setLighting(light);
-    this.hud.setClock(this.clock.label());
+    wetUniform.value = sky.wet;
+    this.traffic.sim.speedFactor = 1 - 0.25 * sky.rain;
+    this.rainSound.update(sky.rain);
+    this.hud.setClock(`${this.clock.label()}${sky.rain > 0.3 ? ' · Mưa' : sky.cloud > 0.5 ? ' · Nhiều mây' : ''}`);
     // Trời tối thì xe đang chạy tự bật đèn; phím L bật/tắt đèn pha thủ công.
     const lightsOn = this.headlight || light.night > 0.35;
     for (const b of this.bikes) b.view.setLights(b === this.riding && lightsOn, light.night);
@@ -371,6 +386,7 @@ export class Game {
     if (this.freeCamera) {
       this.tmp.copy(this.camera.camera.position);
       this.env.update(this.tmp);
+      this.rain.update(dt, this.tmp, this.weather.state.rain);
       return;
     }
     const looking = performance.now() / 1000 - input.lastLookTime < 1.4;
@@ -395,6 +411,7 @@ export class Game {
       this.camera.update(dt, { target: this.tmp, distance: 3.6, followYaw: null, followRate: 0, fovBoost: Math.min(this.character.actualSpeed, 6.4) * 0.6 }, looking);
     }
     this.env.update(this.tmp);
+    this.rain.update(dt, this.camera.camera.position, this.weather.state.rain);
 
     // Bản đồ nhỏ xoay theo camera.
     const look = this.camera.forward();
