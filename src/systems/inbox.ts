@@ -26,6 +26,12 @@ export class Inbox {
     for (const t of data) this.threads.push({ contact: t.contact, messages: [...t.messages], unread: t.unread });
   }
 
+  /** Nạp lại từ bản lưu. */
+  restore(data: Thread[]): void {
+    this.threads.length = 0;
+    for (const t of data) this.threads.push({ contact: t.contact, messages: [...t.messages], unread: t.unread });
+  }
+
   thread(contact: Contact): Thread {
     let t = this.threads.find((x) => x.contact === contact);
     if (!t) {

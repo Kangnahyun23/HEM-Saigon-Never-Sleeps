@@ -6,6 +6,7 @@ import { createRenderer } from '@/render/renderer';
 import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { Hud } from '@/ui/hud';
+import { SaveSlot } from '@/systems/save';
 import type { DebugInfo } from '@/debug';
 
 
@@ -28,7 +29,15 @@ async function main(): Promise<void> {
   const startHour = gio === null ? NaN : Number(gio);
   // ?mua=1 để vào game giữa cơn mưa (ép mưa suốt).
   const forceRain = new URLSearchParams(location.search).get('mua') === '1';
-  const game = new Game(scene, camera, physics, city, input, hud, env, Number.isFinite(startHour) ? startHour : undefined, forceRain ? 'rain' : null);
+  // ?moi=1 để chơi lại từ đầu (xoá bản lưu).
+  const saveSlot = SaveSlot.browser();
+  if (new URLSearchParams(location.search).get('moi') === '1') saveSlot.clear();
+  const game = new Game(scene, camera, physics, city, input, hud, env, Number.isFinite(startHour) ? startHour : undefined, forceRain ? 'rain' : null, saveSlot);
+  // Rời trang / chuyển tab: lưu lại.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') game.save();
+  });
+  window.addEventListener('pagehide', () => game.save());
   const timer = new THREE.Timer();
 
   const debug: DebugInfo = {
@@ -63,6 +72,10 @@ async function main(): Promise<void> {
     }
     if (debug.paused) game.update(0);
   };
+  /** Lưu game ngay. */
+  debug.save = () => game.save(true);
+  /** Đặt Độ Nóng 0–3 (bị truy đuổi). */
+  debug.setHeat = (level: number) => game.heat.set(level);
   /** Đặt giờ trong game (0–24). */
   debug.setHour = (h: number) => {
     game.clock.hour = h;

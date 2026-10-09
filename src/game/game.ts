@@ -1,9 +1,16 @@
 import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
+import { ChaseSystem } from '@/ai/chaseSystem';
+import { buildTrafficNetwork } from '@/ai/trafficNetwork';
 import { PedestrianSim, type Threat } from '@/ai/pedestrians';
+import { Heat, SightGrid } from '@/systems/heat';
+import type { SaveSlot } from '@/systems/save';
 import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
+import { MissionDirector } from '@/missions/director';
+import { StoryRunner } from '@/missions/storyRunner';
+import { FIRST_INSTALLMENT } from '@/missions/story';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
@@ -55,6 +62,11 @@ export class Game {
   private readonly rainSound = new RainSound();
   readonly wallet = new Wallet();
   readonly inbox = new Inbox();
+  readonly missions: MissionDirector;
+  readonly heat = new Heat();
+  readonly story: StoryRunner;
+  readonly chase: ChaseSystem;
+  private caughtThisStep = false;
   /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
   playTime = 0;
   private readonly scheduled: Array<{ at: number; run: () => void }> = [];
@@ -88,6 +100,8 @@ export class Game {
     private readonly env: Environment,
     startHour = 16.5,
     startSky: Sky | null = null,
+    /** Nơi lưu game (null = không lưu, ví dụ khi test). */
+    private readonly saveSlot: SaveSlot | null = null,
   ) {
     this.clock = new GameClock(startHour);
     this.weather = new WeatherSim(city.layout.seed + 7, startSky ?? 'clear');
@@ -104,7 +118,10 @@ export class Game {
       this.hud.phone?.invalidate();
       if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
     };
-    this.scheduleIntro();
+    this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
+    this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
+    const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
+    this.chase = new ChaseSystem(scene, physics, buildTrafficNetwork(city.layout), sight, city.layout.seed + 11);
     const { spawn } = city.layout;
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
     this.character.yaw = spawn.yaw;
@@ -126,6 +143,63 @@ export class Game {
     this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z });
     this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
     scene.add(this.pedestrianView.root);
+
+    // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
+    this.loaded = this.restore();
+    if (!this.loaded) this.scheduleIntro();
+  }
+
+  /** Có nạp từ bản lưu không (để bỏ tin nhắn mở màn). */
+  readonly loaded: boolean;
+  private saveTimer = 0;
+  private savedProgress = '';
+
+  /** Nạp bản lưu (nếu có): tiền, nợ, tin nhắn, tiến độ Hồi 1, giờ, vị trí. */
+  private restore(): boolean {
+    const data = this.saveSlot?.load();
+    if (!data) return false;
+    this.wallet.restore(data.wallet);
+    this.inbox.restore(data.inbox);
+    this.story.progress.next = Math.max(0, Math.min(this.story.missions.length, Math.floor(data.story.next)));
+    this.missions.jobsDone = data.jobsDone;
+    this.clock.hour = data.hour;
+    const { x, z, yaw } = data.player;
+    this.character.teleport(x, PAD_HEIGHT + 0.3, z, yaw);
+    // Xe của Tín đậu ngay cạnh chỗ đứng.
+    this.bikes[0]?.phys.reset(x + Math.cos(yaw) * 1.6, PAD_HEIGHT, z - Math.sin(yaw) * 1.6, yaw);
+    this.savedProgress = this.progressKey();
+    this.schedule(1, () => this.hud.showToast('Đã tải bản lưu', 2));
+    return true;
+  }
+
+  private progressKey(): string {
+    return `${this.story.progress.next}|${this.missions.jobsDone}`;
+  }
+
+  /** Lưu game ngay (tự gọi sau mỗi nhiệm vụ, mỗi 30 giây và khi rời trang). */
+  save(announce = false): boolean {
+    if (!this.saveSlot) return false;
+    const p = this.riding ? this.riding.phys.body.translation() : this.character.feet();
+    const yaw = this.riding ? this.riding.phys.heading() : this.character.yaw;
+    const ok = this.saveSlot.save({
+      hour: this.clock.hour,
+      wallet: this.wallet.toJSON(),
+      inbox: this.inbox.toJSON(),
+      story: { next: this.story.progress.next },
+      jobsDone: this.missions.jobsDone,
+      player: { x: p.x, z: p.z, yaw },
+    });
+    if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
+    return ok;
+  }
+
+  /** Bị đàn em của Phát chặn đầu: bị "lục túi" (mất 30 % tiền mặt, ít nhất 50.000 đ), hết truy đuổi. */
+  private caught(): void {
+    const lost = this.wallet.spend(Math.max(50_000, this.wallet.cash * 0.3), 'Bị đàn em Phát chặn đầu', this.clock.hour);
+    this.heat.set(0);
+    this.chase.sim.disperse();
+    this.hud.showToast(lost > 0 ? `Bị chặn đầu! Mất ${formatVnd(lost)}` : 'Bị chặn đầu! May mà túi rỗng', 3);
+    this.schedule(3, () => this.inbox.receive('Phát CEO', 'Chạy đâu cho thoát hả tài xế? Lo mà trả nợ đúng hạn đi.', this.clock.hour));
   }
 
   /** Hẹn một việc sau `seconds` giây chơi. */
@@ -138,8 +212,9 @@ export class Game {
     const say = (at: number, who: Contact, text: string): void => this.schedule(at, () => this.inbox.receive(who, text, this.clock.hour));
     say(4, 'Ngân', 'Anh Tín ơi, người của app vay lại tới nhà. Họ dán giấy đỏ lên cửa, la lối cả xóm nghe.');
     say(7, 'Ngân', 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...');
-    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán 5.000.000 đ trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
+    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán ${formatVnd(FIRST_INSTALLMENT)} trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
     say(20, 'Chú Sáu', 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.');
+    say(30, 'Tổng đài kèo', 'Có kèo giao hàng mới quanh bạn. Mở điện thoại (P) › Kèo để nhận. Giao đúng giờ được boa thêm!');
   }
 
   /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */
@@ -266,6 +341,18 @@ export class Game {
       }
     }
 
+    // Tự lưu: xong nhiệm vụ / kèo thì lưu ngay (báo trên HUD), còn lại mỗi 30 giây.
+    this.saveTimer += dt;
+    const progress = this.progressKey();
+    if (progress !== this.savedProgress) {
+      this.savedProgress = progress;
+      this.saveTimer = 0;
+      this.save(true);
+    } else if (this.saveTimer > 30) {
+      this.saveTimer = 0;
+      this.save();
+    }
+
     // Việc đã hẹn giờ (tin nhắn, sự kiện nhiệm vụ).
     this.playTime += dt;
     for (let i = this.scheduled.length - 1; i >= 0; i--) {
@@ -329,6 +416,14 @@ export class Game {
         threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
       }
       this.pedestrians.step(STEP, me, threats);
+
+      // Truy đuổi: xe đàn em bám theo khi có Độ Nóng; khuất tầm nhìn đủ lâu thì cắt đuôi.
+      const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
+      if (this.chase.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.heat.level)) this.caughtThisStep = true;
+      if (this.heat.update(STEP, this.chase.sim.seen)) {
+        this.chase.sim.disperse();
+        this.hud.showToast('Cắt đuôi thành công!', 2.4);
+      }
       for (const h of this.traffic.sim.honks) {
         const d = Math.hypot(h.x - me.x, h.z - me.z);
         this.trafficHorn.beep(1 / (1 + d / 8), 0.85 + ((h.id * 37) % 40) / 100);
@@ -374,6 +469,13 @@ export class Game {
     const alpha = this.stepper.alpha;
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
     this.traffic.render(alpha);
+    this.chase.render(alpha);
+    if (this.caughtThisStep) {
+      this.caughtThisStep = false;
+      this.caught();
+    }
+    this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
+    this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
     this.pedestrianView.update(this.pedestrians.walkers, alpha);
     let speedKmh: number | null = null;
     const cp = this.character.prev;
@@ -427,6 +529,11 @@ export class Game {
     }
     this.env.update(this.tmp);
     this.rain.update(dt, this.camera.camera.position, this.weather.state.rain);
+
+    // Nhiệm vụ / kèo: kiểm tra mục tiêu theo vị trí người chơi.
+    const pos = this.riding ? this.riding.phys.body.translation() : this.character.feet();
+    this.missions.update(dt, { x: pos.x, z: pos.z, riding: this.mode === 'ride', heat: this.heat.level });
+    this.story.update(dt, pos.x, pos.z);
 
     // Bản đồ nhỏ xoay theo camera.
     const look = this.camera.forward();
