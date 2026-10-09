@@ -3,8 +3,10 @@
 *HẺM: Saigon Never Sleeps* — game hành động thế giới mở góc nhìn thứ 3 trên trình duyệt. Bạn là Tín, tài xế xe ôm công nghệ
 bị cuốn vào vòng nợ tín dụng đen, lách xe máy qua phố đông và những con hẻm chằng chịt của một Sài Gòn hư cấu.
 
-> Trạng thái: **M1 — thế giới + xe máy**. Một khu phố hư cấu ~520 × 440 m (1.600+ nhà ống, mạng hẻm, chợ có tháp
-> đồng hồ, công viên, bờ sông), Tín đi bộ / chạy / nhảy, lên xe máy chạy khắp phố với camera góc nhìn thứ 3.
+> Trạng thái: **M3 — nhiệm vụ + truy đuổi** (chơi được trọn Hồi 1). Một khu phố hư cấu ~520 × 440 m (1.600+ nhà ống,
+> mạng hẻm, chợ có tháp đồng hồ, công viên, bờ sông) đông xe máy, người đi bộ đội nón lá, có ngày đêm và mưa rào.
+> Tín chạy kèo giao hàng qua điện thoại để trả nợ app vay, luồn hẻm cắt đuôi đàn em của Phát, đi hết 5 nhiệm vụ Hồi 1.
+> Game tự lưu.
 
 ![Chợ Trung Tâm nhìn từ mái nhà](docs/screenshots/m1-cho-trung-tam.png)
 

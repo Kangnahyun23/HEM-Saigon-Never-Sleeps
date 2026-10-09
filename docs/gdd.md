@@ -52,13 +52,16 @@ Không làm trong MVP: ô tô lái được, vũ khí, đánh tay đôi, multipl
 - [x] M1 thế giới + di chuyển: bộ sinh khu phố có hẻm, nhân vật đi bộ, camera góc nhìn 3, xe máy (2026-10-09)
 
 ## Lộ trình
-| Mốc | Ngày | Nội dung |
-| --- | --- | --- |
-| M0 Khung dự án | 10–12/10 | Vite + TS + Three + Rapier, CI, Pages, Playwright screenshot, CLAUDE.md |
-| M1 Thế giới + di chuyển | 13–19/10 | Sinh nhà/đường/hẻm; nhân vật đi bộ, camera; xe máy (Rapier vehicle controller) |
-| M2 Thành phố sống động | 20–26/10 | Xe NPC theo làn, người đi bộ, ngày đêm, mưa; HUD, minimap, điện thoại |
-| M3 Nhiệm vụ + truy đuổi | 27/10–2/11 | Hệ thống nhiệm vụ, 5 nhiệm vụ Hồi 1, kèo lặp lại; Độ Nóng; lưu game |
-| M4 Hoàn thiện | 3–4/11 | Instancing, LOD, sửa lỗi, âm thanh; demo lên itch.io |
+| Mốc | Ngày | Nội dung | Trạng thái |
+| --- | --- | --- | --- |
+| M0 Khung dự án | 10–12/10 | Vite + TS + Three + Rapier, CI, Pages, Playwright screenshot, CLAUDE.md | Xong |
+| M1 Thế giới + di chuyển | 13–19/10 | Sinh nhà/đường/hẻm; nhân vật đi bộ, camera; xe máy (Rapier vehicle controller) | Xong |
+| M2 Thành phố sống động | 20–26/10 | Xe NPC theo làn, người đi bộ, ngày đêm, mưa; HUD, minimap, điện thoại | Xong (9/10) |
+| M3 Nhiệm vụ + truy đuổi | 27/10–2/11 | Hệ thống nhiệm vụ, 5 nhiệm vụ Hồi 1, kèo lặp lại; Độ Nóng; lưu game | Xong (9/10) |
+| M4 Hoàn thiện | 3–4/11 | Instancing, LOD, sửa lỗi, âm thanh; demo lên itch.io | Chưa làm |
+
+Cân bằng Hồi 1: kỳ trả nợ đầu 1.500.000 đ; thưởng 4 nhiệm vụ đầu + tiền mặt ban đầu = 1.400.000 đ ⇒ phải chạy thêm vài
+kèo giao hàng (~40–90 nghìn/kèo, ~12 % "hàng nóng" trả gần gấp đôi nhưng bị bám đuôi).
 
 Trễ thì cắt bớt M2 (mưa, người đi bộ), không cắt M3.
 
