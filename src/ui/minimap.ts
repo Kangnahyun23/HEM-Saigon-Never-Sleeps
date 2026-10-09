@@ -1,0 +1,179 @@
+import type { CityLayout } from '@/world/city/layout';
+import { arrowAngle, mapImageTransform, markerOnMap, type MapView } from './minimapMath';
+
+/** Màu bản đồ (tông đêm Sài Gòn: nền tối, đường sáng, mốc có màu). */
+const MAP = {
+  ground: '#1c1a22',
+  block: '#2f2b37',
+  lot: '#3d3746',
+  road: '#8d8698',
+  avenue: '#c2b59c',
+  hem: '#66606f',
+  market: '#c8762f',
+  park: '#3d7a4b',
+  river: '#2a5a78',
+} as const;
+
+const PX_PER_M = 1.4;
+const SIZE = 196;
+
+export interface Blip {
+  x: number;
+  z: number;
+  color: string;
+}
+
+/** Điểm đánh dấu: chỗ cần tới (nhiệm vụ, kèo). */
+export interface Waypoint {
+  x: number;
+  z: number;
+  label?: string;
+}
+
+/**
+ * Bản đồ nhỏ góc dưới trái: ảnh nền khu phố dựng một lần từ bố cục, mỗi khung hình chỉ vẽ lại phần quanh người
+ * chơi (xoay theo camera), mũi tên người chơi, điểm đánh dấu và các chấm (xe truy đuổi…).
+ */
+export class Minimap {
+  readonly root: HTMLElement;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly image: HTMLCanvasElement;
+  private readonly x0: number;
+  private readonly z0: number;
+  private waypoint: Waypoint | null = null;
+  private blips: Blip[] = [];
+  private zoom = 1.8;
+
+  constructor(parent: HTMLElement, layout: CityLayout) {
+    this.root = document.createElement('div');
+    this.root.className = 'hud-minimap';
+    this.canvas = document.createElement('canvas');
+    this.root.appendChild(this.canvas);
+    parent.appendChild(this.root);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = SIZE * dpr;
+    this.canvas.height = SIZE * dpr;
+    this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
+    this.ctx.scale(dpr, dpr);
+
+    const r = layout.playArea;
+    this.x0 = r.x0 - 40;
+    this.z0 = r.z0 - 40;
+    const w = Math.ceil((r.x1 - r.x0 + 80) * PX_PER_M);
+    const h = Math.ceil((r.z1 - r.z0 + 140) * PX_PER_M);
+    this.image = document.createElement('canvas');
+    this.image.width = w;
+    this.image.height = h;
+    this.paintCity(layout);
+  }
+
+  /** Vẽ ảnh nền một lần: block, nhà, đường, hẻm, chợ, công viên, sông. */
+  private paintCity(layout: CityLayout): void {
+    const g = this.image.getContext('2d') as CanvasRenderingContext2D;
+    const k = PX_PER_M;
+    const rect = (x0: number, z0: number, x1: number, z1: number, color: string): void => {
+      g.fillStyle = color;
+      g.fillRect((x0 - this.x0) * k, (z0 - this.z0) * k, (x1 - x0) * k, (z1 - z0) * k);
+    };
+    g.fillStyle = MAP.ground;
+    g.fillRect(0, 0, this.image.width, this.image.height);
+    const shore = layout.river.shoreZ;
+    rect(this.x0, shore, this.x0 + this.image.width / k, this.z0 + this.image.height / k, MAP.river);
+    for (const b of layout.blocks) rect(b.rect.x0, b.rect.z0, b.rect.x1, b.rect.z1, b.kind === 'park' ? MAP.park : MAP.block);
+    for (const l of layout.lots) rect(l.rect.x0, l.rect.z0, l.rect.x1, l.rect.z1, MAP.lot);
+    const m = layout.market.rect;
+    rect(m.x0, m.z0, m.x1, m.z1, MAP.market);
+    for (const h of layout.hems) rect(h.rect.x0, h.rect.z0, h.rect.x1, h.rect.z1, MAP.hem);
+    for (const road of layout.roads) {
+      const rr = road.rect;
+      rect(rr.x0, rr.z0, rr.x1, Math.min(rr.z1, shore), road.kind === 'avenue' ? MAP.avenue : MAP.road);
+    }
+  }
+
+  setWaypoint(w: Waypoint | null): void {
+    this.waypoint = w;
+  }
+
+  setBlips(blips: Blip[]): void {
+    this.blips = blips;
+  }
+
+  /** `yaw`: hướng người chơi (xe hoặc người); `riding`: đang chạy xe thì thu nhỏ bản đồ để thấy xa hơn. */
+  update(dt: number, px: number, pz: number, fx: number, fz: number, yaw: number, riding: boolean): void {
+    const goal = riding ? 1.15 : 1.8;
+    this.zoom += (goal - this.zoom) * (1 - Math.exp(-2.5 * dt));
+    const c = this.ctx;
+    const half = SIZE / 2;
+    const radius = half - 6;
+    const view: MapView = { px, pz, fx, fz, cx: half, cy: half, scale: this.zoom };
+
+    c.save();
+    c.clearRect(0, 0, SIZE, SIZE);
+    c.beginPath();
+    c.arc(half, half, radius, 0, Math.PI * 2);
+    c.clip();
+    c.fillStyle = MAP.ground;
+    c.fillRect(0, 0, SIZE, SIZE);
+    const [a, b, cc, d, e, f] = mapImageTransform(view, this.x0, this.z0, PX_PER_M);
+    c.transform(a, b, cc, d, e, f);
+    c.drawImage(this.image, 0, 0);
+    c.restore();
+
+    // Viền + chữ "B" (Bắc = −Z) chạy quanh mép.
+    c.strokeStyle = 'rgba(255,255,255,.22)';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(half, half, radius, 0, Math.PI * 2);
+    c.stroke();
+    const north = markerOnMap(view, px, pz - 1e5, radius - 9);
+    c.fillStyle = 'rgba(14,12,20,.85)';
+    c.beginPath();
+    c.arc(north.u, north.v, 9, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#f7f1e6';
+    c.font = '700 11px system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('B', north.u, north.v + 0.5);
+
+    for (const blip of this.blips) {
+      const p = markerOnMap(view, blip.x, blip.z, radius - 4);
+      c.fillStyle = blip.color;
+      c.beginPath();
+      c.arc(p.u, p.v, p.edge ? 3.5 : 4.5, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    if (this.waypoint) {
+      const p = markerOnMap(view, this.waypoint.x, this.waypoint.z, radius - 8);
+      c.fillStyle = '#ffd23f';
+      c.strokeStyle = '#1c1a22';
+      c.lineWidth = 2;
+      c.beginPath();
+      // Hình giọt nước (ghim bản đồ).
+      c.arc(p.u, p.v - 6, 6, Math.PI * 0.85, Math.PI * 2.15);
+      c.lineTo(p.u, p.v + 4);
+      c.closePath();
+      c.fill();
+      c.stroke();
+    }
+
+    // Mũi tên người chơi.
+    c.save();
+    c.translate(half, half);
+    c.rotate(arrowAngle(yaw, fx, fz));
+    c.fillStyle = '#ff8c1a';
+    c.strokeStyle = '#fff';
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(0, -9);
+    c.lineTo(6.5, 7);
+    c.lineTo(0, 3.5);
+    c.lineTo(-6.5, 7);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.restore();
+  }
+}

@@ -1,4 +1,6 @@
 import type { Backend } from '@/render/renderer';
+import type { CityLayout } from '@/world/city/layout';
+import { Minimap } from './minimap';
 
 const SPEEDO_MAX = 80; // km/h
 const ARC_START = 135; // độ, bắt đầu từ góc dưới trái
@@ -25,6 +27,8 @@ export class Hud {
   private readonly help: HTMLElement;
   private readonly fps: HTMLElement;
   private readonly clock: HTMLElement;
+  /** Bản đồ nhỏ (tạo sau khi có bố cục khu phố). */
+  minimap: Minimap | null = null;
   private lastClock = '';
   private lastPlace = '';
   private lastPrompt = '';
@@ -33,7 +37,10 @@ export class Hud {
   private frames = 0;
   private elapsed = 0;
 
-  constructor(root: HTMLElement, private readonly backend: Backend) {
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly backend: Backend,
+  ) {
     root.innerHTML = `
       <div class="hud-location panel">
         <div class="brand">HẺM</div>
@@ -68,6 +75,11 @@ export class Hud {
     this.help = q('[data-help]');
     this.fps = q('[data-fps]');
     this.clock = q('[data-clock]');
+  }
+
+  createMinimap(layout: CityLayout): Minimap {
+    this.minimap = new Minimap(this.root, layout);
+    return this.minimap;
   }
 
   /** Giờ trong game, dạng "HH:MM". */
