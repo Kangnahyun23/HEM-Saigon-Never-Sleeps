@@ -29,6 +29,7 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | `F` | lên xe (khi đứng gần) | xuống xe (khi chạy chậm) |
 | `H` / `L` / `R` | — | bóp còi · đèn pha · dựng lại xe |
 | Chuột / con lăn | xoay camera · zoom | xoay camera · zoom |
+| `P` | điện thoại (Kèo · Bản đồ · Tin nhắn · Ví), `1`–`4` đổi tab, `Esc` cất | như đi bộ |
 | `Tab` | ẩn/hiện bảng phím | |
 
 Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:30. Muốn xem ngay cảnh đêm: mở

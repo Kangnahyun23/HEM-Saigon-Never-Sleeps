@@ -1,6 +1,9 @@
 import type { Backend } from '@/render/renderer';
 import type { CityLayout } from '@/world/city/layout';
+import type { Inbox } from '@/systems/inbox';
+import { formatVnd, type Wallet } from '@/systems/wallet';
 import { Minimap } from './minimap';
+import { Phone } from './phone';
 
 const SPEEDO_MAX = 80; // km/h
 const ARC_START = 135; // độ, bắt đầu từ góc dưới trái
@@ -29,6 +32,11 @@ export class Hud {
   private readonly clock: HTMLElement;
   /** Bản đồ nhỏ (tạo sau khi có bố cục khu phố). */
   minimap: Minimap | null = null;
+  phone: Phone | null = null;
+  private readonly cash: HTMLElement;
+  private readonly phoneHint: HTMLElement;
+  private lastCash = NaN;
+  private lastUnread = -1;
   private lastClock = '';
   private lastPlace = '';
   private lastPrompt = '';
@@ -60,10 +68,12 @@ export class Hud {
       <div class="hud-help panel" data-help>
         <div class="title">Điều khiển</div>
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>đi / lái</b> · <kbd>Shift</kbd> <b>chạy</b> · <kbd>Space</kbd> <b>nhảy / phanh tay</b></div>
-        <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b></div>
+        <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>P</kbd> <b>điện thoại</b></div>
         <div>Bấm vào màn hình rồi <b>rê chuột</b> để xoay camera · <b>cuộn</b> để zoom · <kbd>Tab</kbd> <b>ẩn/hiện bảng này</b></div>
       </div>
-      <div class="hud-fps" data-fps></div>`;
+      <div class="hud-fps" data-fps></div>
+      <div class="hud-cash" data-cash></div>
+      <div class="hud-phone-hint panel" data-phone-hint><kbd>P</kbd> Điện thoại</div>`;
     const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as T;
     this.place = q('[data-place]');
     this.locationBox = q('.hud-location');
@@ -75,6 +85,33 @@ export class Hud {
     this.help = q('[data-help]');
     this.fps = q('[data-fps]');
     this.clock = q('[data-clock]');
+    this.cash = q('[data-cash]');
+    this.phoneHint = q('[data-phone-hint]');
+  }
+
+  createPhone(inbox: Inbox, wallet: Wallet): Phone {
+    this.phone = new Phone(this.root, inbox, wallet, this.minimap);
+    return this.phone;
+  }
+
+  /** Tiền mặt (góc trên phải) và số tin chưa đọc (nhắc mở điện thoại). */
+  setStatus(cash: number, unread: number): void {
+    if (cash !== this.lastCash) {
+      const gained = Number.isFinite(this.lastCash) && cash > this.lastCash;
+      this.lastCash = cash;
+      this.cash.textContent = formatVnd(cash);
+      this.cash.classList.remove('gain');
+      if (gained) {
+        void this.cash.offsetWidth;
+        this.cash.classList.add('gain');
+      }
+      this.phone?.invalidate();
+    }
+    if (unread !== this.lastUnread) {
+      this.lastUnread = unread;
+      this.phoneHint.innerHTML = `<kbd>P</kbd> Điện thoại${unread > 0 ? ` <i>${unread}</i>` : ''}`;
+      this.phoneHint.classList.toggle('ping', unread > 0);
+    }
   }
 
   createMinimap(layout: CityLayout): Minimap {

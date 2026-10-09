@@ -91,6 +91,45 @@ export class Minimap {
     }
   }
 
+  /** Bản đồ toàn khu (hướng Bắc lên trên) cho tab Bản đồ của điện thoại: vị trí người chơi + điểm đánh dấu. */
+  drawFull(canvas: HTMLCanvasElement, px: number, pz: number): void {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(canvas.clientWidth || 260));
+    const h = Math.round((w * this.image.height) / this.image.width);
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+    const c = canvas.getContext('2d') as CanvasRenderingContext2D;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.drawImage(this.image, 0, 0, w, h);
+    const s = w / this.image.width;
+    const toU = (x: number): number => (x - this.x0) * PX_PER_M * s;
+    const toV = (z: number): number => (z - this.z0) * PX_PER_M * s;
+    if (this.waypoint) {
+      c.fillStyle = '#ffd23f';
+      c.strokeStyle = '#1c1a22';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(toU(this.waypoint.x), toV(this.waypoint.z), 6, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+    }
+    for (const blip of this.blips) {
+      c.fillStyle = blip.color;
+      c.beginPath();
+      c.arc(toU(blip.x), toV(blip.z), 3.5, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = '#ff8c1a';
+    c.strokeStyle = '#fff';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(toU(px), toV(pz), 5.5, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+  }
+
   setWaypoint(w: Waypoint | null): void {
     this.waypoint = w;
   }

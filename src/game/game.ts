@@ -2,6 +2,9 @@ import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
 import { Horn } from '@/audio/horn';
+import { Inbox, type Contact } from '@/systems/inbox';
+import { formatVnd, Wallet } from '@/systems/wallet';
+import type { PhoneTab } from '@/ui/phone';
 import { FixedStepAccumulator } from '@/core/fixedStep';
 import type { Input } from '@/core/input';
 import { GROUP, interaction } from '@/physics/groups';
@@ -39,6 +42,11 @@ export class Game {
   readonly traffic: TrafficSystem;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
+  readonly wallet = new Wallet();
+  readonly inbox = new Inbox();
+  /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
+  playTime = 0;
+  private readonly scheduled: Array<{ at: number; run: () => void }> = [];
   /** Đèn pha thật của xe người chơi (một SpotLight dùng chung, gắn vào xe đang chạy). */
   private readonly headlamp = new THREE.SpotLight('#fff1d6', 0, 45, 0.55, 0.65, 1.2);
   mode: 'foot' | 'ride' = 'foot';
@@ -75,6 +83,13 @@ export class Game {
     this.headlamp.target.position.set(0, -0.6, 12);
     this.headlamp.add(this.headlamp.target);
     scene.add(this.headlamp);
+
+    this.hud.createPhone(this.inbox, this.wallet);
+    this.inbox.onMessage = (_m, contact) => {
+      this.hud.phone?.invalidate();
+      if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
+    };
+    this.scheduleIntro();
     const { spawn } = city.layout;
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
     this.character.yaw = spawn.yaw;
@@ -93,6 +108,20 @@ export class Game {
     this.camera.yaw = spawn.yaw + Math.PI;
 
     this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z });
+  }
+
+  /** Hẹn một việc sau `seconds` giây chơi. */
+  schedule(seconds: number, run: () => void): void {
+    this.scheduled.push({ at: this.playTime + seconds, run });
+  }
+
+  /** Tin nhắn mở màn Hồi 1: Ngân bị siết nợ, app vay đòi tiền, chú Sáu hẹn gặp. */
+  private scheduleIntro(): void {
+    const say = (at: number, who: Contact, text: string): void => this.schedule(at, () => this.inbox.receive(who, text, this.clock.hour));
+    say(4, 'Ngân', 'Anh Tín ơi, người của app vay lại tới nhà. Họ dán giấy đỏ lên cửa, la lối cả xóm nghe.');
+    say(7, 'Ngân', 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...');
+    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán 5.000.000 đ trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
+    say(20, 'Chú Sáu', 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.');
   }
 
   /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */
@@ -205,6 +234,29 @@ export class Game {
     if (input.wasPressed('Tab')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
+
+    // Điện thoại: P bật/tắt, Esc cất, 1–4 đổi tab.
+    const phone = this.hud.phone;
+    if (phone) {
+      if (input.wasPressed('KeyP')) phone.toggle();
+      else if (phone.open && input.wasPressed('Escape')) phone.setOpen(false);
+      if (phone.open) {
+        const tabs: PhoneTab[] = ['jobs', 'map', 'messages', 'wallet'];
+        tabs.forEach((t, i) => {
+          if (input.wasPressed(`Digit${i + 1}`)) phone.show(t);
+        });
+      }
+    }
+
+    // Việc đã hẹn giờ (tin nhắn, sự kiện nhiệm vụ).
+    this.playTime += dt;
+    for (let i = this.scheduled.length - 1; i >= 0; i--) {
+      const job = this.scheduled[i] as { at: number; run: () => void };
+      if (job.at <= this.playTime) {
+        this.scheduled.splice(i, 1);
+        job.run();
+      }
+    }
 
     // Giờ trong ngày ⇒ trời, nắng, sương, đèn ban đêm.
     this.clock.advance(dt);
@@ -348,6 +400,8 @@ export class Game {
     const look = this.camera.forward();
     const yaw = this.riding ? this.riding.phys.heading() : this.character.yaw;
     this.hud.minimap?.update(dt, this.tmp.x, this.tmp.z, look.x, look.z, yaw, this.mode === 'ride');
+    this.hud.phone?.update(this.clock.label(), this.tmp.x, this.tmp.z);
+    this.hud.setStatus(this.wallet.cash, this.inbox.unread);
 
     // Địa điểm trên HUD (4 lần/giây là đủ).
     this.locateTimer -= dt;
