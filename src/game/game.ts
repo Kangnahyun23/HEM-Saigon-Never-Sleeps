@@ -5,6 +5,7 @@ import { ChaseSystem } from '@/ai/chaseSystem';
 import { buildTrafficNetwork } from '@/ai/trafficNetwork';
 import { PedestrianSim, type Threat } from '@/ai/pedestrians';
 import { Heat, SightGrid } from '@/systems/heat';
+import type { SaveSlot } from '@/systems/save';
 import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
 import { MissionDirector } from '@/missions/director';
@@ -99,6 +100,8 @@ export class Game {
     private readonly env: Environment,
     startHour = 16.5,
     startSky: Sky | null = null,
+    /** Nơi lưu game (null = không lưu, ví dụ khi test). */
+    private readonly saveSlot: SaveSlot | null = null,
   ) {
     this.clock = new GameClock(startHour);
     this.weather = new WeatherSim(city.layout.seed + 7, startSky ?? 'clear');
@@ -119,7 +122,6 @@ export class Game {
     this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
     this.chase = new ChaseSystem(scene, physics, buildTrafficNetwork(city.layout), sight, city.layout.seed + 11);
-    this.scheduleIntro();
     const { spawn } = city.layout;
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
     this.character.yaw = spawn.yaw;
@@ -141,6 +143,54 @@ export class Game {
     this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z });
     this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
     scene.add(this.pedestrianView.root);
+
+    // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
+    this.loaded = this.restore();
+    if (!this.loaded) this.scheduleIntro();
+  }
+
+  /** Có nạp từ bản lưu không (để bỏ tin nhắn mở màn). */
+  readonly loaded: boolean;
+  private saveTimer = 0;
+  private savedProgress = '';
+
+  /** Nạp bản lưu (nếu có): tiền, nợ, tin nhắn, tiến độ Hồi 1, giờ, vị trí. */
+  private restore(): boolean {
+    const data = this.saveSlot?.load();
+    if (!data) return false;
+    this.wallet.restore(data.wallet);
+    this.inbox.restore(data.inbox);
+    this.story.progress.next = Math.max(0, Math.min(this.story.missions.length, Math.floor(data.story.next)));
+    this.missions.jobsDone = data.jobsDone;
+    this.clock.hour = data.hour;
+    const { x, z, yaw } = data.player;
+    this.character.teleport(x, PAD_HEIGHT + 0.3, z, yaw);
+    // Xe của Tín đậu ngay cạnh chỗ đứng.
+    this.bikes[0]?.phys.reset(x + Math.cos(yaw) * 1.6, PAD_HEIGHT, z - Math.sin(yaw) * 1.6, yaw);
+    this.savedProgress = this.progressKey();
+    this.schedule(1, () => this.hud.showToast('Đã tải bản lưu', 2));
+    return true;
+  }
+
+  private progressKey(): string {
+    return `${this.story.progress.next}|${this.missions.jobsDone}`;
+  }
+
+  /** Lưu game ngay (tự gọi sau mỗi nhiệm vụ, mỗi 30 giây và khi rời trang). */
+  save(announce = false): boolean {
+    if (!this.saveSlot) return false;
+    const p = this.riding ? this.riding.phys.body.translation() : this.character.feet();
+    const yaw = this.riding ? this.riding.phys.heading() : this.character.yaw;
+    const ok = this.saveSlot.save({
+      hour: this.clock.hour,
+      wallet: this.wallet.toJSON(),
+      inbox: this.inbox.toJSON(),
+      story: { next: this.story.progress.next },
+      jobsDone: this.missions.jobsDone,
+      player: { x: p.x, z: p.z, yaw },
+    });
+    if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
+    return ok;
   }
 
   /** Bị đàn em của Phát chặn đầu: bị "lục túi" (mất 30 % tiền mặt, ít nhất 50.000 đ), hết truy đuổi. */
@@ -289,6 +339,18 @@ export class Game {
           if (input.wasPressed(`Digit${i + 1}`)) phone.show(t);
         });
       }
+    }
+
+    // Tự lưu: xong nhiệm vụ / kèo thì lưu ngay (báo trên HUD), còn lại mỗi 30 giây.
+    this.saveTimer += dt;
+    const progress = this.progressKey();
+    if (progress !== this.savedProgress) {
+      this.savedProgress = progress;
+      this.saveTimer = 0;
+      this.save(true);
+    } else if (this.saveTimer > 30) {
+      this.saveTimer = 0;
+      this.save();
     }
 
     // Việc đã hẹn giờ (tin nhắn, sự kiện nhiệm vụ).

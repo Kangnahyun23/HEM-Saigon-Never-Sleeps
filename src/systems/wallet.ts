@@ -29,6 +29,14 @@ export class Wallet {
     if (data.ledger) this.ledger.push(...data.ledger.slice(-50));
   }
 
+  /** Nạp lại từ bản lưu. */
+  restore(data: WalletData): void {
+    this.cash = Math.round(data.cash);
+    this.debt = Math.round(data.debt);
+    this.ledger.length = 0;
+    this.ledger.push(...data.ledger.slice(-50));
+  }
+
   /** Nhận tiền (kèo, thưởng). */
   earn(amount: number, reason: string, hour = 0): void {
     const a = Math.max(0, Math.round(amount));
