@@ -5,6 +5,9 @@
   "description": "HẺM — Sài Gòn Không Ngủ: game hành động thế giới mở trên trình duyệt",
   "type": "module",
   "scripts": {
+    "start": "node scripts/setup.mjs && vite --open",
+    "setup": "node scripts/setup.mjs",
+    "predev": "node scripts/setup.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

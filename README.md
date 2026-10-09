@@ -6,12 +6,17 @@ bị cuốn vào vòng nợ tín dụng đen, lách xe máy qua phố đông và
 > Trạng thái: **M0 — khung dự án**. Sandbox một đoạn phố nhà ống với vật lý thùng gỗ rơi.
 
 ## Chạy thử
-Yêu cầu Node ≥ 22.12 và npm ≥ 11 (`npm i -g npm@11`).
+**Chơi ngay, không cần cài gì:** https://kangnahyun23.github.io/HEM-Saigon-Never-Sleeps/
+(bản mới nhất trên nhánh `main`, tự deploy qua GitHub Pages).
+
+**Chạy trên máy mình:** cần [Node](https://nodejs.org) ≥ 22.12, rồi chỉ một lệnh:
 ```bash
-npm install
-npm run dev
+npm start
 ```
-Mở http://localhost:5173. Chuột trái/phải để xoay/kéo camera, cuộn để zoom, `Space` thả thùng, `R` làm lại.
+Lệnh này tự cài thư viện ở lần đầu (và mỗi khi `package-lock.json` đổi; các lần sau bỏ qua, mất chưa tới 1 giây),
+rồi mở game trong trình duyệt tại http://localhost:5173. Máy còn npm 10 cũng không sao — script tự mượn npm 11 qua `npx`.
+
+Chuột trái/phải để xoay/kéo camera, cuộn để zoom, `Space` thả thùng, `R` làm lại.
 
 ## Công nghệ
 TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics · Vitest · Playwright.
