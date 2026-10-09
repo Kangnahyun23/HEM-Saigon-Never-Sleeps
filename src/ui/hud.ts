@@ -34,6 +34,8 @@ export class Hud {
   minimap: Minimap | null = null;
   phone: Phone | null = null;
   private readonly cash: HTMLElement;
+  private readonly subtitle: HTMLElement;
+  private subtitleTimer = 0;
   private readonly heat: HTMLElement;
   private lastHeat = '';
   private readonly objective: HTMLElement;
@@ -70,6 +72,7 @@ export class Hud {
       </div>
       <div class="hud-prompt panel hidden" data-prompt></div>
       <div class="hud-toast" data-toast role="status" aria-live="polite"></div>
+      <div class="hud-subtitle" data-subtitle aria-live="polite"><b></b><span></span></div>
       <div class="hud-help panel" data-help>
         <div class="title">Điều khiển</div>
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>đi / lái</b> · <kbd>Shift</kbd> <b>chạy</b> · <kbd>Space</kbd> <b>nhảy / phanh tay</b></div>
@@ -95,9 +98,18 @@ export class Hud {
     this.cash = q('[data-cash]');
     this.phoneHint = q('[data-phone-hint]');
     this.heat = q('[data-heat]');
+    this.subtitle = q('[data-subtitle]');
     this.objective = q('[data-objective]');
     this.objectiveText = q('[data-objective-text]');
     this.objectiveTimer = q('[data-objective-timer]');
+  }
+
+  /** Phụ đề lời thoại (giữa dưới), tự ẩn sau vài giây. */
+  showSubtitle(speaker: string, text: string, seconds = 3.6): void {
+    (this.subtitle.querySelector('b') as HTMLElement).textContent = speaker;
+    (this.subtitle.querySelector('span') as HTMLElement).textContent = text;
+    this.subtitle.classList.add('show');
+    this.subtitleTimer = seconds;
   }
 
   /** Độ Nóng: sao đỏ dưới tiền mặt; khuất tầm nhìn thì sao nhấp nháy và chữ đổi thành tiến độ cắt đuôi. */
@@ -212,6 +224,10 @@ export class Hud {
       this.fps.textContent = `${this.backend} · ${Math.round(this.frames / this.elapsed)} fps`;
       this.frames = 0;
       this.elapsed = 0;
+    }
+    if (this.subtitleTimer > 0) {
+      this.subtitleTimer -= dt;
+      if (this.subtitleTimer <= 0) this.subtitle.classList.remove('show');
     }
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;

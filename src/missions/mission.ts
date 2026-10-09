@@ -90,7 +90,11 @@ export class MissionRunner {
       this.waited = 0;
       if (this.def.timeLimit && this.timer === null && this.index === this.def.timerFrom) this.timer = 0;
       const next = this.objective;
-      if (next) events.push({ type: 'objective', index: this.index, objective: next });
+      if (next) {
+        events.push({ type: 'objective', index: this.index, objective: next });
+        // Bước cắt đuôi chỉ xét từ bước sau: Độ Nóng do sự kiện vừa rồi gây ra chưa kịp tính vào ctx.
+        if (next.kind === 'escape') break;
+      }
       else {
         this.done = true;
         const reward = this.late && this.def.late === 'half' ? Math.round(this.def.reward / 2 / 1000) * 1000 : this.def.reward;

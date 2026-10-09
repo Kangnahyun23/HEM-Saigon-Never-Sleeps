@@ -139,3 +139,8 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .hud-heat.hiding span.on { animation: blink .7s steps(2) infinite; }
 .hud-heat small { order: -1; margin-right: 8px; font-size: 12px; font-weight: 700; color: #ffb3ab; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
 @keyframes blink { 50% { opacity: .25; } }
+
+/* Phụ đề lời thoại (giữa dưới) */
+.hud-subtitle { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); max-width: min(720px, calc(100% - 40px)); padding: 10px 16px; border-radius: 10px; background: rgba(10, 8, 14, .72); font-size: 17px; line-height: 1.45; text-align: center; opacity: 0; transition: opacity .3s; }
+.hud-subtitle.show { opacity: 1; }
+.hud-subtitle b { color: var(--hud-accent); margin-right: 8px; }

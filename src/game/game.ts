@@ -8,6 +8,8 @@ import { Heat, SightGrid } from '@/systems/heat';
 import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
 import { MissionDirector } from '@/missions/director';
+import { StoryRunner } from '@/missions/storyRunner';
+import { FIRST_INSTALLMENT } from '@/missions/story';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
@@ -61,6 +63,7 @@ export class Game {
   readonly inbox = new Inbox();
   readonly missions: MissionDirector;
   readonly heat = new Heat();
+  readonly story: StoryRunner;
   readonly chase: ChaseSystem;
   private caughtThisStep = false;
   /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
@@ -113,6 +116,7 @@ export class Game {
       if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
     };
     this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
+    this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
     this.chase = new ChaseSystem(scene, physics, buildTrafficNetwork(city.layout), sight, city.layout.seed + 11);
     this.scheduleIntro();
@@ -158,7 +162,7 @@ export class Game {
     const say = (at: number, who: Contact, text: string): void => this.schedule(at, () => this.inbox.receive(who, text, this.clock.hour));
     say(4, 'Ngân', 'Anh Tín ơi, người của app vay lại tới nhà. Họ dán giấy đỏ lên cửa, la lối cả xóm nghe.');
     say(7, 'Ngân', 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...');
-    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán 5.000.000 đ trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
+    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán ${formatVnd(FIRST_INSTALLMENT)} trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
     say(20, 'Chú Sáu', 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.');
     say(30, 'Tổng đài kèo', 'Có kèo giao hàng mới quanh bạn. Mở điện thoại (P) › Kèo để nhận. Giao đúng giờ được boa thêm!');
   }
@@ -467,6 +471,7 @@ export class Game {
     // Nhiệm vụ / kèo: kiểm tra mục tiêu theo vị trí người chơi.
     const pos = this.riding ? this.riding.phys.body.translation() : this.character.feet();
     this.missions.update(dt, { x: pos.x, z: pos.z, riding: this.mode === 'ride', heat: this.heat.level });
+    this.story.update(dt, pos.x, pos.z);
 
     // Bản đồ nhỏ xoay theo camera.
     const look = this.camera.forward();
