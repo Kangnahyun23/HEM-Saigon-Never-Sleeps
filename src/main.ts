@@ -1,10 +1,10 @@
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FixedStepAccumulator } from '@/core/fixedStep';
-import { Input } from '@/core/input';
 import { createPhysics } from '@/physics/physics';
 import { createRenderer } from '@/render/renderer';
-import { buildSandbox } from '@/world/sandbox';
+import { buildCity } from '@/world/city/buildCity';
+import { createEnvironment } from '@/world/environment';
 import { Hud } from '@/ui/hud';
 import type { DebugInfo } from '@/debug';
 
@@ -16,19 +16,17 @@ async function main(): Promise<void> {
   const [{ renderer, backend }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
-  // Đứng giữa lòng đường nhìn dọc phố (nhà bắt đầu từ |z| > 9 m).
-  camera.position.set(-26, 9, 4);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2500);
+  const env = await createEnvironment(scene, renderer);
+  const city = buildCity(scene, physics);
+  const { spawn } = city.layout;
+
+  camera.position.set(spawn.x + 30, 25, spawn.z + 30);
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 2, 0);
+  controls.target.set(spawn.x, 2, spawn.z);
   controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI * 0.48;
-  controls.minDistance = 4;
-  controls.maxDistance = 60;
   controls.update();
 
-  const sandbox = buildSandbox(scene, physics);
-  const input = new Input();
   const hud = new Hud(hudRoot, backend);
   const stepper = new FixedStepAccumulator(1 / 60, 5);
   const timer = new THREE.Timer();
@@ -38,8 +36,14 @@ async function main(): Promise<void> {
     backend,
     frames: 0,
     physicsSteps: 0,
-    crateHeights: () => sandbox.crates.map((c) => c.position.y),
+    stats: { ...city.stats, lots: city.layout.lots.length },
+    setCamera(px, py, pz, tx, ty, tz) {
+      camera.position.set(px, py, pz);
+      controls.target.set(tx, ty, tz);
+      controls.update();
+    },
   };
+  debug.layout = city.layout;
   window.__HEM__ = debug;
 
   window.addEventListener('resize', () => {
@@ -51,25 +55,19 @@ async function main(): Promise<void> {
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const dt = timer.getDelta();
-
-    if (input.wasPressed('Space')) sandbox.dropCrate();
-    if (input.wasPressed('KeyR')) sandbox.respawnCrates();
-
     const steps = stepper.advance(dt);
     for (let i = 0; i < steps; i++) physics.step();
     debug.physicsSteps += steps;
-    physics.syncMeshes();
-
     controls.update();
+    env.update(controls.target);
     renderer.render(scene, camera);
     hud.update(dt);
-    input.endFrame();
     debug.frames++;
   });
 
   loading.classList.add('done');
   debug.ready = true;
-  console.info(`[HẺM] sẵn sàng · render ${backend}`);
+  console.info(`[HẺM] sẵn sàng · render ${backend} · ${city.stats.meshes} mesh · ${city.stats.instances} instance · ${city.stats.colliders} collider`);
 }
 
 main().catch((err: unknown) => {

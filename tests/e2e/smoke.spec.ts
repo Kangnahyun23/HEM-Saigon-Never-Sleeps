@@ -7,30 +7,23 @@ declare global {
   }
 }
 
-test('game khởi động, render và vật lý chạy', async ({ page }) => {
+test('game khởi động, dựng khu phố và render không lỗi', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
 
   await page.goto('/');
-  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  await page.waitForFunction(() => window.__HEM__!.frames > 3, null, { timeout: 90_000 });
 
-  const startHeights = await page.evaluate(() => window.__HEM__!.crateHeights());
-  expect(startHeights.length).toBeGreaterThan(0);
-
-  // Chờ thùng rơi chạm đất (vật lý chạy) và đủ khung hình (render chạy).
-  await page.waitForFunction(
-    () => {
-      const d = window.__HEM__!;
-      return d.frames > 30 && d.physicsSteps > 120 && Math.max(...d.crateHeights()) < 3;
-    },
-    null,
-    { timeout: 45_000 },
-  );
-
-  const info = await page.evaluate(() => ({ backend: window.__HEM__!.backend, frames: window.__HEM__!.frames }));
-  test.info().annotations.push({ type: 'backend', description: info.backend });
+  const stats = await page.evaluate(() => window.__HEM__!.stats);
+  expect(stats.lots).toBeGreaterThan(800);
+  expect(stats.colliders).toBeGreaterThan(1000);
+  test.info().annotations.push({ type: 'stats', description: JSON.stringify(stats) });
 
   await expect(page.locator('#hud h1')).toHaveText('HẺM');
-  await page.screenshot({ path: 'tests/e2e/__screenshots__/sandbox.png' });
+  await page.screenshot({ path: 'tests/e2e/__screenshots__/start.png' });
   expect(errors).toEqual([]);
 });

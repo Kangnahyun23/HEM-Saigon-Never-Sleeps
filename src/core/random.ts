@@ -2,7 +2,10 @@
  * Bộ sinh số ngẫu nhiên có seed (mulberry32): cùng seed → cùng thành phố.
  * Dùng cho sinh khối nhà, vị trí NPC… để bug tái hiện được.
  */
-export function createRng(seed: number): () => number {
+/** Hàm sinh số ngẫu nhiên [0, 1). */
+export type Rng = () => number;
+
+export function createRng(seed: number): Rng {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
