@@ -6,6 +6,7 @@ import { buildBuildings } from './build/buildings';
 import type { BuildContext } from './build/context';
 import { buildGround } from './build/ground';
 import { buildLandmarks } from './build/landmarks';
+import { buildLightPools } from './build/lightPools';
 import { buildStreetProps } from './build/streetProps';
 import { generateCity, PAD_HEIGHT, type CityLayout, type CityOptions } from './layout';
 
@@ -29,6 +30,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   buildBuildings(ctx);
   buildStreetProps(ctx);
   buildLandmarks(ctx);
+  buildLightPools(ctx);
 
   // Toàn bộ khu phố là tĩnh: tắt cập nhật ma trận mỗi khung hình.
   group.updateMatrixWorld(true);

@@ -1,9 +1,10 @@
 import * as THREE from 'three/webgpu';
-import { cameraPosition, float, positionWorld, smoothstep } from 'three/tsl';
+import { cameraPosition, float, mix, positionWorld, smoothstep, vec3 } from 'three/tsl';
 import { range } from '@/core/random';
 import { euler, InstanceBatch } from '@/render/instancing';
 import { GROUP } from '@/physics/groups';
 import { BIKE_BODY_COLORS, BIKE_PARTS, BIKE_ROLE_COLORS, type BikePart } from '@/vehicles/bikeModel';
+import { nightUniform } from '../../nightGlow';
 import { CITY_COLORS } from '../palette';
 import { addMesh, GEO, type BuildContext } from './context';
 
@@ -20,7 +21,9 @@ function buildPoles(ctx: BuildContext): void {
   const transformers = new InstanceBatch(GEO.cyl, new THREE.MeshStandardNodeMaterial({ color: '#7d8287', roughness: 0.5, metalness: 0.5 }), {
     name: 'transformers',
   });
-  const lampMat = new THREE.MeshStandardNodeMaterial({ color: '#fff4d6', emissive: '#ffe2a8', emissiveIntensity: 0.15, roughness: 0.4 });
+  const lampMat = new THREE.MeshStandardNodeMaterial({ color: '#fff4d6', roughness: 0.4 });
+  // Bóng đèn natri vàng cam: hơi sáng ban ngày, rực lên khi tối.
+  lampMat.emissiveNode = vec3(1.0, 0.8, 0.5).mul(mix(float(0.15), float(9), nightUniform));
   const lampHeads = new InstanceBatch(GEO.box, lampMat, { name: 'lamp-heads', castShadow: false });
 
   const inRoad = (x: number, z: number): boolean => layout.roads.some((r) => x > r.rect.x0 && x < r.rect.x1 && z > r.rect.z0 && z < r.rect.z1);

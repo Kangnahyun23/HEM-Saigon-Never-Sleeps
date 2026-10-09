@@ -31,6 +31,9 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | Chuột / con lăn | xoay camera · zoom | xoay camera · zoom |
 | `Tab` | ẩn/hiện bảng phím | |
 
+Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:30. Muốn xem ngay cảnh đêm: mở
+http://localhost:5173/?gio=21
+
 ## Công nghệ
 TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics · Vitest · Playwright.
 

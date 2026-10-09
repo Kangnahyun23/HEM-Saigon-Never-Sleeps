@@ -3,6 +3,7 @@ import { float, hash, floor, mix, positionWorld, sin, time, vec3 } from 'three/t
 import { range } from '@/core/random';
 import { centerX, centerZ, depth, width, type Rect } from '@/core/rect';
 import { InstanceBatch } from '@/render/instancing';
+import { nightUniform } from '../../nightGlow';
 import { createFacadeMaterial, createPavementMaterial } from '../materials';
 import { CITY_COLORS } from '../palette';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
@@ -266,7 +267,9 @@ function buildRiver(ctx: BuildContext): void {
 
   // Đèn đôi ven sông.
   const lampPost = new InstanceBatch(GEO.cylBase, railMat, { name: 'river-lamps' });
-  const lampGlobe = new InstanceBatch(GEO.blob, new THREE.MeshStandardNodeMaterial({ color: '#fff7e0', emissive: '#ffe6b0', emissiveIntensity: 0.2 }), {
+  const globeMat = new THREE.MeshStandardNodeMaterial({ color: '#fff7e0' });
+  globeMat.emissiveNode = vec3(1.0, 0.9, 0.7).mul(mix(float(0.2), float(7), nightUniform));
+  const lampGlobe = new InstanceBatch(GEO.blob, globeMat, {
     name: 'river-lamp-globes',
     castShadow: false,
   });

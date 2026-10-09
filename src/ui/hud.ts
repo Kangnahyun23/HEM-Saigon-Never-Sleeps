@@ -24,6 +24,8 @@ export class Hud {
   private readonly toast: HTMLElement;
   private readonly help: HTMLElement;
   private readonly fps: HTMLElement;
+  private readonly clock: HTMLElement;
+  private lastClock = '';
   private lastPlace = '';
   private lastPrompt = '';
   private toastTimer = 0;
@@ -35,7 +37,7 @@ export class Hud {
     root.innerHTML = `
       <div class="hud-location panel">
         <div class="brand">HẺM</div>
-        <div class="district">Khu Trung Tâm</div>
+        <div class="district">Khu Trung Tâm · <span data-clock>--:--</span></div>
         <div class="place" data-place aria-live="polite">—</div>
       </div>
       <div class="hud-speedo hidden" data-speedo>
@@ -65,6 +67,14 @@ export class Hud {
     this.toast = q('[data-toast]');
     this.help = q('[data-help]');
     this.fps = q('[data-fps]');
+    this.clock = q('[data-clock]');
+  }
+
+  /** Giờ trong game, dạng "HH:MM". */
+  setClock(label: string): void {
+    if (label === this.lastClock) return;
+    this.lastClock = label;
+    this.clock.textContent = label;
   }
 
   setPlace(name: string): void {

@@ -1,10 +1,12 @@
 import * as THREE from 'three/webgpu';
+import { abs, float, mix, smoothstep, uv, vec3 } from 'three/tsl';
 import { createRng, pick } from '@/core/random';
 import { BIKE_BODY_COLORS, BIKE_PARTS, BIKE_ROLE_COLORS } from '@/vehicles/bikeModel';
+import { nightUniform } from '@/world/nightGlow';
 import type { TrafficAgent } from './traffic';
 
 /**
- * Hình dòng xe NPC: mọi xe + người lái gom vào HAI InstancedMesh (hộp và trụ) ⇒ 2 draw call cho cả đàn xe.
+ * Hình dòng xe NPC: mọi xe + người lái gom vào vài InstancedMesh (hộp, trụ, đèn, vệt đèn pha) ⇒ 4 draw call cho cả đàn xe.
  * Mỗi khung hình chỉ ghi lại ma trận instance từ vị trí nội suy giữa hai bước mô phỏng.
  */
 
@@ -17,6 +19,8 @@ interface Part {
   color: string | Look | 'body';
   /** Chỉ hiện khi xe chở hàng. */
   cargo?: boolean;
+  /** Đèn pha / đèn hậu: vẽ bằng vật liệu tự phát sáng, rực hơn khi tối. */
+  lamp?: boolean;
 }
 
 const SHIRTS = ['#f2efe6', '#2b5fa8', '#c8402e', '#3b8a52', '#e0b43a', '#7a4fa0', '#2a2a2a', '#e98aa6', '#4ab0c2', '#d9d4c5'];
@@ -55,7 +59,13 @@ function buildParts(): Part[] {
     q.setFromEuler(e.set(p.tilt ?? 0, 0, 0));
     if (p.shape === 'box') s.set(p.size[0], p.size[1], p.size[2]);
     else s.set(p.size[1], p.size[0], p.size[0]);
-    parts.push({ shape: p.shape, local: new THREE.Matrix4().compose(v, q, s), color: p.role === 'body' ? 'body' : BIKE_ROLE_COLORS[p.role] });
+    const lamp = p.role === 'light' || p.role === 'tail';
+    parts.push({
+      shape: p.shape,
+      local: new THREE.Matrix4().compose(v, q, s),
+      color: p.role === 'body' ? 'body' : BIKE_ROLE_COLORS[p.role],
+      ...(lamp ? { lamp: true } : {}),
+    });
   }
   for (const r of RIDER) {
     v.set(...r.pos);
@@ -80,22 +90,32 @@ const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _one = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color();
+const _up = new THREE.Vector3(0, 1, 0);
+/** Vệt đèn pha: rộng 2.6 m, dài 7 m, bắt đầu ngay trước đầu xe, sát mặt đường. */
+const BEAM_LOCAL = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.04, 4.3), new THREE.Quaternion(), new THREE.Vector3(2.6, 1, 7));
 
 export class TrafficView {
   readonly root = new THREE.Group();
   private readonly parts = buildParts();
   private readonly boxParts: Part[];
   private readonly cylParts: Part[];
+  private readonly lampParts: Part[];
   private readonly boxes: THREE.InstancedMesh;
   private readonly cyls: THREE.InstancedMesh;
+  private readonly lamps: THREE.InstancedMesh;
+  private readonly beams: THREE.InstancedMesh;
   private readonly looks: AgentLook[] = [];
 
   constructor(private readonly capacity: number) {
-    this.boxParts = this.parts.filter((p) => p.shape === 'box');
-    this.cylParts = this.parts.filter((p) => p.shape === 'cyl');
+    this.boxParts = this.parts.filter((p) => p.shape === 'box' && !p.lamp);
+    this.cylParts = this.parts.filter((p) => p.shape === 'cyl' && !p.lamp);
+    this.lampParts = this.parts.filter((p) => p.lamp);
     const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.55, metalness: 0.1 });
-    const mesh = (geo: THREE.BufferGeometry, perAgent: number, name: string): THREE.InstancedMesh => {
-      const m = new THREE.InstancedMesh(geo, mat, capacity * perAgent);
+    // Đèn: không chịu ánh sáng, màu theo instance (trắng ngà / đỏ), sáng gấp mấy lần khi tối.
+    const lampMat = new THREE.MeshBasicNodeMaterial();
+    lampMat.colorNode = vec3(1, 1, 1).mul(mix(float(0.9), float(4), nightUniform));
+    const mesh = (geo: THREE.BufferGeometry, perAgent: number, name: string, material: THREE.Material = mat): THREE.InstancedMesh => {
+      const m = new THREE.InstancedMesh(geo, material, capacity * perAgent);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * perAgent * 3), 3);
       m.frustumCulled = false;
@@ -107,6 +127,21 @@ export class TrafficView {
     };
     this.boxes = mesh(new THREE.BoxGeometry(1, 1, 1), this.boxParts.length, 'traffic-boxes');
     this.cyls = mesh(new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2), this.cylParts.length, 'traffic-wheels');
+    this.lamps = mesh(new THREE.BoxGeometry(1, 1, 1), this.lampParts.length, 'traffic-lamps', lampMat);
+    this.lamps.castShadow = false;
+
+    // Vệt đèn pha in trên mặt đường phía trước xe (cộng sáng, chỉ hiện khi tối). uv.y = 1 ở sát xe, 0 ở xa.
+    const beamMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const far = float(1).sub(uv().y);
+    const side = abs(uv().x.sub(0.5)).mul(2);
+    const shape = float(1).sub(smoothstep(far.mul(0.5).add(0.25), float(1), side)).mul(float(1).sub(far).pow(1.4)).mul(smoothstep(0, 0.12, far));
+    beamMat.colorNode = vec3(1.0, 0.93, 0.78).mul(shape).mul(nightUniform.mul(0.3));
+    this.beams = mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), 1, 'traffic-beams', beamMat);
+    // Vệt đèn không dùng màu theo instance (bộ đệm màu khởi tạo bằng 0 sẽ làm tắt vệt sáng).
+    this.beams.instanceColor = null;
+    this.beams.castShadow = false;
+    this.beams.receiveShadow = false;
+    this.beams.renderOrder = 1;
     this.root.name = 'traffic';
   }
 
@@ -145,6 +180,7 @@ export class TrafficView {
     };
     write(this.boxes, this.boxParts);
     write(this.cyls, this.cylParts);
+    write(this.lamps, this.lampParts);
   }
 
   /** Ghi ma trận cho mọi xe; `alpha` nội suy giữa bước mô phỏng trước và sau. */
@@ -168,10 +204,21 @@ export class TrafficView {
       };
       write(this.boxes, this.boxParts);
       write(this.cyls, this.cylParts);
+      write(this.lamps, this.lampParts);
+      // Vệt đèn: theo hướng xe nhưng nằm phẳng trên đường (không nghiêng theo xe).
+      _q.setFromAxisAngle(_up, yaw);
+      _w.compose(_p, _q, _one);
+      this.beams.setMatrixAt(i, _m.multiplyMatrices(_w, BEAM_LOCAL));
     }
-    this.boxes.count = n * this.boxParts.length;
-    this.cyls.count = n * this.cylParts.length;
-    this.boxes.instanceMatrix.needsUpdate = true;
-    this.cyls.instanceMatrix.needsUpdate = true;
+    for (const [mesh, parts] of [
+      [this.boxes, this.boxParts],
+      [this.cyls, this.cylParts],
+      [this.lamps, this.lampParts],
+    ] as const) {
+      mesh.count = n * parts.length;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    this.beams.count = n;
+    this.beams.instanceMatrix.needsUpdate = true;
   }
 }

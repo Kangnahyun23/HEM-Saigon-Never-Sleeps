@@ -1,5 +1,8 @@
 import * as THREE from 'three/webgpu';
+import { float, hash, mix, positionLocal, smoothstep, step, vec3 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
+import { nightUniform } from './nightGlow';
+import type { Lighting, RGB } from './timeOfDay';
 
 export interface Environment {
   sun: THREE.DirectionalLight;
@@ -7,6 +10,8 @@ export interface Environment {
   sky: SkyMesh;
   /** Gọi mỗi khung hình: kéo vùng đổ bóng theo điểm đang nhìn. */
   update(focus: THREE.Vector3): void;
+  /** Áp ánh sáng theo giờ trong ngày (trời, nắng/trăng, sương, phơi sáng, đèn ban đêm). */
+  setLighting(l: Lighting): void;
 }
 
 function makeSky(sunDir: THREE.Vector3, clouds: boolean): SkyMesh {
@@ -45,6 +50,22 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
 
   scene.fog = new THREE.Fog('#d3d8da', 190, 760);
 
+  // Vòm trời đêm: SkyMesh gần như đen khi mặt trời lặn, nên phủ thêm một vòm xanh thẫm có quầng cam tím của
+  // thành phố ở chân trời và vài ngôi sao; độ đậm theo mức đêm.
+  const domeMat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, transparent: true, depthWrite: false, fog: false });
+  const up = positionLocal.y.div(2000); // độ cao trên vòm: 0 ở chân trời, 1 ở đỉnh
+  const glow = smoothstep(0.25, 0.0, up);
+  const nightSky = mix(vec3(0.015, 0.022, 0.055), vec3(0.1, 0.065, 0.1), glow);
+  const starCell = positionLocal.mul(0.45).floor();
+  const star = step(0.9985, hash(starCell.x.add(starCell.y.mul(157)).add(starCell.z.mul(311)))).mul(smoothstep(0.15, 0.4, up));
+  domeMat.colorNode = nightSky.add(vec3(star.mul(0.9)));
+  domeMat.opacityNode = nightUniform.mul(float(0.96));
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2000, 32, 16), domeMat);
+  dome.name = 'night-dome';
+  dome.frustumCulled = false;
+  dome.renderOrder = -1;
+  scene.add(dome);
+
   const hemi = new THREE.HemisphereLight('#cfe0f5', '#8b7a63', 1.0);
   scene.add(hemi);
 
@@ -66,6 +87,11 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
 
   const texel = (range * 2) / 2048;
   const snapped = new THREE.Vector3();
+  const lightDir = sunDir.clone();
+  const fog = scene.fog;
+  const setColor = (c: THREE.Color, rgb: RGB): void => {
+    c.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
+  };
   return {
     sun,
     hemi,
@@ -74,8 +100,21 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       // Bám theo điểm nhìn, làm tròn theo kích thước texel để bóng không "rung".
       snapped.set(Math.round(focus.x / texel) * texel, 0, Math.round(focus.z / texel) * texel);
       sun.target.position.copy(snapped);
-      sun.position.copy(snapped).addScaledVector(sunDir, 200);
+      sun.position.copy(snapped).addScaledVector(lightDir, 200);
       sun.target.updateMatrixWorld();
+    },
+    setLighting(l) {
+      sky.sunPosition.value.set(l.sunDir[0], l.sunDir[1], l.sunDir[2]);
+      lightDir.set(l.lightDir[0], l.lightDir[1], l.lightDir[2]);
+      setColor(sun.color, l.lightColor);
+      sun.intensity = l.lightIntensity;
+      setColor(hemi.color, l.hemiSky);
+      setColor(hemi.groundColor, l.hemiGround);
+      hemi.intensity = l.hemiIntensity;
+      setColor(fog.color, l.fogColor);
+      scene.environmentIntensity = l.envIntensity;
+      renderer.toneMappingExposure = l.exposure;
+      nightUniform.value = l.night;
     },
   };
 }
