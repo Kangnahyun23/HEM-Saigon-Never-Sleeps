@@ -17,6 +17,7 @@ import type { City } from '@/world/city/buildCity';
 import { PAD_HEIGHT } from '@/world/city/layout';
 import { locate } from '@/world/city/locate';
 import type { Environment } from '@/world/environment';
+import { GameClock, lightingAt } from '@/world/timeOfDay';
 
 const STEP = 1 / 60;
 const MOUNT_RANGE = 2.4;
@@ -36,6 +37,10 @@ export class Game {
   readonly camera: FollowCamera;
   readonly bikes: Bike[] = [];
   readonly traffic: TrafficSystem;
+  /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
+  readonly clock: GameClock;
+  /** Đèn pha thật của xe người chơi (một SpotLight dùng chung, gắn vào xe đang chạy). */
+  private readonly headlamp = new THREE.SpotLight('#fff1d6', 0, 45, 0.55, 0.65, 1.2);
   mode: 'foot' | 'ride' = 'foot';
   riding: Bike | null = null;
   physicsSteps = 0;
@@ -62,7 +67,14 @@ export class Game {
     private readonly input: Input,
     private readonly hud: Hud,
     private readonly env: Environment,
+    startHour = 16.5,
   ) {
+    this.clock = new GameClock(startHour);
+    // Đèn luôn nằm trong cảnh (cường độ 0 khi tắt) để không phải biên dịch lại shader khi bật/tắt.
+    this.headlamp.position.set(0, 0.98, 0.62);
+    this.headlamp.target.position.set(0, -0.6, 12);
+    this.headlamp.add(this.headlamp.target);
+    scene.add(this.headlamp);
     const { spawn } = city.layout;
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
     this.character.yaw = spawn.yaw;
@@ -124,6 +136,7 @@ export class Game {
     this.riding = bike;
     this.character.setEnabled(false);
     bike.view.seat.add(this.model.root);
+    bike.view.model.add(this.headlamp);
     this.model.root.position.set(0, 0, 0);
     this.model.root.rotation.set(0, 0, 0);
     this.model.setHelmet(true);
@@ -168,6 +181,7 @@ export class Game {
     spot ??= { x: t.x, y: t.y + 1, z: t.z };
 
     this.scene.add(this.model.root);
+    this.scene.add(this.headlamp);
     this.model.setHelmet(false);
     this.character.setEnabled(true);
     this.character.teleport(spot.x, spot.y + 0.02, spot.z, h);
@@ -190,10 +204,17 @@ export class Game {
     if (input.wheel) this.camera.addZoom(input.wheel);
     if (input.wasPressed('Tab')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
-    if (input.wasPressed('KeyL')) {
-      this.headlight = !this.headlight;
-      for (const b of this.bikes) b.view.setHeadlight(this.headlight);
-    }
+    if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
+
+    // Giờ trong ngày ⇒ trời, nắng, sương, đèn ban đêm.
+    this.clock.advance(dt);
+    const light = lightingAt(this.clock.hour);
+    this.env.setLighting(light);
+    this.hud.setClock(this.clock.label());
+    // Trời tối thì xe đang chạy tự bật đèn; phím L bật/tắt đèn pha thủ công.
+    const lightsOn = this.headlight || light.night > 0.35;
+    for (const b of this.bikes) b.view.setLights(b === this.riding && lightsOn, light.night);
+    this.headlamp.intensity = this.riding && lightsOn ? 6 + 34 * light.night : 0;
 
     // Lên / xuống xe.
     let prompt = '';

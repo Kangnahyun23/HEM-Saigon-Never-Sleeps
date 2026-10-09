@@ -15,6 +15,7 @@ export class MotorbikeView {
   private readonly frontSpin = new THREE.Group();
   private readonly rearSpin = new THREE.Group();
   private readonly headlight: THREE.MeshStandardNodeMaterial;
+  private readonly taillight: THREE.MeshStandardNodeMaterial;
 
   constructor(bodyColor: string) {
     this.root.add(this.model);
@@ -41,6 +42,7 @@ export class MotorbikeView {
       return m;
     };
     this.headlight = matFor({ shape: 'box', size: [1, 1, 1], pos: [0, 0, 0], role: 'light' });
+    this.taillight = matFor({ shape: 'box', size: [1, 1, 1], pos: [0, 0, 0], role: 'tail' });
 
     // Cụm lái: trục quay nghiêng về sau một góc RAKE, đi qua steerPivot.
     const [px, py, pz] = BIKE.steerPivot;
@@ -93,8 +95,10 @@ export class MotorbikeView {
     this.model.add(this.seat);
   }
 
-  setHeadlight(on: boolean): void {
-    this.headlight.emissiveIntensity = on ? 2.5 : 0.6;
+  /** Bật/tắt đèn pha; `night` 0..1 làm đèn hậu rực hơn khi tối. */
+  setLights(on: boolean, night = 0): void {
+    this.headlight.emissiveIntensity = on ? 2.5 + night * 3 : 0.6;
+    this.taillight.emissiveIntensity = on ? 0.3 + night * 2.5 : 0.3;
   }
 
   /** Đồng bộ với vật lý (gọi mỗi khung hình). `alpha` = vị trí giữa bước vật lý trước và sau (0..1). */

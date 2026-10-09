@@ -22,7 +22,10 @@ async function main(): Promise<void> {
   const city = buildCity(scene, physics);
   const input = new Input(window, renderer.domElement);
   const hud = new Hud(hudRoot, backend);
-  const game = new Game(scene, camera, physics, city, input, hud, env);
+  // ?gio=21 để vào game lúc 21 giờ (thử cảnh đêm).
+  const gio = new URLSearchParams(location.search).get('gio');
+  const startHour = gio === null ? NaN : Number(gio);
+  const game = new Game(scene, camera, physics, city, input, hud, env, Number.isFinite(startHour) ? startHour : undefined);
   const timer = new THREE.Timer();
 
   const debug: DebugInfo = {
@@ -48,6 +51,11 @@ async function main(): Promise<void> {
     }
   };
   debug.input = input;
+  /** Đặt giờ trong game (0–24). */
+  debug.setHour = (h: number) => {
+    game.clock.hour = h;
+    if (debug.paused) game.update(0);
+  };
   window.__HEM__ = debug;
 
   window.addEventListener('resize', () => {

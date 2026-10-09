@@ -16,6 +16,7 @@ import {
   vec2,
   vec3,
 } from 'three/tsl';
+import { nightUniform } from '../nightGlow';
 import { FLOOR_HEIGHT } from './layout';
 
 /**
@@ -135,6 +136,17 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const metalShutter = isShop.and(shutterClosed).and(inHem.not());
   mat.roughnessNode = select(glassy, float(0.12), select(metalShutter, float(0.5), float(0.9)));
   mat.metalnessNode = select(glassy, float(0.3), select(metalShutter, float(0.45), float(0)));
+
+  // --- Ban đêm: đèn trong nhà hắt ra cửa sổ, cửa hàng còn mở sáng trưng -----------------------------------------
+  // Khoảng 45 % ô cửa sáng đèn; nửa đèn vàng ấm, nửa đèn tuýp trắng xanh (rất "Sài Gòn"). Ô có rèm sáng màu rèm.
+  const litHash = hash(winHash.mul(13.7).add(3.1));
+  const lit = isWindow.and(isFrame.not()).and(bars.not()).and(litHash.lessThan(0.45));
+  const lampTone = mix(vec3(1.0, 0.78, 0.48), vec3(0.78, 0.9, 1.0), select(hash(winHash.mul(5.3)).greaterThan(0.5), float(1), float(0)));
+  const windowGlow = select(winHash.greaterThan(0.72).and(isTower.not()), curtainPalette.mul(0.6), lampTone.mul(mix(float(0.45), float(0.85), litHash.mul(2.2))));
+  const shopGlow = select(isShop.and(shutterClosed.not()), mix(vec3(1.0, 0.82, 0.55), vec3(0.85, 0.95, 1.0), hash(seed.mul(53))).mul(float(1.0).sub(interiorDepth.mul(0.6))), vec3(0, 0, 0));
+  const lobbyGlow = select(isLobby, vec3(0.9, 0.85, 0.7).mul(0.7), vec3(0, 0, 0));
+  const glow = select(roof, vec3(0, 0, 0), select(lit, windowGlow, shopGlow.add(lobbyGlow)));
+  mat.emissiveNode = glow.mul(nightUniform);
   return mat;
 }
 
@@ -179,5 +191,7 @@ export function createSignMaterial(atlas: THREE.Texture, cols: number, rows: num
   const offset = attribute<'vec2'>('aSign', 'vec2');
   const st = uv().mul(vec2(1 / cols, 1 / rows)).add(offset);
   mat.colorNode = texture(atlas, st).rgb;
+  // Bảng hiệu có đèn: ban đêm tự phát sáng theo màu chữ/nền.
+  mat.emissiveNode = texture(atlas, st).rgb.mul(nightUniform.mul(0.75));
   return mat;
 }

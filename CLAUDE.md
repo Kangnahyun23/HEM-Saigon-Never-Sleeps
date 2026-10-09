@@ -20,7 +20,8 @@ npx playwright test views      # chỉ chụp các góc nhìn khu phố
 npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → phanh → xuống xe
 ```
 Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
-(chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do).
+(chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do), `__HEM__.setHour(21)` (đổi giờ).
+Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm).
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
 
@@ -44,11 +45,13 @@ src/
   physics/           Rapier: physics.ts, groups.ts (nhóm va chạm), staticWorld.ts (vật cản tĩnh)
   render/            renderer (WebGPU→WebGL2), instancing.ts (InstanceBatch)
   world/
-    environment.ts   bầu trời SkyMesh, PMREM, nắng + bóng đổ bám điểm nhìn, sương
+    environment.ts   bầu trời SkyMesh + vòm trời đêm, PMREM, nắng/trăng + bóng đổ bám điểm nhìn, sương; setLighting()
+    timeOfDay.ts     đồng hồ game + ánh sáng theo giờ (mặt trời, màu trời, sương, mức đêm) — thuần logic, có unit test
+    nightGlow.ts     uniform "mức đêm" dùng chung cho mọi vật liệu phát sáng (cửa sổ, bảng hiệu, đèn đường, đèn xe)
     city/layout.ts   BỐ CỤC thuần dữ liệu (đường, block, hẻm, lô nhà, cột điện, cây…) — có unit test
     city/locate.ts   tên địa điểm tại (x, z) cho HUD
     city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng…), vỉa hè, bê tông hẻm, nhựa đường
-    city/build/*     dựng hình + va chạm từ bố cục: ground, buildings, streetProps, landmarks
+    city/build/*     dựng hình + va chạm từ bố cục: ground, buildings, streetProps, landmarks, lightPools (vũng đèn đường)
   player/            characterBody (Rapier character controller), characterModel (hoạt hoạ thủ tục),
                      followCamera (góc nhìn 3, chống xuyên tường)
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
@@ -57,7 +60,7 @@ src/
   audio/             còi xe WebAudio
   ui/                HUD (địa điểm, đồng hồ tốc độ, gợi ý phím, thông báo)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
-tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay, traffic
+tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay, traffic, dayNight
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).
