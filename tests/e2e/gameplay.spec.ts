@@ -24,6 +24,9 @@ test('đi bộ, lên xe, chạy xe, cua, phanh, xuống xe', async ({ page }) =>
   test.setTimeout(600_000);
   await page.goto('/');
   await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  // Chỉ cho game chạy qua `simulate`: khung hình thật (số lượng khác nhau giữa các máy) không được chen vào điều khiển,
+  // nếu không xe có thể chạy tiếp lúc chờ chụp ảnh, đâm tường, và kết quả test phụ thuộc tốc độ máy.
+  await page.evaluate(() => (window.__HEM__!.paused = true));
   await nextFrames(page);
   await simulate(page, 1);
   await nextFrames(page);

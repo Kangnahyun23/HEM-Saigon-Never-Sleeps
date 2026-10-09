@@ -30,6 +30,7 @@ async function main(): Promise<void> {
     backend,
     frames: 0,
     physicsSteps: 0,
+    paused: false,
     stats: { ...city.stats, lots: city.layout.lots.length },
     setCamera(px, py, pz, tx, ty, tz) {
       game.freeCamera = true;
@@ -58,7 +59,7 @@ async function main(): Promise<void> {
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.1);
-    game.update(dt);
+    if (!debug.paused) game.update(dt);
     renderer.render(scene, camera);
     hud.update(dt);
     input.endFrame();
