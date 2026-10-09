@@ -1,0 +1,37 @@
+{
+  "name": "hem-saigon-never-sleeps",
+  "private": true,
+  "version": "0.0.1",
+  "description": "HẺM — Sài Gòn Không Ngủ: game hành động thế giới mở trên trình duyệt",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.0.0",
+    "@types/three": "^0.186.0",
+    "eslint": "^10.12.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.0.0",
+    "vitest": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22.12",
+    "npm": ">=11"
+  }
+}
