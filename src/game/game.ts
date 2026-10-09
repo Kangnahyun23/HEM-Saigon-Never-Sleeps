@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import type { Obstacle } from '@/ai/traffic';
+import { TrafficSystem } from '@/ai/trafficSystem';
 import { Horn } from '@/audio/horn';
 import { FixedStepAccumulator } from '@/core/fixedStep';
 import type { Input } from '@/core/input';
@@ -33,11 +35,14 @@ export class Game {
   readonly model = new CharacterModel();
   readonly camera: FollowCamera;
   readonly bikes: Bike[] = [];
+  readonly traffic: TrafficSystem;
   mode: 'foot' | 'ride' = 'foot';
   riding: Bike | null = null;
   physicsSteps = 0;
   private readonly stepper = new FixedStepAccumulator(STEP, 5);
   private readonly horn = new Horn();
+  /** Còi của xe NPC (khoá bận riêng, không chặn còi người chơi). */
+  private readonly trafficHorn = new Horn();
   private readonly tmp = new THREE.Vector3();
   private headlight = false;
   /** Lệnh nhảy chờ bước vật lý kế tiếp (nhấn một lần = nhảy một lần). */
@@ -74,6 +79,22 @@ export class Game {
 
     this.camera = new FollowCamera(camera, physics);
     this.camera.yaw = spawn.yaw + Math.PI;
+
+    this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z });
+  }
+
+  /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */
+  private trafficObstacles(): Obstacle[] {
+    const out: Obstacle[] = [];
+    if (this.mode === 'foot') {
+      const f = this.character.feet();
+      out.push({ x: f.x, z: f.z, radius: 0.45 });
+    }
+    for (const b of this.bikes) {
+      const t = b.phys.body.translation();
+      out.push({ x: t.x, z: t.z, radius: 0.9 });
+    }
+    return out;
   }
 
   private addBike(x: number, z: number, yaw: number, color: string): void {
@@ -204,6 +225,12 @@ export class Game {
     const fwd = input.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
     const strafe = input.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
     for (let i = 0; i < steps; i++) {
+      const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
+      this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
+      for (const h of this.traffic.sim.honks) {
+        const d = Math.hypot(h.x - me.x, h.z - me.z);
+        this.trafficHorn.beep(1 / (1 + d / 8), 0.85 + ((h.id * 37) % 40) / 100);
+      }
       if (this.mode === 'foot') {
         // Phải của hướng nhìn (fx, fz) là (−fz, fx).
         const mx = cam.x * fwd - cam.z * strafe;
@@ -244,6 +271,7 @@ export class Game {
     // Đồng bộ hình ảnh.
     const alpha = this.stepper.alpha;
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
+    this.traffic.render(alpha);
     let speedKmh: number | null = null;
     const cp = this.character.prev;
     const cc = this.character.curr;

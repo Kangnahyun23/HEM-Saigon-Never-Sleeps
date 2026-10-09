@@ -52,14 +52,17 @@ src/
   player/            characterBody (Rapier character controller), characterModel (hoạt hoạ thủ tục),
                      followCamera (góc nhìn 3, chống xuyên tường)
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
+  ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
+                     trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
   audio/             còi xe WebAudio
   ui/                HUD (địa điểm, đồng hồ tốc độ, gợi ý phím, thông báo)
-tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật)
-tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay
+tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
+tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay, traffic
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).
 Xe chạy bên phải: đi theo +X thì ở nửa +Z của đường, đi theo +Z thì ở nửa −X.
+Test e2e cần tất định thì đặt `window.__HEM__.paused = true` rồi chạy game bằng `simulate(giây)`.
 
 ## Quy trình làm việc
 - Mỗi phiên làm MỘT task nhỏ, kết thúc bằng một PR vào `main` (CI: lint, typecheck, test, build, e2e).
