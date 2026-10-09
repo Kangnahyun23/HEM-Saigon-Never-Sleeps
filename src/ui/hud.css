@@ -1,28 +1,64 @@
 :root {
   color-scheme: dark;
-  --hud-bg: rgba(12, 10, 18, 0.62);
-  --hud-ink: #f6efe4;
-  --hud-quiet: #b9ad9c;
-  --hud-accent: #ffb347;
+  --hud-bg: rgba(14, 12, 20, 0.58);
+  --hud-ink: #f7f1e6;
+  --hud-quiet: #c4b8a6;
+  --hud-accent: #ff8c1a;
+  --hud-accent-2: #1a9e83;
   font-family: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #120f18; color: var(--hud-ink); }
 #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-#hud {
-  position: fixed; top: 16px; left: 16px; padding: 12px 14px; border-radius: 10px;
-  background: var(--hud-bg); backdrop-filter: blur(6px); font-size: 13px; line-height: 1.5;
-  pointer-events: none; min-width: 220px;
-}
-#hud h1 { margin: 0 0 4px; font-size: 16px; letter-spacing: 0.08em; color: var(--hud-accent); }
-#hud .quiet { color: var(--hud-quiet); }
-#hud kbd {
-  display: inline-block; padding: 0 5px; border-radius: 4px; border: 1px solid var(--hud-quiet);
-  font: 11px ui-monospace, monospace;
-}
-#loading {
-  position: fixed; inset: 0; display: grid; place-items: center; font-size: 18px; letter-spacing: 0.04em;
-  background: #120f18; transition: opacity 0.4s;
-}
+#hud { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+.panel { background: var(--hud-bg); backdrop-filter: blur(6px); border-radius: 10px; }
+
+/* Địa điểm (góc trên trái) */
+.hud-location { position: absolute; top: 18px; left: 18px; padding: 10px 14px 10px 12px; border-left: 3px solid var(--hud-accent); min-width: 220px; transition: opacity .4s; }
+.hud-location .brand { font-size: 12px; font-weight: 800; letter-spacing: .22em; color: var(--hud-accent); }
+.hud-location .district { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--hud-quiet); margin-top: 6px; }
+.hud-location .place { font-size: 19px; font-weight: 700; line-height: 1.25; margin-top: 2px; }
+.hud-location.changed .place { animation: pop .5s ease-out; }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Đồng hồ tốc độ (góc dưới phải) */
+.hud-speedo { position: absolute; right: 22px; bottom: 22px; width: 172px; height: 172px; transition: opacity .3s, transform .3s; }
+.hud-speedo.hidden { opacity: 0; transform: translateY(12px); }
+.hud-speedo svg { width: 100%; height: 100%; }
+.hud-speedo .value { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.hud-speedo .num { font-size: 44px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.hud-speedo .unit { font-size: 11px; letter-spacing: .18em; color: var(--hud-quiet); margin-top: 4px; }
+
+/* Gợi ý thao tác (giữa dưới) */
+.hud-prompt { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%); padding: 9px 16px; font-size: 15px; font-weight: 600; transition: opacity .25s; white-space: nowrap; }
+.hud-prompt.hidden { opacity: 0; }
+kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; border-radius: 5px; border: 1px solid rgba(255,255,255,.35); border-bottom-width: 2px; background: rgba(255,255,255,.08); font: 700 12px ui-monospace, monospace; text-align: center; color: var(--hud-ink); }
+.hud-prompt kbd { border-color: var(--hud-accent); color: var(--hud-accent); }
+
+/* Thông báo nhanh (giữa trên) */
+.hud-toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 30px; font-weight: 800; letter-spacing: .02em; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.4), 0 0 24px rgba(0,0,0,.45); opacity: 0; transition: opacity .3s, transform .3s; white-space: nowrap; }
+.hud-toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
+/* Bảng phím (góc dưới trái) */
+.hud-help { position: absolute; left: 18px; bottom: 18px; padding: 10px 14px; font-size: 12.5px; line-height: 1.85; color: var(--hud-quiet); transition: opacity .5s; }
+.hud-help.hidden { opacity: 0; }
+.hud-help b { color: var(--hud-ink); font-weight: 600; }
+.hud-help .title { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--hud-accent); margin-bottom: 2px; }
+
+/* FPS (góc trên phải) */
+.hud-fps { position: absolute; top: 14px; right: 16px; font: 11px ui-monospace, monospace; color: var(--hud-quiet); opacity: .75; }
+
+#loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 18px; letter-spacing: .04em; background: #120f18; transition: opacity .5s; text-align: center; }
+#loading .logo { font-size: 56px; font-weight: 800; letter-spacing: .2em; color: var(--hud-accent); }
+#loading .sub { color: var(--hud-quiet); margin-top: 8px; }
 #loading.done { opacity: 0; pointer-events: none; }
-#loading.error { color: #ff8a80; padding: 24px; text-align: center; }
+#loading.error { color: #ff8a80; padding: 24px; }
+
+@media (max-width: 640px) {
+  .hud-help { display: none; }
+  .hud-speedo { width: 128px; height: 128px; right: 12px; bottom: 12px; }
+  .hud-speedo .num { font-size: 32px; }
+  .hud-location { top: 12px; left: 12px; min-width: 0; }
+  .hud-location .place { font-size: 16px; }
+  .hud-prompt { font-size: 13px; bottom: 40px; }
+}

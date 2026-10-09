@@ -1,0 +1,306 @@
+import * as THREE from 'three/webgpu';
+import { Horn } from '@/audio/horn';
+import { FixedStepAccumulator } from '@/core/fixedStep';
+import type { Input } from '@/core/input';
+import { GROUP, interaction } from '@/physics/groups';
+import type { PhysicsWorld } from '@/physics/physics';
+import { CHARACTER, CharacterBody } from '@/player/characterBody';
+import { CharacterModel } from '@/player/characterModel';
+import { FollowCamera } from '@/player/followCamera';
+import type { Hud } from '@/ui/hud';
+import { BIKE_BODY_COLORS } from '@/vehicles/bikeModel';
+import { BIKE_TUNING, MotorbikePhysics, NO_CONTROL, type BikeControls } from '@/vehicles/motorbikePhysics';
+import { MotorbikeView } from '@/vehicles/motorbikeView';
+import type { City } from '@/world/city/buildCity';
+import { PAD_HEIGHT } from '@/world/city/layout';
+import { locate } from '@/world/city/locate';
+import type { Environment } from '@/world/environment';
+
+const STEP = 1 / 60;
+const MOUNT_RANGE = 2.4;
+const DISMOUNT_MAX_SPEED = 4;
+
+interface Bike {
+  phys: MotorbikePhysics;
+  view: MotorbikeView;
+}
+
+/**
+ * Vòng chơi M1: đi bộ quanh khu phố, lên xe máy, chạy xe; camera góc nhìn thứ 3, HUD địa điểm + tốc độ.
+ */
+export class Game {
+  readonly character: CharacterBody;
+  readonly model = new CharacterModel();
+  readonly camera: FollowCamera;
+  readonly bikes: Bike[] = [];
+  mode: 'foot' | 'ride' = 'foot';
+  riding: Bike | null = null;
+  physicsSteps = 0;
+  private readonly stepper = new FixedStepAccumulator(STEP, 5);
+  private readonly horn = new Horn();
+  private readonly tmp = new THREE.Vector3();
+  private headlight = false;
+  /** Lệnh nhảy chờ bước vật lý kế tiếp (nhấn một lần = nhảy một lần). */
+  private jumpQueued = false;
+  private stillTime = 0;
+  private locateTimer = 0;
+  /** Điều khiển giả lập từ test (ghi đè bàn phím). */
+  autopilot: Partial<BikeControls> | null = null;
+  /** Camera do debug/test điều khiển, game không đụng tới. */
+  freeCamera = false;
+
+  constructor(
+    private readonly scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+    private readonly physics: PhysicsWorld,
+    private readonly city: City,
+    private readonly input: Input,
+    private readonly hud: Hud,
+    private readonly env: Environment,
+  ) {
+    const { spawn } = city.layout;
+    this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
+    this.character.yaw = spawn.yaw;
+    scene.add(this.model.root);
+
+    // Xe của Tín đậu sẵn cạnh điểm xuất phát (bên trái, đầu xe cùng hướng nhìn), thêm hai xe khác để thử.
+    const fx = Math.sin(spawn.yaw);
+    const fz = Math.cos(spawn.yaw);
+    const lx = fz; // bên trái = (cos yaw, -sin yaw)… với yaw quanh +Y: trái của hướng (sin, cos) là (cos, -sin)
+    const lz = -fx;
+    this.addBike(spawn.x + lx * 1.6 + fx * 1.5, spawn.z + lz * 1.6 + fz * 1.5, spawn.yaw + Math.PI / 2, '#b3242b');
+    this.addBike(spawn.x + lx * 1.6 + fx * 3.0, spawn.z + lz * 1.6 + fz * 3.0, spawn.yaw + Math.PI / 2, BIKE_BODY_COLORS[2]);
+    this.addBike(spawn.x + lx * 1.6 + fx * 4.5, spawn.z + lz * 1.6 + fz * 4.5, spawn.yaw + Math.PI / 2, BIKE_BODY_COLORS[3]);
+
+    this.camera = new FollowCamera(camera, physics);
+    this.camera.yaw = spawn.yaw + Math.PI;
+  }
+
+  private addBike(x: number, z: number, yaw: number, color: string): void {
+    const phys = new MotorbikePhysics(this.physics.RAPIER, this.physics.world, x, PAD_HEIGHT, z, yaw);
+    const view = new MotorbikeView(color);
+    this.scene.add(view.root);
+    this.bikes.push({ phys, view });
+  }
+
+  private nearestBike(): { bike: Bike; dist: number } | null {
+    const p = this.character.feet();
+    let best: Bike | null = null;
+    let bestD = Infinity;
+    for (const b of this.bikes) {
+      const t = b.phys.body.translation();
+      const d = Math.hypot(t.x - p.x, t.z - p.z);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best ? { bike: best, dist: bestD } : null;
+  }
+
+  mount(bike: Bike): void {
+    this.mode = 'ride';
+    this.riding = bike;
+    this.character.setEnabled(false);
+    bike.view.seat.add(this.model.root);
+    this.model.root.position.set(0, 0, 0);
+    this.model.root.rotation.set(0, 0, 0);
+    this.model.setHelmet(true);
+    this.camera.zoom = Math.max(this.camera.zoom, 1);
+    bike.phys.body.wakeUp();
+  }
+
+  /** Xuống xe: đặt Tín đứng cạnh xe (ưu tiên bên trái), kiểm tra chỗ trống. */
+  private dismount(thrown = false): void {
+    const bike = this.riding;
+    if (!bike) return;
+    const t = bike.phys.body.translation();
+    const h = bike.phys.heading();
+    const { RAPIER, world } = this.physics;
+    const shape = new RAPIER.Capsule(CHARACTER.halfHeight, CHARACTER.radius);
+    let spot: { x: number; y: number; z: number } | null = null;
+    for (const side of [1, -1, 0]) {
+      const ox = side === 0 ? -Math.sin(h) * 1.4 : Math.cos(h) * 0.85 * side;
+      const oz = side === 0 ? -Math.cos(h) * 1.4 : -Math.sin(h) * 0.85 * side;
+      const x = t.x + ox;
+      const z = t.z + oz;
+      // Tìm mặt đất bằng tia bắn xuống.
+      const hit = world.castRay(new RAPIER.Ray({ x, y: t.y + 2, z }, { x: 0, y: -1, z: 0 }), 6, true, undefined, interaction(GROUP.ALL, GROUP.WORLD));
+      const gy = hit ? t.y + 2 - hit.timeOfImpact : PAD_HEIGHT;
+      let blocked = false;
+      world.intersectionsWithShape(
+        { x, y: gy + CHARACTER.halfHeight + CHARACTER.radius + 0.05, z },
+        { x: 0, y: 0, z: 0, w: 1 },
+        shape,
+        () => {
+          blocked = true;
+          return false;
+        },
+        undefined,
+        interaction(GROUP.ALL, GROUP.WORLD | GROUP.PROP),
+      );
+      if (!blocked) {
+        spot = { x, y: gy, z };
+        break;
+      }
+    }
+    spot ??= { x: t.x, y: t.y + 1, z: t.z };
+
+    this.scene.add(this.model.root);
+    this.model.setHelmet(false);
+    this.character.setEnabled(true);
+    this.character.teleport(spot.x, spot.y + 0.02, spot.z, h);
+    if (thrown) {
+      // Văng khỏi xe theo quán tính TRƯỚC cú va (lúc này xe đã gần như đứng lại).
+      const v = bike.phys.lastSpeed * 0.45;
+      this.character.vx = Math.sin(h) * v;
+      this.character.vz = Math.cos(h) * v;
+      this.character.vy = 4.5;
+    }
+    this.jumpQueued = false;
+    this.mode = 'foot';
+    this.riding = null;
+  }
+
+  /** Cập nhật mỗi khung hình (dt thực, giây). */
+  update(dt: number): void {
+    const input = this.input;
+    if (input.mouseDX || input.mouseDY) this.camera.look(input.mouseDX, input.mouseDY);
+    if (input.wheel) this.camera.addZoom(input.wheel);
+    if (input.wasPressed('Tab')) this.hud.toggleHelp();
+    if (input.wasPressed('KeyH')) this.horn.beep();
+    if (input.wasPressed('KeyL')) {
+      this.headlight = !this.headlight;
+      for (const b of this.bikes) b.view.setHeadlight(this.headlight);
+    }
+
+    // Lên / xuống xe.
+    let prompt = '';
+    if (this.mode === 'foot') {
+      const near = this.nearestBike();
+      if (near && near.dist < MOUNT_RANGE) {
+        prompt = '<kbd>F</kbd> Lên xe';
+        if (input.wasPressed('KeyF')) this.mount(near.bike);
+      }
+    } else if (this.riding) {
+      const speed = Math.abs(this.riding.phys.speed);
+      if (input.wasPressed('KeyF')) {
+        if (speed < DISMOUNT_MAX_SPEED) this.dismount();
+        else this.hud.showToast('Chạy chậm lại rồi mới xuống xe!', 1.6);
+      }
+      if (input.wasPressed('KeyR')) {
+        const t = this.riding.phys.body.translation();
+        this.riding.phys.reset(t.x, t.y - 0.3, t.z, this.riding.phys.heading());
+      }
+      if (speed < 0.5) prompt = '<kbd>F</kbd> Xuống xe';
+    }
+    this.hud.setPrompt(prompt);
+
+    if (this.mode === 'foot' && input.wasPressed('Space')) this.jumpQueued = true;
+
+    // Bước vật lý cố định.
+    const steps = this.stepper.advance(dt);
+    const cam = this.camera.forward();
+    const fwd = input.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
+    const strafe = input.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
+    for (let i = 0; i < steps; i++) {
+      if (this.mode === 'foot') {
+        // Phải của hướng nhìn (fx, fz) là (−fz, fx).
+        const mx = cam.x * fwd - cam.z * strafe;
+        const mz = cam.z * fwd + cam.x * strafe;
+        this.character.update(STEP, { x: mx, z: mz, run: input.isDown('ShiftLeft', 'ShiftRight'), jump: this.jumpQueued });
+        this.jumpQueued = false;
+      }
+      for (const b of this.bikes) {
+        if (b === this.riding) {
+          const controls: BikeControls = {
+            throttle: this.autopilot?.throttle ?? fwd,
+            steer: this.autopilot?.steer ?? -strafe,
+            handbrake: this.autopilot?.handbrake ?? input.isDown('Space'),
+          };
+          b.phys.update(STEP, controls);
+        } else {
+          b.phys.update(STEP, { ...NO_CONTROL, handbrake: true });
+        }
+      }
+      this.physics.step();
+      this.physicsSteps++;
+      this.character.snapshot();
+      for (const b of this.bikes) b.phys.snapshot();
+
+      // Đâm xe: tốc độ tụt đột ngột ⇒ văng khỏi xe.
+      if (this.riding && this.riding.phys.impact > 7) {
+        this.hud.showToast('Ui da! Té xe rồi…');
+        this.dismount(true);
+      }
+    }
+
+    // Rơi khỏi thế giới (lỗi va chạm hiếm gặp): đưa về điểm xuất phát.
+    if (this.mode === 'foot' && this.character.feet().y < -8) {
+      const s = this.city.layout.spawn;
+      this.character.teleport(s.x, PAD_HEIGHT + 0.5, s.z, s.yaw);
+    }
+
+    // Đồng bộ hình ảnh.
+    const alpha = this.stepper.alpha;
+    for (const b of this.bikes) b.view.sync(b.phys, alpha);
+    let speedKmh: number | null = null;
+    const cp = this.character.prev;
+    const cc = this.character.curr;
+    const feet = { x: cp.x + (cc.x - cp.x) * alpha, y: cp.y + (cc.y - cp.y) * alpha, z: cp.z + (cc.z - cp.z) * alpha };
+    if (this.mode === 'foot') {
+      this.model.root.position.set(feet.x, feet.y, feet.z);
+      this.model.root.rotation.set(0, this.character.yaw, 0);
+      this.model.update(dt, {
+        mode: 'foot',
+        speed: this.character.actualSpeed,
+        grounded: this.character.grounded,
+        running: input.isDown('ShiftLeft', 'ShiftRight'),
+      });
+    } else if (this.riding) {
+      const p = this.riding.phys;
+      const still = Math.abs(p.speed) < 0.4;
+      this.stillTime = still ? this.stillTime + dt : 0;
+      this.model.update(dt, { mode: 'ride', speed: Math.abs(p.speed), grounded: true, running: false, footDown: this.stillTime > 0.25, steer: p.steer });
+      speedKmh = p.speed * 3.6;
+    }
+    this.hud.setSpeed(speedKmh);
+
+    // Camera.
+    if (this.freeCamera) {
+      this.tmp.copy(this.camera.camera.position);
+      this.env.update(this.tmp);
+      return;
+    }
+    const looking = performance.now() / 1000 - input.lastLookTime < 1.4;
+    if (this.mode === 'ride' && this.riding) {
+      const p = this.riding.phys;
+      const t = this.riding.view.root.position;
+      this.tmp.set(t.x, t.y + 1.25, t.z);
+      const v = Math.abs(p.speed);
+      this.camera.update(
+        dt,
+        {
+          target: this.tmp,
+          distance: 4.6 + Math.min(2.2, v * 0.1),
+          followYaw: v > 1.5 ? p.heading() + Math.PI : null,
+          followRate: 2.4,
+          fovBoost: (v / BIKE_TUNING.maxSpeed) * 14,
+        },
+        looking,
+      );
+    } else {
+      this.tmp.set(feet.x, feet.y + 1.55, feet.z);
+      this.camera.update(dt, { target: this.tmp, distance: 3.6, followYaw: null, followRate: 0, fovBoost: Math.min(this.character.actualSpeed, 6.4) * 0.6 }, looking);
+    }
+    this.env.update(this.tmp);
+
+    // Địa điểm trên HUD (4 lần/giây là đủ).
+    this.locateTimer -= dt;
+    if (this.locateTimer <= 0) {
+      this.locateTimer = 0.25;
+      this.hud.setPlace(locate(this.city.layout, this.tmp.x, this.tmp.z).name);
+    }
+  }
+}
+

@@ -1,0 +1,25 @@
+export { FACADE_COLORS } from '../palette';
+
+export const CITY_COLORS = {
+  asphalt: '#3a3a3f',
+  sidewalk: '#a99f93',
+  curb: '#cfc8bb',
+  hem: '#958e85',
+  hemBranch: '#857d73',
+  grass: '#5c8f3e',
+  paintWhite: '#ece8dc',
+  paintYellow: '#e8b923',
+  roof: '#77726b',
+  railing: ['#f1efe9', '#222426', '#2f5d43', '#e9dcc1', '#2f4f7a'],
+  awning: ['#c0392b', '#1f5fa8', '#2e8b57', '#e67e22', '#f0e6d2', '#d4ac0d', '#8e44ad'],
+  roofSheet: ['#3d6fa3', '#a8402f', '#8a8f94', '#5b8a72'],
+  plant: ['#3e7d32', '#4f8f3a', '#2f6b2a', '#c2185b', '#e64a8f', '#5b9a3c'],
+  stool: ['#d32f2f', '#1976d2', '#fbc02d', '#388e3c'],
+  tankSteel: '#c9ced3',
+  tankBlue: '#2f6fb3',
+  pole: '#a8a39a',
+  wire: '#141414',
+  trunk: '#5b4636',
+  leaf: ['#3f7d34', '#4b8a3b', '#356f2f', '#5c9443', '#2f6230'],
+  water: '#3f5f55',
+} as const;

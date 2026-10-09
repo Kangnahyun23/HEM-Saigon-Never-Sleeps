@@ -16,7 +16,11 @@ npm run dev        # như trên nhưng không mở trình duyệt (thêm ?webgl 
 npm run check      # lint + typecheck + unit test — chạy trước mỗi commit
 npm run build      # tsc + vite build → dist/
 npm run e2e        # build, chạy preview, Playwright mở game và chụp tests/e2e/__screenshots__/
+npx playwright test views      # chỉ chụp các góc nhìn khu phố
+npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → phanh → xuống xe
 ```
+Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
+(chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do).
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
 
@@ -34,16 +38,28 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 ## Cấu trúc
 ```
 src/
-  main.ts          khởi tạo renderer + physics + game loop
-  core/            fixedStep, input, random (seed)
-  physics/         bọc Rapier, đồng bộ mesh
-  render/          tạo renderer
-  world/           sandbox M0 (sẽ thành bộ sinh thành phố ở M1), bảng màu
-  ui/              HUD
-  (sắp có) vehicles/ player/ ai/ systems/ missions/ audio/
-tests/unit/        Vitest
-tests/e2e/         Playwright
+  main.ts            khởi tạo renderer, physics, khu phố, Game; vòng lặp khung hình; móc __HEM__
+  game/game.ts       vòng chơi: đi bộ ⇄ lái xe, bước vật lý cố định + nội suy, camera, HUD
+  core/              fixedStep, input (phím + chuột/pointer lock), random (seed), rect
+  physics/           Rapier: physics.ts, groups.ts (nhóm va chạm), staticWorld.ts (vật cản tĩnh)
+  render/            renderer (WebGPU→WebGL2), instancing.ts (InstanceBatch)
+  world/
+    environment.ts   bầu trời SkyMesh, PMREM, nắng + bóng đổ bám điểm nhìn, sương
+    city/layout.ts   BỐ CỤC thuần dữ liệu (đường, block, hẻm, lô nhà, cột điện, cây…) — có unit test
+    city/locate.ts   tên địa điểm tại (x, z) cho HUD
+    city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng…), vỉa hè, bê tông hẻm, nhựa đường
+    city/build/*     dựng hình + va chạm từ bố cục: ground, buildings, streetProps, landmarks
+  player/            characterBody (Rapier character controller), characterModel (hoạt hoạ thủ tục),
+                     followCamera (góc nhìn 3, chống xuyên tường)
+  vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
+  audio/             còi xe WebAudio
+  ui/                HUD (địa điểm, đồng hồ tốc độ, gợi ý phím, thông báo)
+tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật)
+tests/e2e/           Playwright: smoke, views (ảnh khu phố), gameplay
 ```
+
+Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).
+Xe chạy bên phải: đi theo +X thì ở nửa +Z của đường, đi theo +Z thì ở nửa −X.
 
 ## Quy trình làm việc
 - Mỗi phiên làm MỘT task nhỏ, kết thúc bằng một PR vào `main` (CI: lint, typecheck, test, build, e2e).

@@ -4,7 +4,10 @@ export interface DebugInfo {
   backend: string;
   frames: number;
   physicsSteps: number;
-  crateHeights: () => number[];
+  stats: Record<string, number>;
+  /** Đặt camera tự do (dùng chụp ảnh kiểm tra). */
+  setCamera(px: number, py: number, pz: number, tx: number, ty: number, tz: number): void;
+  [key: string]: unknown;
 }
 
 declare global {
