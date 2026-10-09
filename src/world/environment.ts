@@ -1,8 +1,11 @@
 import * as THREE from 'three/webgpu';
-import { float, hash, mix, positionLocal, smoothstep, step, vec3 } from 'three/tsl';
+import { float, hash, mix, positionLocal, smoothstep, step, uniform, vec3 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { nightUniform } from './nightGlow';
 import type { Lighting, RGB } from './timeOfDay';
+
+/** Ánh sáng đã áp thời tiết (sương, mây là tuỳ chọn). */
+export type SceneLighting = Lighting & { fogNear?: number; fogFar?: number; cloud?: number };
 
 export interface Environment {
   sun: THREE.DirectionalLight;
@@ -11,7 +14,7 @@ export interface Environment {
   /** Gọi mỗi khung hình: kéo vùng đổ bóng theo điểm đang nhìn. */
   update(focus: THREE.Vector3): void;
   /** Áp ánh sáng theo giờ trong ngày (trời, nắng/trăng, sương, phơi sáng, đèn ban đêm). */
-  setLighting(l: Lighting): void;
+  setLighting(l: SceneLighting): void;
 }
 
 function makeSky(sunDir: THREE.Vector3, clouds: boolean): SkyMesh {
@@ -57,7 +60,8 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
   const glow = smoothstep(0.25, 0.0, up);
   const nightSky = mix(vec3(0.015, 0.022, 0.055), vec3(0.1, 0.065, 0.1), glow);
   const starCell = positionLocal.mul(0.45).floor();
-  const star = step(0.9985, hash(starCell.x.add(starCell.y.mul(157)).add(starCell.z.mul(311)))).mul(smoothstep(0.15, 0.4, up));
+  const domeCloud = uniform(0);
+  const star = float(1).sub(domeCloud).mul(step(0.9985, hash(starCell.x.add(starCell.y.mul(157)).add(starCell.z.mul(311))))).mul(smoothstep(0.15, 0.4, up));
   domeMat.colorNode = nightSky.add(vec3(star.mul(0.9)));
   domeMat.opacityNode = nightUniform.mul(float(0.96));
   const dome = new THREE.Mesh(new THREE.SphereGeometry(2000, 32, 16), domeMat);
@@ -112,6 +116,14 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       setColor(hemi.groundColor, l.hemiGround);
       hemi.intensity = l.hemiIntensity;
       setColor(fog.color, l.fogColor);
+      if (fog instanceof THREE.Fog) {
+        fog.near = l.fogNear ?? 190;
+        fog.far = l.fogFar ?? 760;
+      }
+      const cloud = l.cloud ?? 0;
+      sky.cloudCoverage.value = 0.45 + 0.5 * cloud;
+      sky.turbidity.value = 6.5 + 8 * cloud;
+      domeCloud.value = cloud;
       scene.environmentIntensity = l.envIntensity;
       renderer.toneMappingExposure = l.exposure;
       nightUniform.value = l.night;

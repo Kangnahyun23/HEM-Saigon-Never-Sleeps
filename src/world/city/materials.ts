@@ -16,7 +16,7 @@ import {
   vec2,
   vec3,
 } from 'three/tsl';
-import { nightUniform } from '../nightGlow';
+import { nightUniform, wetUniform } from '../nightGlow';
 import { FLOOR_HEIGHT } from './layout';
 
 /**
@@ -158,7 +158,9 @@ export function createPavementMaterial(base: THREE.ColorRepresentation): THREE.M
   const grout = fract(tile.x).lessThan(0.05).or(fract(tile.y).lessThan(0.05));
   const tileHash = hash(floor(tile.x).add(floor(tile.y).mul(113)));
   const color = vec3(c.r, c.g, c.b).mul(float(0.9).add(tileHash.mul(0.12)));
-  mat.colorNode = select(grout, color.mul(0.72), color);
+  // Ướt mưa: sẫm lại và bóng lên.
+  mat.colorNode = select(grout, color.mul(0.72), color).mul(mix(float(1), float(0.72), wetUniform));
+  mat.roughnessNode = mix(float(0.92), float(0.45), wetUniform);
   return mat;
 }
 
@@ -181,7 +183,11 @@ export function createAsphaltMaterial(base: THREE.ColorRepresentation): THREE.Me
   const c = new THREE.Color(base);
   const grain = hash(floor(positionWorld.x.mul(3)).add(floor(positionWorld.z.mul(3)).mul(1337)));
   const patch = hash(floor(positionWorld.x.div(7)).add(floor(positionWorld.z.div(7)).mul(71)));
-  mat.colorNode = vec3(c.r, c.g, c.b).mul(float(0.88).add(grain.mul(0.1)).add(patch.mul(0.08)));
+  // Ướt mưa: nhựa đường sẫm, gần như gương (phản chiếu đèn đường, đèn xe qua môi trường); vũng nước theo mảng.
+  const puddle = smoothstep(0.55, 0.85, patch).mul(wetUniform);
+  mat.colorNode = vec3(c.r, c.g, c.b).mul(float(0.88).add(grain.mul(0.1)).add(patch.mul(0.08))).mul(mix(float(1), float(0.55), wetUniform));
+  mat.roughnessNode = mix(float(0.96), float(0.32), wetUniform).sub(puddle.mul(0.25));
+  mat.metalnessNode = puddle.mul(0.25);
   return mat;
 }
 

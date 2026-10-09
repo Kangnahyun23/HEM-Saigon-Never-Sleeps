@@ -1,7 +1,12 @@
 import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
+import { PedestrianSim, type Threat } from '@/ai/pedestrians';
+import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
+import { Inbox, type Contact } from '@/systems/inbox';
+import { formatVnd, Wallet } from '@/systems/wallet';
+import type { PhoneTab } from '@/ui/phone';
 import { FixedStepAccumulator } from '@/core/fixedStep';
 import type { Input } from '@/core/input';
 import { GROUP, interaction } from '@/physics/groups';
@@ -17,7 +22,11 @@ import type { City } from '@/world/city/buildCity';
 import { PAD_HEIGHT } from '@/world/city/layout';
 import { locate } from '@/world/city/locate';
 import type { Environment } from '@/world/environment';
+import { RainSound } from '@/audio/rainSound';
+import { wetUniform } from '@/world/nightGlow';
+import { Rain } from '@/world/rain';
 import { GameClock, lightingAt } from '@/world/timeOfDay';
+import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 
 const STEP = 1 / 60;
 const MOUNT_RANGE = 2.4;
@@ -37,8 +46,18 @@ export class Game {
   readonly camera: FollowCamera;
   readonly bikes: Bike[] = [];
   readonly traffic: TrafficSystem;
+  readonly pedestrians: PedestrianSim;
+  private readonly pedestrianView: PedestrianView;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
+  readonly weather: WeatherSim;
+  private readonly rain = new Rain();
+  private readonly rainSound = new RainSound();
+  readonly wallet = new Wallet();
+  readonly inbox = new Inbox();
+  /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
+  playTime = 0;
+  private readonly scheduled: Array<{ at: number; run: () => void }> = [];
   /** Đèn pha thật của xe người chơi (một SpotLight dùng chung, gắn vào xe đang chạy). */
   private readonly headlamp = new THREE.SpotLight('#fff1d6', 0, 45, 0.55, 0.65, 1.2);
   mode: 'foot' | 'ride' = 'foot';
@@ -68,13 +87,24 @@ export class Game {
     private readonly hud: Hud,
     private readonly env: Environment,
     startHour = 16.5,
+    startSky: Sky | null = null,
   ) {
     this.clock = new GameClock(startHour);
+    this.weather = new WeatherSim(city.layout.seed + 7, startSky ?? 'clear');
+    this.weather.forced = startSky;
+    scene.add(this.rain.mesh);
     // Đèn luôn nằm trong cảnh (cường độ 0 khi tắt) để không phải biên dịch lại shader khi bật/tắt.
     this.headlamp.position.set(0, 0.98, 0.62);
     this.headlamp.target.position.set(0, -0.6, 12);
     this.headlamp.add(this.headlamp.target);
     scene.add(this.headlamp);
+
+    this.hud.createPhone(this.inbox, this.wallet);
+    this.inbox.onMessage = (_m, contact) => {
+      this.hud.phone?.invalidate();
+      if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
+    };
+    this.scheduleIntro();
     const { spawn } = city.layout;
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
     this.character.yaw = spawn.yaw;
@@ -93,6 +123,23 @@ export class Game {
     this.camera.yaw = spawn.yaw + Math.PI;
 
     this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z });
+    this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z });
+    this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
+    scene.add(this.pedestrianView.root);
+  }
+
+  /** Hẹn một việc sau `seconds` giây chơi. */
+  schedule(seconds: number, run: () => void): void {
+    this.scheduled.push({ at: this.playTime + seconds, run });
+  }
+
+  /** Tin nhắn mở màn Hồi 1: Ngân bị siết nợ, app vay đòi tiền, chú Sáu hẹn gặp. */
+  private scheduleIntro(): void {
+    const say = (at: number, who: Contact, text: string): void => this.schedule(at, () => this.inbox.receive(who, text, this.clock.hour));
+    say(4, 'Ngân', 'Anh Tín ơi, người của app vay lại tới nhà. Họ dán giấy đỏ lên cửa, la lối cả xóm nghe.');
+    say(7, 'Ngân', 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...');
+    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán 5.000.000 đ trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
+    say(20, 'Chú Sáu', 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.');
   }
 
   /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */
@@ -206,11 +253,38 @@ export class Game {
     if (input.wasPressed('KeyH')) this.horn.beep();
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
 
+    // Điện thoại: P bật/tắt, Esc cất, 1–4 đổi tab.
+    const phone = this.hud.phone;
+    if (phone) {
+      if (input.wasPressed('KeyP')) phone.toggle();
+      else if (phone.open && input.wasPressed('Escape')) phone.setOpen(false);
+      if (phone.open) {
+        const tabs: PhoneTab[] = ['jobs', 'map', 'messages', 'wallet'];
+        tabs.forEach((t, i) => {
+          if (input.wasPressed(`Digit${i + 1}`)) phone.show(t);
+        });
+      }
+    }
+
+    // Việc đã hẹn giờ (tin nhắn, sự kiện nhiệm vụ).
+    this.playTime += dt;
+    for (let i = this.scheduled.length - 1; i >= 0; i--) {
+      const job = this.scheduled[i] as { at: number; run: () => void };
+      if (job.at <= this.playTime) {
+        this.scheduled.splice(i, 1);
+        job.run();
+      }
+    }
+
     // Giờ trong ngày ⇒ trời, nắng, sương, đèn ban đêm.
     this.clock.advance(dt);
-    const light = lightingAt(this.clock.hour);
+    const sky = this.weather.update(dt * this.clock.rate, this.clock.hour);
+    const light = applyWeather(lightingAt(this.clock.hour), sky);
     this.env.setLighting(light);
-    this.hud.setClock(this.clock.label());
+    wetUniform.value = sky.wet;
+    this.traffic.sim.speedFactor = 1 - 0.25 * sky.rain;
+    this.rainSound.update(sky.rain);
+    this.hud.setClock(`${this.clock.label()}${sky.rain > 0.3 ? ' · Mưa' : sky.cloud > 0.5 ? ' · Nhiều mây' : ''}`);
     // Trời tối thì xe đang chạy tự bật đèn; phím L bật/tắt đèn pha thủ công.
     const lightsOn = this.headlight || light.night > 0.35;
     for (const b of this.bikes) b.view.setLights(b === this.riding && lightsOn, light.night);
@@ -248,6 +322,13 @@ export class Game {
     for (let i = 0; i < steps; i++) {
       const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
       this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
+      // Người đi bộ né xe của người chơi khi xe lao tới.
+      const threats: Threat[] = [];
+      if (this.riding) {
+        const v = this.riding.phys.body.linvel();
+        threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
+      }
+      this.pedestrians.step(STEP, me, threats);
       for (const h of this.traffic.sim.honks) {
         const d = Math.hypot(h.x - me.x, h.z - me.z);
         this.trafficHorn.beep(1 / (1 + d / 8), 0.85 + ((h.id * 37) % 40) / 100);
@@ -293,6 +374,7 @@ export class Game {
     const alpha = this.stepper.alpha;
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
     this.traffic.render(alpha);
+    this.pedestrianView.update(this.pedestrians.walkers, alpha);
     let speedKmh: number | null = null;
     const cp = this.character.prev;
     const cc = this.character.curr;
@@ -319,6 +401,7 @@ export class Game {
     if (this.freeCamera) {
       this.tmp.copy(this.camera.camera.position);
       this.env.update(this.tmp);
+      this.rain.update(dt, this.tmp, this.weather.state.rain);
       return;
     }
     const looking = performance.now() / 1000 - input.lastLookTime < 1.4;
@@ -343,11 +426,14 @@ export class Game {
       this.camera.update(dt, { target: this.tmp, distance: 3.6, followYaw: null, followRate: 0, fovBoost: Math.min(this.character.actualSpeed, 6.4) * 0.6 }, looking);
     }
     this.env.update(this.tmp);
+    this.rain.update(dt, this.camera.camera.position, this.weather.state.rain);
 
     // Bản đồ nhỏ xoay theo camera.
     const look = this.camera.forward();
     const yaw = this.riding ? this.riding.phys.heading() : this.character.yaw;
     this.hud.minimap?.update(dt, this.tmp.x, this.tmp.z, look.x, look.z, yaw, this.mode === 'ride');
+    this.hud.phone?.update(this.clock.label(), this.tmp.x, this.tmp.z);
+    this.hud.setStatus(this.wallet.cash, this.inbox.unread);
 
     // Địa điểm trên HUD (4 lần/giây là đủ).
     this.locateTimer -= dt;
