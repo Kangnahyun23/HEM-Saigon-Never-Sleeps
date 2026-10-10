@@ -32,11 +32,17 @@ export const TEXTURES = {
     "size": [1.8, 1.8],
     "color": "media/textures/plaster-color.webp",
     "mean": [0.182, 0.1548, 0.1107]
+  },
+  "corrugated": {
+    "size": [2.7, 2.7],
+    "color": "media/textures/corrugated-color.webp",
+    "mean": [0.0993, 0.0977, 0.0826],
+    "normal": "media/textures/corrugated-normal.webp"
   }
 } as const satisfies Record<string, TextureEntry>;
 
 export type TextureId = keyof typeof TEXTURES;
 
 /** Tổng dung lượng thư mục public/media (byte) và ngân sách cho phép. */
-export const MEDIA_BYTES = 1418792;
+export const MEDIA_BYTES = 1478952;
 export const MEDIA_BUDGET = 26214400;

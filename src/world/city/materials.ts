@@ -151,7 +151,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const sideShade = select(isFront.or(isBack), float(1), float(0.9));
   const floorBand = select(isFront.and(fv.lessThan(0.045)).and(upper), float(0.82), float(1)); // gờ sàn mỗi tầng
   const wallPlain = wall.mul(float(0.94).sub(streak)).mul(footDarken).mul(sideShade).mul(floorBand);
-  // Vữa loang lổ (texture CC0): mặt tiền nhẹ tay, tường hông / mặt sau đậm (tường hông nhà phố Sài Gòn hay bong tróc, ố mốc).
+  // Vữa loang lổ (texture CC0): mặt tiền nhẹ tay, tường hông / mặt sau đậm hơn (tường hông nhà phố Sài Gòn hay bong tróc, ố mốc).
   const plaster = getTextures('plaster');
   const plasterMean = plaster?.entry.mean;
   const wallColor =
@@ -159,8 +159,9 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
       ? wallPlain.mul(
           mix(
             vec3(1, 1, 1),
-            texture(plaster.color, vec2(u.add(seed.mul(17.3)), y).div(plaster.entry.size[0])).rgb.div(vec3(plasterMean[0], plasterMean[1], plasterMean[2])),
-            select(isFront, float(0.45), float(0.85)),
+            // Phóng to ×2 (vết loang to, thưa — đỡ rối mắt và đỡ lộ ô lặp).
+            texture(plaster.color, vec2(u.add(seed.mul(17.3)), y).div(plaster.entry.size[0] * 2)).rgb.div(vec3(plasterMean[0], plasterMean[1], plasterMean[2])),
+            select(isFront, float(0.28), float(0.6)),
           ).clamp(0.35, 1.5),
         )
       : wallPlain;
@@ -246,13 +247,54 @@ export function createAsphaltMaterial(base: THREE.ColorRepresentation): THREE.Me
   return mat;
 }
 
-/** Bảng hiệu: lấy một ô trong atlas chữ (aSign = góc ô, đơn vị uv). */
-export function createSignMaterial(atlas: THREE.Texture, cols: number, rows: number): THREE.MeshStandardNodeMaterial {
-  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.6 });
-  const offset = attribute<'vec2'>('aSign', 'vec2');
-  const st = uv().mul(vec2(1 / cols, 1 / rows)).add(offset);
-  mat.colorNode = texture(atlas, st).rgb;
-  // Bảng hiệu có đèn: ban đêm tự phát sáng theo màu chữ/nền.
-  mat.emissiveNode = texture(atlas, st).rgb.mul(nightUniform.mul(0.75));
+/**
+ * Bảng hiệu: lấy một ô trong atlas (aSign = [u0, v0, du, dv]); aGlow = độ tự sáng ban đêm theo phong cách
+ * (hộp đèn / neon sáng rực, bảng alu có LED hắt, bảng sơn tay gần như tối).
+ */
+export function createSignMaterial(atlas: THREE.Texture): THREE.MeshStandardNodeMaterial {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.55 });
+  const cell = attribute<'vec4'>('aSign', 'vec4');
+  const glow = attribute<'float'>('aGlow', 'float');
+  const st = uv().mul(cell.zw).add(cell.xy);
+  const color = texture(atlas, st).rgb;
+  mat.colorNode = color;
+  mat.emissiveNode = color.mul(nightUniform.mul(glow));
+  return mat;
+}
+
+/**
+ * Mái tôn sóng (texture CC0): sóng chạy dọc chiều dốc mái (trục z cục bộ của tấm). aSize = kích thước tấm (m) để sóng
+ * giữ đúng khoảng cách thật dù tấm to nhỏ khác nhau. Màu tôn (xanh, đỏ, kẽm) lấy từ màu từng bản sao.
+ */
+export function createRoofSheetMaterial(): THREE.MeshStandardNodeMaterial {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.45, metalness: 0.15 });
+  const tex = getTextures('corrugated');
+  const mean = tex?.entry.mean;
+  if (!tex?.color || !mean) return mat;
+  const size = attribute<'vec3'>('aSize', 'vec3');
+  const local = attribute<'vec3'>('position', 'vec3').add(0.5).mul(size);
+  const st = vec2(local.x, local.z.negate()).div(tex.entry.size[0]);
+  mat.colorNode = texture(tex.color, st).rgb.div(vec3(mean[0], mean[1], mean[2])).clamp(0.3, 1.6);
+  return mat;
+}
+
+/**
+ * Chuồng cọp: khung sắt bọc ban công — song đứng mỗi ~16 cm, nẹp ngang mỗi 0,75 m, khung viền trên dưới.
+ * Phần trống cắt bằng alphaTest; aSize = kích thước tấm (m) để song sắt giữ đúng khoảng cách thật.
+ */
+export function createCageMaterial(): THREE.MeshStandardNodeMaterial {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.55, metalness: 0.2, side: THREE.DoubleSide });
+  const size = attribute<'vec3'>('aSize', 'vec3');
+  const local = attribute<'vec3'>('position', 'vec3').add(0.5).mul(size);
+  const along = positionWorld.x.add(positionWorld.z);
+  const bar = fract(along.mul(6.2)).lessThan(0.16);
+  const band = fract(local.y.div(0.75)).lessThan(0.05);
+  const frame = local.y.lessThan(0.05).or(local.y.greaterThan(size.y.sub(0.05)));
+  // Mặt trên (mái lồng): lưới ô vuông theo toạ độ thế giới.
+  const top = abs(attribute<'vec3'>('normal', 'vec3').y).greaterThan(0.5);
+  const grid = fract(positionWorld.x.mul(4)).lessThan(0.12).or(fract(positionWorld.z.mul(4)).lessThan(0.12));
+  mat.opacityNode = select(top, select(grid, float(1), float(0)), select(bar.or(band).or(frame), float(1), float(0)));
+  mat.alphaTest = 0.5;
+  mat.colorNode = vec3(1, 1, 1);
   return mat;
 }

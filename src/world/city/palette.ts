@@ -15,6 +15,8 @@ export const CITY_COLORS = {
   roofSheet: ['#3d6fa3', '#a8402f', '#8a8f94', '#5b8a72'],
   plant: ['#3e7d32', '#4f8f3a', '#2f6b2a', '#c2185b', '#e64a8f', '#5b9a3c'],
   stool: ['#d32f2f', '#1976d2', '#fbc02d', '#388e3c'],
+  /** Quần áo phơi: áo thun, đồ bộ hoa, áo sơ mi trắng. */
+  laundry: ['#e53935', '#1e88e5', '#fdd835', '#f5f5f5', '#ec407a', '#43a047', '#8e24aa', '#ff7043', '#90a4ae'],
   tankSteel: '#c9ced3',
   tankBlue: '#2f6fb3',
   pole: '#a8a39a',

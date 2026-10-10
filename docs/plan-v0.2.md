@@ -3,6 +3,12 @@
 Cập nhật: 2026-10-10. v0.1 = M0–M4 (khu Trung Tâm, Hồi 1, xe máy, Độ Nóng, điện thoại, âm thanh, bản demo itch.io).
 Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự án, chia thành các PR nhỏ merge dần vào `main`.
 
+**Tiến độ:**
+- [x] N1 nền tảng asset + font (PR #16);
+- [x] N2.1 bảng hiệu, N2.2 nhà ống (chuồng cọp, đồ phơi, mái tôn, giá bồn nước);
+- [ ] N2.3–N2.6;
+- [ ] N3–N10.
+
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 
 | Mảng | Hiện trạng | Vì sao chưa "Sài Gòn" |

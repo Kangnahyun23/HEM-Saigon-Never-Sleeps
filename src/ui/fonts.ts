@@ -1,41 +1,20 @@
 /**
  * Font có đủ dấu tiếng Việt (giấy phép SIL OFL, gói @fontsource — đi kèm bản build, không gọi Google Fonts):
  * giao diện dùng Be Vietnam Pro; bảng hiệu dùng các font chữ đứng / chữ đậm / chữ viết tay giống bảng hiệu Sài Gòn.
- * Chỉ nhúng 3 bảng mã latin, latin-ext, vietnamese (trình duyệt tự tải đúng phần cần dùng theo unicode-range).
+ * Dùng file CSS theo độ đậm (có unicode-range cho từng bảng mã) — trình duyệt chỉ tải phần latin + vietnamese cần dùng.
+ * KHÔNG import file tách bảng mã (vietnamese-400.css…): chúng thiếu unicode-range nên đè lên nhau, chữ mất dấu.
  */
-import '@fontsource/be-vietnam-pro/latin-400.css';
-import '@fontsource/be-vietnam-pro/latin-ext-400.css';
-import '@fontsource/be-vietnam-pro/vietnamese-400.css';
-import '@fontsource/be-vietnam-pro/latin-600.css';
-import '@fontsource/be-vietnam-pro/latin-ext-600.css';
-import '@fontsource/be-vietnam-pro/vietnamese-600.css';
-import '@fontsource/be-vietnam-pro/latin-700.css';
-import '@fontsource/be-vietnam-pro/latin-ext-700.css';
-import '@fontsource/be-vietnam-pro/vietnamese-700.css';
-import '@fontsource/be-vietnam-pro/latin-800.css';
-import '@fontsource/be-vietnam-pro/latin-ext-800.css';
-import '@fontsource/be-vietnam-pro/vietnamese-800.css';
-import '@fontsource/oswald/latin-700.css';
-import '@fontsource/oswald/latin-ext-700.css';
-import '@fontsource/oswald/vietnamese-700.css';
-import '@fontsource/anton/latin-400.css';
-import '@fontsource/anton/latin-ext-400.css';
-import '@fontsource/anton/vietnamese-400.css';
-import '@fontsource/bungee/latin-400.css';
-import '@fontsource/bungee/latin-ext-400.css';
-import '@fontsource/bungee/vietnamese-400.css';
-import '@fontsource/barlow-condensed/latin-700.css';
-import '@fontsource/barlow-condensed/latin-ext-700.css';
-import '@fontsource/barlow-condensed/vietnamese-700.css';
-import '@fontsource/sriracha/latin-400.css';
-import '@fontsource/sriracha/latin-ext-400.css';
-import '@fontsource/sriracha/vietnamese-400.css';
-import '@fontsource/patrick-hand/latin-400.css';
-import '@fontsource/patrick-hand/latin-ext-400.css';
-import '@fontsource/patrick-hand/vietnamese-400.css';
-import '@fontsource/tilt-neon/latin-400.css';
-import '@fontsource/tilt-neon/latin-ext-400.css';
-import '@fontsource/tilt-neon/vietnamese-400.css';
+import '@fontsource/be-vietnam-pro/400.css';
+import '@fontsource/be-vietnam-pro/600.css';
+import '@fontsource/be-vietnam-pro/700.css';
+import '@fontsource/be-vietnam-pro/800.css';
+import '@fontsource/oswald/700.css';
+import '@fontsource/anton/400.css';
+import '@fontsource/bungee/400.css';
+import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/sriracha/400.css';
+import '@fontsource/patrick-hand/400.css';
+import '@fontsource/tilt-neon/400.css';
 
 /** Kiểu chữ bảng hiệu: [độ đậm + họ font] dùng cho `ctx.font` trên canvas. */
 export const SIGN_FONTS = {

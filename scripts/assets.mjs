@@ -37,6 +37,7 @@ const SOURCES = [
   { id: 'pavers', polyhaven: 'concrete_pavers', maps: ['color', 'normal'], use: 'Vỉa hè gạch con sâu' },
   { id: 'concrete', polyhaven: 'concrete_floor_worn_001', maps: ['color', 'normal'], use: 'Nền bê tông trong hẻm' },
   { id: 'plaster', polyhaven: 'worn_plaster_wall', maps: ['color'], use: 'Tường vữa loang lổ của nhà phố' },
+  { id: 'corrugated', polyhaven: 'corrugated_iron_02', maps: ['color', 'normal'], use: 'Mái tôn sóng trên sân thượng' },
 ];
 
 /** Tên bản đồ trên Poly Haven tương ứng. */
