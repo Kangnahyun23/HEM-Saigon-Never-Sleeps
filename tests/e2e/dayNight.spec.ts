@@ -18,6 +18,9 @@ test('ngày đêm: trời, nắng, đèn đường, cửa sổ, đèn xe', async
   await page.goto('/');
   await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
   await page.evaluate(() => (window.__HEM__!.paused = true));
+  // Test này chụp ánh sáng theo giờ, không phải thời tiết: ép trời quang để nhãn giờ / ảnh không phụ thuộc
+  // thời tiết ngẫu nhiên đã kịp đổi trong lúc game còn chạy theo khung hình thật (trước khi dừng).
+  await page.evaluate(() => (window.__HEM__!.setWeather as (s: string) => void)('clear'));
 
   const layout = (await page.evaluate(() => window.__HEM__!.layout)) as CityLayout;
   const s = layout.spawn;
