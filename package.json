@@ -1,7 +1,7 @@
 {
   "name": "hem-saigon-never-sleeps",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.4.0",
   "description": "HẺM — Sài Gòn Không Ngủ: game hành động thế giới mở trên trình duyệt",
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "package": "npm run build && node scripts/package.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

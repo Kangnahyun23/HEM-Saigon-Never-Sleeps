@@ -15,6 +15,7 @@ npm start          # tự cài thư viện nếu cần (scripts/setup.mjs) rồi
 npm run dev        # như trên nhưng không mở trình duyệt (thêm ?webgl để ép WebGL2)
 npm run check      # lint + typecheck + unit test — chạy trước mỗi commit
 npm run build      # tsc + vite build → dist/
+npm run package    # build + đóng gói release/hem-saigon-v<phiên bản>-web.zip cho itch.io (scripts/package.mjs, zip.mjs)
 npm run e2e        # build, chạy preview, Playwright mở game và chụp tests/e2e/__screenshots__/
 npx playwright test views      # chỉ chụp các góc nhìn khu phố
 npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → phanh → xuống xe
@@ -90,6 +91,7 @@ src/
                      settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
+scripts/             setup.mjs (tự cài thư viện), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
 tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall
 ```
@@ -101,4 +103,6 @@ Test e2e cần tất định thì đặt `window.__HEM__.paused = true` rồi ch
 ## Quy trình làm việc
 - Mỗi phiên làm MỘT task nhỏ, kết thúc bằng một PR vào `main` (CI: lint, typecheck, test, build, e2e).
 - Push lên `main` tự deploy GitHub Pages (bật Pages → Source: GitHub Actions trong Settings của repo).
+- CI luôn đóng gói zip itch.io (artifact `hem-saigon-web-zip`); có secret `BUTLER_API_KEY` + biến `ITCH_TARGET` thì bản trên `main`
+  tự đẩy lên itch.io. Giữ `base: './'` trong vite.config.ts — itch.io phục vụ game trong thư mục con.
 - Lộ trình: M0 khung dự án → M1 thế giới + xe máy → M2 thành phố sống động → M3 nhiệm vụ + truy đuổi → M4 hoàn thiện.

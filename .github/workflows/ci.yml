@@ -16,6 +16,9 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # Có secret BUTLER_API_KEY + biến ITCH_TARGET (vd. "ten-ban/hem-saigon:web") thì bản trên main tự đẩy lên itch.io.
+      HAS_BUTLER: ${{ secrets.BUTLER_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +30,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Đóng gói bản web cho itch.io
+        run: node scripts/package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hem-saigon-web-zip
+          path: release/*.zip
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
       - name: Lưu ảnh chụp màn hình e2e
@@ -36,6 +45,16 @@ jobs:
           name: e2e-screenshots
           path: tests/e2e/__screenshots__/
           if-no-files-found: ignore
+      - name: Đẩy lên itch.io (chỉ khi đã cài BUTLER_API_KEY + ITCH_TARGET)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.HAS_BUTLER == 'true' && vars.ITCH_TARGET != ''
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+        run: |
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler-bin && chmod +x butler-bin/butler
+          VERSION="$(node -p "require('./package.json').version")-${GITHUB_SHA::7}"
+          ./butler-bin/butler push release/*.zip "$ITCH_TARGET" --userversion "$VERSION"
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
