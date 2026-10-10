@@ -19,7 +19,7 @@ import type { Input } from '@/core/input';
 import { GROUP, interaction } from '@/physics/groups';
 import type { PhysicsWorld } from '@/physics/physics';
 import { CHARACTER, CharacterBody } from '@/player/characterBody';
-import { CharacterModel } from '@/player/characterModel';
+import { createPlayerView, type CharacterView } from '@/player/skinnedCharacter';
 import { FollowCamera } from '@/player/followCamera';
 import type { Hud } from '@/ui/hud';
 import { BIKE_BODY_COLORS } from '@/vehicles/bikeModel';
@@ -57,7 +57,7 @@ interface Bike {
  */
 export class Game {
   readonly character: CharacterBody;
-  readonly model = new CharacterModel();
+  readonly model: CharacterView = createPlayerView();
   readonly camera: FollowCamera;
   readonly bikes: Bike[] = [];
   readonly traffic: TrafficSystem;

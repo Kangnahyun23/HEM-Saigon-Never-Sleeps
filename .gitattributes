@@ -4,3 +4,6 @@
 *.ogg filter=lfs diff=lfs merge=lfs -text
 *.png binary
 *.jpg binary
+# Asset đã nén cho web (public/media, có ngân sách MEDIA_BUDGET) lưu thẳng trong git, KHÔNG qua LFS:
+# CI / GitHub Pages / gói itch.io checkout không kéo LFS ⇒ file LFS chỉ còn con trỏ, game không tải được.
+public/media/** -filter -diff -merge binary
