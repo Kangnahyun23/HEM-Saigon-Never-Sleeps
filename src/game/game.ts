@@ -16,6 +16,11 @@ import { FIRST_INSTALLMENT } from '@/missions/story';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
+import { Inventory, ITEMS, starterInventory } from '@/systems/inventory';
+
+/** Phím di chuyển (hằng số — khỏi tạo mảng mới mỗi khung hình). */
+const MOVE_ALL = { fwd: ['KeyW', 'ArrowUp'], back: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
+const MOVE_WASD = { fwd: ['KeyW'], back: ['KeyS'], left: ['KeyA'], right: ['KeyD'] };
 
 /** Phím 1–8 trên điện thoại mở thẳng app (thứ tự như màn hình chính). */
 const PHONE_KEYS: readonly PhoneTab[] = ['jobs', 'map', 'messages', 'wallet', 'settings', 'bank', 'social', 'camera'];
@@ -193,9 +198,15 @@ export class Game {
     if (this.seated) scene.add(this.seated.root);
 
     // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
+    this.bindBackpack();
     this.loaded = this.restore();
     if (!this.loaded) this.scheduleIntro();
   }
+
+  /** Balo của Tín (phím I). */
+  inventory: Inventory = starterInventory();
+  /** Máu 0..100 (chiến đấu ở N5; giờ chỉ hồi bằng đồ ăn / thuốc). */
+  health = 100;
 
   /** Có nạp từ bản lưu không (để bỏ tin nhắn mở màn). */
   readonly loaded: boolean;
@@ -211,6 +222,9 @@ export class Game {
     this.story.progress.next = Math.max(0, Math.min(this.story.missions.length, Math.floor(data.story.next)));
     this.missions.jobsDone = data.jobsDone;
     this.clock.hour = data.hour;
+    if (data.inventory !== undefined) this.inventory = Inventory.fromJSON(data.inventory);
+    if (typeof data.health === 'number' && Number.isFinite(data.health)) this.health = Math.max(1, Math.min(100, data.health));
+    this.bindBackpack();
     const { x, z, yaw } = data.player;
     this.character.teleport(x, PAD_HEIGHT + 0.3, z, yaw);
     // Xe của Tín đậu ngay cạnh chỗ đứng.
@@ -218,6 +232,28 @@ export class Game {
     this.savedProgress = this.progressKey();
     this.schedule(1, () => this.hud.showToast('Đã tải bản lưu', 2));
     return true;
+  }
+
+  /** Nối balo với giao diện: dùng đồ ăn / thuốc hồi máu, vứt đồ. */
+  private bindBackpack(): void {
+    this.hud.backpack.setInventory(
+      this.inventory,
+      (i) => {
+        const def = this.inventory.use(i);
+        if (!def) return;
+        const before = this.health;
+        this.health = Math.min(100, this.health + (def.heal ?? 0));
+        this.hud.showToast(this.health > before ? `${def.name}: +${Math.round(this.health - before)} máu` : `${def.name}: đã đầy máu rồi`, 1.8);
+      },
+      (i) => {
+        const s = this.inventory.slots[i];
+        if (!s) return;
+        const kind = ITEMS[s.id].kind;
+        if (kind === 'quest' || kind === 'misc') return;
+        this.inventory.remove(i, 1);
+        this.hud.showToast(`Đã vứt: ${ITEMS[s.id].name}`, 1.4);
+      },
+    );
   }
 
   private progressKey(): string {
@@ -236,6 +272,8 @@ export class Game {
       story: { next: this.story.progress.next },
       jobsDone: this.missions.jobsDone,
       player: { x: p.x, z: p.z, yaw },
+      inventory: this.inventory.toJSON(),
+      health: this.health,
     });
     if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
     return ok;
@@ -418,6 +456,20 @@ export class Game {
     if (input.wasPressed('KeyM')) this.hud.showToast(mixer.toggleMute() ? 'Đã tắt tiếng (M)' : 'Đã bật tiếng (M)', 1.4);
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
 
+    // Balo: I bật/tắt; đang mở thì mũi tên chọn ô, E dùng, X vứt, Esc đóng.
+    const bp = this.hud.backpack;
+    if (input.wasPressed('KeyI')) bp.toggle();
+    else if (bp.open) {
+      if (input.wasPressed('Escape')) bp.setOpen(false);
+      if (input.wasPressed('ArrowLeft')) bp.move(-1, 0);
+      if (input.wasPressed('ArrowRight')) bp.move(1, 0);
+      if (input.wasPressed('ArrowUp')) bp.move(0, -1);
+      if (input.wasPressed('ArrowDown')) bp.move(0, 1);
+      if (input.wasPressed('KeyE') || input.wasPressed('Enter')) bp.useSelected();
+      if (input.wasPressed('KeyX') || input.wasPressed('Delete')) bp.dropSelected();
+    }
+    bp.update();
+
     // Điện thoại: P bật/tắt, 1–8 mở thẳng app, Backspace / Esc lùi về màn hình chính (đang ở đó thì cất máy).
     const phone = this.hud.phone;
     if (phone) {
@@ -491,8 +543,10 @@ export class Game {
     // Bước vật lý cố định.
     const steps = this.stepper.advance(dt);
     const cam = this.camera.forward();
-    const fwd = input.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
-    const strafe = input.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
+    // Balo đang mở thì mũi tên dùng để chọn ô ⇒ chỉ đi / lái bằng WASD.
+    const keys = this.hud.backpack.open ? MOVE_WASD : MOVE_ALL;
+    const fwd = input.axis(keys.back, keys.fwd);
+    const strafe = input.axis(keys.left, keys.right);
     for (let i = 0; i < steps; i++) {
       const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
       this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
@@ -568,8 +622,8 @@ export class Game {
       this.caught();
     }
     this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
-    // Máu / giáp: chưa có chiến đấu (N5) ⇒ luôn đầy máu, chưa có giáp.
-    this.hud.setVitals(1, 0);
+    // Máu / giáp (giáp có ở N5).
+    this.hud.setVitals(this.health / 100, 0);
     this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
     if (this.nearPedestrians) this.nearPedestrians.update(this.pedestrians.walkers, alpha, dt, this.view.position.x, this.view.position.z);
     this.seated?.update(dt, this.clock.hour, this.view.position.x, this.view.position.z);

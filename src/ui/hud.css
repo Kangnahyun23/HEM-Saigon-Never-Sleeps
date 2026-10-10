@@ -237,3 +237,26 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .phone-screen .stepper button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #ebe4d8; font-weight: 700; font-size: 16px; }
 .phone-screen .setting.reload { background: #fff4e6; font-size: 12.5px; }
 .phone-screen .setting.reload b { color: #d2650f; white-space: nowrap; }
+
+/* Balo (phím I): lưới ô đồ giữa màn hình, thông tin món đang chọn + nút dùng / vứt */
+.hud-backpack { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(430px, calc(100% - 24px)); padding: 14px 16px 12px; pointer-events: auto; border-top: 3px solid var(--hud-accent); }
+.hud-backpack[hidden] { display: none; }
+.bp-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.bp-head b { font-size: 16px; letter-spacing: .04em; }
+.bp-head span { font-size: 12px; color: var(--hud-quiet); }
+.bp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; max-height: 330px; overflow-y: auto; }
+.bp-slot { position: relative; height: 82px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px 4px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.05); color: var(--hud-ink); font: inherit; cursor: pointer; overflow: hidden; }
+.bp-slot.empty { background: rgba(255,255,255,.02); }
+.bp-slot.on { border-color: var(--hud-accent); box-shadow: 0 0 0 2px rgba(255,140,26,.35) inset; }
+.bp-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; font: 800 10px system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.bp-slot small { font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--hud-quiet); }
+.bp-slot b { position: absolute; top: 4px; right: 6px; font-size: 11px; }
+.bp-slot u { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 3px; border-radius: 2px; background: #5fcf7a; transform-origin: 0 50%; }
+.bp-info { min-height: 76px; margin-top: 10px; padding: 9px 10px; border-radius: 10px; background: rgba(0,0,0,.25); font-size: 13px; }
+.bp-info p { margin: 4px 0 8px; color: var(--hud-quiet); line-height: 1.4; }
+.bp-info .muted { color: var(--hud-quiet); font-size: 12px; }
+.bp-actions { display: flex; gap: 8px; align-items: center; }
+.bp-actions button { padding: 6px 12px; border: 0; border-radius: 8px; background: var(--hud-accent); color: #1a1208; font: 700 13px inherit; cursor: pointer; }
+.bp-actions button.ghost { background: rgba(255,255,255,.12); color: var(--hud-ink); }
+.bp-keys { margin-top: 8px; font-size: 11.5px; color: var(--hud-quiet); }
+.bp-keys kbd { font-size: 10px; min-width: 18px; padding: 0 4px; }
