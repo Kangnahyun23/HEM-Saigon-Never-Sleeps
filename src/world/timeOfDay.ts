@@ -110,6 +110,16 @@ export function nightFactor(hour: number): number {
   return smooth(17.8, 19.0, h);
 }
 
+/**
+ * Tỉ lệ tiệm mặt đường đã đóng cửa theo giờ: ban ngày ~15 % (nghỉ, chưa mở), tối đóng dần sau 21 h,
+ * khuya ~85 % (chỉ còn quán ăn đêm, tạp hoá 24/7), mở lại dần từ 5 h sáng.
+ */
+export function shopsClosedFraction(hour: number): number {
+  const h = wrapHour(hour);
+  if (h < 12) return lerp(0.85, 0.15, smooth(5, 7, h));
+  return lerp(0.15, 0.85, smooth(21, 23.5, h));
+}
+
 export function lightingAt(hour: number): Lighting {
   const h = wrapHour(hour);
   let i = 0;

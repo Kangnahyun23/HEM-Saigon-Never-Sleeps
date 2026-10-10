@@ -7,6 +7,7 @@ import { FLOOR_HEIGHT, type Lot } from '../layout';
 import { createCageMaterial, createFacadeMaterial, createPavementMaterial, createRoofSheetMaterial, createSignMaterial } from '../materials';
 import { CITY_COLORS, FACADE_COLORS } from '../palette';
 import { createSignSet } from '../signs';
+import { hemDoorRight } from '../hemDetails';
 import { BANNER_COUNT, cellUv, H_CELL, hCellPx, SHOP_SIGN_COUNT, V_CELL, V_COUNT, vCellPx } from '../signage';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
 import { reflective } from '../../reflections';
@@ -84,7 +85,8 @@ export function buildBuildings(ctx: BuildContext): void {
     facades.add(cx, pad + h / 2, cz, w, h, d, 0, undefined, {
       aSize: [w, h, d],
       aColor: [color.r, color.g, color.b],
-      aInfo: [FRONT_CODE[lot.front], (lot.seed % 10007) / 10007, KIND_CODE[lot.kind], lot.frontage === 'hem' ? 1 : 0],
+      // w: 0 mặt đường; nhà trong hẻm 1 (cửa trái) / 1,5 (cửa phải) — khớp hemDoorRight() ở build/hems.ts.
+      aInfo: [FRONT_CODE[lot.front], (lot.seed % 10007) / 10007, KIND_CODE[lot.kind], lot.frontage === 'hem' ? (hemDoorRight(lot.seed) ? 1.5 : 1) : 0],
     });
     statics.box(cx, pad + h / 2, cz, w, h, d);
 

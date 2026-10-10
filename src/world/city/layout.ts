@@ -559,8 +559,8 @@ export function generateCity(options: Partial<CityOptions> = {}): CityLayout {
 
   // Xe máy đậu trước nhà mặt tiền (đỗ vuông góc, đầu xe quay vào nhà).
   for (const lot of lots) {
-    if (lot.row !== 'front' || rng() > 0.32) continue;
-    const n = 1 + Math.floor(rng() * 4);
+    if (lot.row !== 'front' || rng() > 0.45) continue;
+    const n = 1 + Math.floor(rng() * 5);
     const along: 'x' | 'z' = lot.front.endsWith('z') ? 'x' : 'z';
     const s = lot.front.startsWith('+') ? 1 : -1;
     const faceLine = along === 'x' ? (s > 0 ? lot.rect.z1 : lot.rect.z0) : s > 0 ? lot.rect.x1 : lot.rect.x0;

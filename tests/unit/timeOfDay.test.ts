@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GameClock, lightingAt, nightFactor, sunDirection, wrapHour } from '@/world/timeOfDay';
+import { GameClock, lightingAt, nightFactor, shopsClosedFraction, sunDirection, wrapHour } from '@/world/timeOfDay';
 
 describe('timeOfDay', () => {
   it('mặt trời mọc phía đông (+X), lặn phía tây (−X), trưa trên cao, nửa đêm dưới chân trời', () => {
@@ -68,5 +68,15 @@ describe('timeOfDay', () => {
     const d = new GameClock(10);
     d.advance(60);
     expect(d.hour).toBeCloseTo(11);
+  });
+
+  it('tiệm đóng cửa theo giờ: ban ngày ít, khuya hầu hết, mở lại dần lúc sáng sớm', () => {
+    expect(shopsClosedFraction(10)).toBeCloseTo(0.15);
+    expect(shopsClosedFraction(15)).toBeCloseTo(0.15);
+    expect(shopsClosedFraction(2)).toBeCloseTo(0.85);
+    expect(shopsClosedFraction(22)).toBeGreaterThan(0.2);
+    expect(shopsClosedFraction(22)).toBeLessThan(0.85);
+    expect(shopsClosedFraction(6)).toBeLessThan(shopsClosedFraction(5));
+    expect(shopsClosedFraction(26)).toBeCloseTo(shopsClosedFraction(2));
   });
 });
