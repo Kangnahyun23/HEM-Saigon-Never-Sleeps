@@ -65,6 +65,11 @@ describe('cài đặt', () => {
     expect(qualityProfile('auto', 3).adaptive).toBe(true);
     expect(qualityProfile('high', 2).adaptive).toBe(false);
     expect(qualityProfile('low', 0.5).pixelRatio).toBe(0.5);
+    // Bloom ban đêm: tắt ở Thấp, ảnh bloom nhỏ hơn ở Vừa.
+    expect(low.bloom).toBe(0);
+    expect(qualityProfile('medium', 2).bloom).toBeGreaterThan(0);
+    expect(qualityProfile('medium', 2).bloom).toBeLessThan(qualityProfile('high', 2).bloom);
+    expect(qualityProfile('auto', 2, 'low').bloom).toBe(0);
   });
 
   it('Tự động bắt đầu theo bậc máy rồi vẫn được nâng tới 1,5×', () => {

@@ -98,11 +98,14 @@ export interface QualityProfile {
   shadows: boolean;
   /** Hệ số tầm nhìn của chi tiết nhỏ (chậu cây, xe đậu…). */
   detailScale: number;
+  /** Bloom ban đêm: độ phân giải ảnh bloom so với màn hình (0 = tắt). */
+  bloom: number;
 }
 
 /**
  * Bảng mức chất lượng. Đo trên máy không GPU: bóng đổ ~8–40 % thời gian vẽ (lượt vẽ bóng + lọc bóng mỗi điểm ảnh),
  * số điểm ảnh ~40 % — nên "Thấp" tắt bóng và vẽ 0,75×, "Vừa" giữ bóng nhưng tối đa 1×.
+ * Bloom ban đêm (neon, LED…) tắt ở "Thấp"; "Vừa" làm mờ trên ảnh 0,35× màn hình, "Cao" 0,5×.
  * "Tự động" bắt đầu từ mức hợp với bậc máy nhận diện được (`autoTier`, xem hardware.ts) rồi tự hạ / nâng theo FPS thật.
  */
 export function qualityProfile(q: Quality, devicePixelRatio: number, autoTier: Tier = 'high'): QualityProfile {
@@ -111,14 +114,14 @@ export function qualityProfile(q: Quality, devicePixelRatio: number, autoTier: T
   switch (q) {
     case 'low': {
       const pr = Math.min(dpr, 0.75);
-      return { pixelRatio: pr, maxPixelRatio: pr, adaptive: false, shadows: false, detailScale: 0.6 };
+      return { pixelRatio: pr, maxPixelRatio: pr, adaptive: false, shadows: false, detailScale: 0.6, bloom: 0 };
     }
     case 'medium': {
       const pr = Math.min(dpr, 1);
-      return { pixelRatio: pr, maxPixelRatio: pr, adaptive: false, shadows: true, detailScale: 0.85 };
+      return { pixelRatio: pr, maxPixelRatio: pr, adaptive: false, shadows: true, detailScale: 0.85, bloom: 0.35 };
     }
     case 'high':
-      return { pixelRatio: top, maxPixelRatio: top, adaptive: false, shadows: true, detailScale: 1.25 };
+      return { pixelRatio: top, maxPixelRatio: top, adaptive: false, shadows: true, detailScale: 1.25, bloom: 0.5 };
     default: {
       const start = autoTier === 'high' ? { ...qualityProfile('high', dpr), detailScale: 1 } : qualityProfile(autoTier, dpr);
       return { ...start, maxPixelRatio: top, adaptive: true };

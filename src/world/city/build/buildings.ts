@@ -6,9 +6,10 @@ import { euler, InstanceBatch } from '@/render/instancing';
 import { FLOOR_HEIGHT, type Lot } from '../layout';
 import { createCageMaterial, createFacadeMaterial, createPavementMaterial, createRoofSheetMaterial, createSignMaterial } from '../materials';
 import { CITY_COLORS, FACADE_COLORS } from '../palette';
-import { createSignSet } from '../signs';
+import { createLedAtlas, createSignSet } from '../signs';
+import { createLedMaterial } from '../nightMaterials';
 import { hemDoorRight } from '../hemDetails';
-import { BANNER_COUNT, cellUv, H_CELL, hCellPx, SHOP_SIGN_COUNT, V_CELL, V_COUNT, vCellPx } from '../signage';
+import { BANNER_COUNT, cellUv, designLed, H_CELL, hCellPx, SHOP_SIGN_COUNT, V_CELL, V_COUNT, vCellPx, type SignDesign } from '../signage';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
 import { reflective } from '../../reflections';
 
@@ -68,6 +69,11 @@ export function buildBuildings(ctx: BuildContext): void {
   const shopCell = (i: number) => ({ aSign: cellUv(hCellPx(i), H_CELL, 3), aGlow: signSet.shops[i]!.glow });
   const bannerCell = (i: number) => ({ aSign: cellUv(hCellPx(SHOP_SIGN_COUNT + i), H_CELL, 3), aGlow: signSet.banners[i]!.glow });
   const verticalCell = (j: number) => ({ aSign: cellUv(vCellPx(j), V_CELL, 3), aGlow: signSet.verticals[j]!.glow });
+  // Bảng LED chạy chữ trên cửa tiệm (một lệnh vẽ cho cả phố).
+  const ledAtlas = createLedAtlas();
+  const leds = new InstanceBatch(GEO.plane, createLedMaterial(ledAtlas), { castShadow: false, receiveShadow: false, name: 'led-signs', attributes: { aSize: 3, aLed: 4 } });
+  /** Màu chính của bảng khi tự sáng: hộp đèn sáng cả nền, neon / alu sáng chữ. */
+  const signLight = (d: SignDesign, width: number) => (d.glow < 0.4 ? null : { color: d.style === 'lightbox' ? d.bg : d.fg, glow: d.glow, width });
 
   const color = new THREE.Color();
 
@@ -181,8 +187,10 @@ export function buildBuildings(ctx: BuildContext): void {
     const inHem = lot.row === 'front' && lot.frontage === 'hem';
     // Mép dưới bảng hiệu treo trên cửa (để hạ mái hiên xuống dưới, không cắt vào bảng).
     let signBottom = 3.2;
+    let mainSign: ReturnType<typeof signLight> = null;
     if ((onStreet && lotRng(5) < 0.88) || (inHem && lotRng(5) < 0.35)) {
-      const cell = shopCell(Math.floor(lotRng(6) * SHOP_SIGN_COUNT));
+      const signIdx = Math.floor(lotRng(6) * SHOP_SIGN_COUNT);
+      const cell = shopCell(signIdx);
       let sw: number;
       let sh: number;
       let y: number;
@@ -212,6 +220,23 @@ export function buildBuildings(ctx: BuildContext): void {
       if (z < 0.5) signBottom = y - sh / 2;
       const [wx, wz] = localToWorld(ox, oz, yaw, 0, z);
       signs.add(wx, pad + y, wz, sw, sh, 1, yaw, undefined, cell);
+      mainSign = signLight(signSet.shops[signIdx]!, sw);
+    }
+    // Bảng LED chạy chữ ngay trên cửa tiệm (khoảng 1/3 tiệm mặt đường có bảng hiệu treo cao hơn cửa).
+    if (onStreet && signBottom >= 2.75 && lotRng(28) < 0.34) {
+      const led = designLed(createRng(lot.seed * 7 + 13));
+      const lw = Math.min(faceW * 0.62, 2.6);
+      const lh = 0.26;
+      const [wx, wz] = localToWorld(ox, oz, yaw, (lotRng(29) - 0.5) * (faceW - lw) * 0.6, 0.05);
+      leds.add(wx, pad + 2.56, wz, lw, lh, 1, yaw, undefined, {
+        aSize: [lw, lh, lotRng(30)],
+        aLed: [led.message, ledAtlas.lengths[led.message]!, led.speed, led.color],
+      });
+    }
+    if (onStreet) {
+      const block = layout.blocks.find((b) => b.id === lot.blockId);
+      const side = lot.front === '+x' ? 'maxX' : lot.front === '-x' ? 'minX' : lot.front === '+z' ? 'maxZ' : 'minZ';
+      ctx.shopFronts.push({ x: ox, z: oz, yaw, width: faceW, seed: (lot.seed % 10007) / 10007, sidewalk: block ? block.sidewalk[side] : 3.5, sign: mainSign });
     }
     // Mái hiên dưới bảng hiệu (mép trong cao hơn mép ngoài ~0,4 m).
     if (lotRng(3) < (isFrontRow ? 0.55 : 0.18)) {
@@ -341,5 +366,5 @@ export function buildBuildings(ctx: BuildContext): void {
   }
   addMesh(ctx, backdropPads.build());
 
-  for (const b of [facades, slabs, railings, cages, laundry, awnings, plants, tanks, tanksLying, roofStuff, sheets, acUnits, stools, signs]) addMesh(ctx, b.build());
+  for (const b of [facades, slabs, railings, cages, laundry, awnings, plants, tanks, tanksLying, roofStuff, sheets, acUnits, stools, signs, leds]) addMesh(ctx, b.build());
 }

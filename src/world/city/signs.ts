@@ -9,6 +9,9 @@ import {
   designVerticalSign,
   H_CELL,
   hCellPx,
+  LED_ATLAS_W,
+  LED_MESSAGES,
+  LED_ROWS,
   SHOP_SIGN_COUNT,
   V_CELL,
   V_COUNT,
@@ -198,4 +201,45 @@ export function createSignSet(seed: number): SignSet {
   atlas.anisotropy = 8;
   atlas.name = 'shop-signs';
   return { shops, banners, verticals, atlas };
+}
+
+/** Atlas chữ bảng LED: mỗi câu một dải LED_ROWS px (1 px = 1 điểm LED) + độ dài vòng chạy của từng câu (px). */
+export interface LedAtlas {
+  readonly texture: THREE.CanvasTexture;
+  readonly lengths: readonly number[];
+  /** Chiều cao atlas (px) để tính toạ độ v của từng dải. */
+  readonly height: number;
+}
+
+/**
+ * Vẽ các câu LED trắng trên nền đen ở cỡ chữ rất nhỏ — shader lấy mẫu đúng tâm từng điểm (lọc NEAREST) rồi so ngưỡng
+ * nên chữ ra dạng chấm vuông vức như bảng LED thật. Câu nối đuôi nhau với khoảng trống để chạy vòng liền mạch.
+ */
+export function createLedAtlas(): LedAtlas {
+  let height = 1;
+  while (height < LED_MESSAGES.length * LED_ROWS) height *= 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = LED_ATLAS_W;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, LED_ATLAS_W, height);
+  ctx.fillStyle = '#fff';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = signFont('narrow', 12);
+  const gap = 28;
+  const lengths = LED_MESSAGES.map((m, i) => {
+    const w = Math.ceil(ctx.measureText(m).width);
+    const len = Math.min(LED_ATLAS_W, w + gap);
+    // Chân chữ ở hàng 14: chữ hoa cao ~8 điểm, dấu thanh / mũ nằm gọn trong 5 hàng phía trên.
+    for (let x = 0; x < LED_ATLAS_W; x += len) ctx.fillText(m, x + 2, i * LED_ROWS + 14);
+    return len;
+  });
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.name = 'led-text';
+  return { texture, lengths, height };
 }

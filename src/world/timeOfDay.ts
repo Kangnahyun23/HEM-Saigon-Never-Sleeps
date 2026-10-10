@@ -120,6 +120,12 @@ export function shopsClosedFraction(hour: number): number {
   return lerp(0.15, 0.85, smooth(21, 23.5, h));
 }
 
+/** Độ mạnh bloom theo mức đêm (0 ban ngày ⇒ khỏi chạy lượt bloom; mạnh dần lúc chạng vạng, đủ khi tối hẳn). */
+export const BLOOM_MAX = 0.55;
+export function bloomStrength(night: number): number {
+  return night <= 0.15 ? 0 : BLOOM_MAX * smooth(0.15, 0.7, night);
+}
+
 export function lightingAt(hour: number): Lighting {
   const h = wrapHour(hour);
   let i = 0;

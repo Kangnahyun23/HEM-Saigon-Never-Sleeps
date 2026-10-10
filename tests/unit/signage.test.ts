@@ -5,6 +5,7 @@ import {
   BANNERS,
   cellUv,
   designBanner,
+  designLed,
   designShopSign,
   designVerticalSign,
   fakePhone,
@@ -12,6 +13,8 @@ import {
   H_COLS,
   H_ROWS,
   hCellPx,
+  LED_COLORS,
+  LED_MESSAGES,
   SHOP_NAMES,
   SIGN_GLOW,
   TRADES,
@@ -83,5 +86,25 @@ describe('bảng hiệu Sài Gòn', () => {
         const [bx, by, bw, bh] = rects[b]!;
         expect(ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah).toBe(false);
       }
+  });
+});
+
+describe('bảng LED chạy chữ', () => {
+  it('câu chữ hoa có dấu, có quảng cáo app vay; thiết kế hợp lệ và tất định', () => {
+    for (const m of LED_MESSAGES) {
+      expect(m.length).toBeGreaterThan(5);
+      expect(m).toBe(m.toUpperCase());
+    }
+    expect(LED_MESSAGES.some((m) => m.includes('VAY LIỀN'))).toBe(true);
+    const a = createRng(3);
+    const b = createRng(3);
+    for (let i = 0; i < 50; i++) {
+      const d = designLed(a);
+      expect(d).toEqual(designLed(b));
+      expect(d.message).toBeGreaterThanOrEqual(0);
+      expect(d.message).toBeLessThan(LED_MESSAGES.length);
+      expect(d.color).toBeLessThan(LED_COLORS.length);
+      expect(d.speed).toBeGreaterThan(0);
+    }
   });
 });

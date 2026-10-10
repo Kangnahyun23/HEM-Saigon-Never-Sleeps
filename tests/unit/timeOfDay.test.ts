@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GameClock, lightingAt, nightFactor, shopsClosedFraction, sunDirection, wrapHour } from '@/world/timeOfDay';
+import { BLOOM_MAX, bloomStrength, GameClock, lightingAt, nightFactor, shopsClosedFraction, sunDirection, wrapHour } from '@/world/timeOfDay';
 
 describe('timeOfDay', () => {
   it('mặt trời mọc phía đông (+X), lặn phía tây (−X), trưa trên cao, nửa đêm dưới chân trời', () => {
@@ -78,5 +78,15 @@ describe('timeOfDay', () => {
     expect(shopsClosedFraction(22)).toBeLessThan(0.85);
     expect(shopsClosedFraction(6)).toBeLessThan(shopsClosedFraction(5));
     expect(shopsClosedFraction(26)).toBeCloseTo(shopsClosedFraction(2));
+  });
+
+  it('bloom: tắt ban ngày (khỏi chạy lượt hậu kỳ), tăng dần lúc chạng vạng, đủ khi tối hẳn', () => {
+    expect(bloomStrength(0)).toBe(0);
+    expect(bloomStrength(0.1)).toBe(0);
+    expect(bloomStrength(0.4)).toBeGreaterThan(0);
+    expect(bloomStrength(0.4)).toBeLessThan(BLOOM_MAX);
+    expect(bloomStrength(1)).toBeCloseTo(BLOOM_MAX);
+    expect(bloomStrength(nightFactor(12))).toBe(0);
+    expect(bloomStrength(nightFactor(22))).toBeCloseTo(BLOOM_MAX);
   });
 });
