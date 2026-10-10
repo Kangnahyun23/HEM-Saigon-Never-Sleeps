@@ -14,3 +14,4 @@ tác giả và để tra nguồn.
 | `pavers` | [Concrete Pavers](https://polyhaven.com/a/concrete_pavers) | Amal Kumar | Poly Haven | CC0 | Vỉa hè gạch con sâu |
 | `concrete` | [Concrete Floor Worn 001](https://polyhaven.com/a/concrete_floor_worn_001) | Dimitrios Savva, Rico Cilliers | Poly Haven | CC0 | Nền bê tông trong hẻm |
 | `plaster` | [Worn Plaster Wall](https://polyhaven.com/a/worn_plaster_wall) | Dimitrios Savva | Poly Haven | CC0 | Tường vữa loang lổ của nhà phố |
+| `corrugated` | [Corrugated Iron 02](https://polyhaven.com/a/corrugated_iron_02) | Jenelle van Heerden, Sergej Majboroda | Poly Haven | CC0 | Mái tôn sóng trên sân thượng |

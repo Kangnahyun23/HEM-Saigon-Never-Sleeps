@@ -42,6 +42,7 @@ const DETAIL_DISTANCE: Record<string, number> = {
   'parked-bike-': 110,
   benches: 120,
   railings: 160,
+  laundry: 110,
   'water-tanks': 180,
   'roof-sheets': 160,
   shrubs: 170,
