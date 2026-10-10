@@ -33,6 +33,8 @@ Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `
 Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ.
 Thuộc tính instance tới fragment qua nội suy: số nguyên có thể thành 0,9999… ⇒ giải mã bằng ngưỡng, đừng `fract()` đúng tại số nguyên.
 `material.positionNode` được gán SAU bước instancing (ghi đè cả phần dịch của instance).
+Nhân vật có xương: đừng gọi `skeleton.pose()` (lưới lượng tử hoá meshopt ⇒ xương gốc lệch chỗ); động tác mới thêm vào
+`ANIMATIONS` trong scripts/assets.mjs (tên trong game → tên clip gốc) rồi `npm run assets`.
 KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % thời gian vẽ): vật liệu kim loại / mặt nước cần phản chiếu
 thì bọc `reflective(mat)` (world/reflections.ts); ánh sáng nền thay IBL là đèn `envFill` trong environment.ts.
 Đo GPU trên máy không GPU: đổi vật liệu / đèn xong phải `await renderer.compileAsync()` rồi mới đo — three.js bỏ qua
@@ -60,7 +62,8 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 ## Cấu trúc
 ```
 src/
-  assets/            manifest.ts (tự sinh: texture, kích thước thật, màu trung bình), textures.ts (tải lúc vào game, getTextures)
+  assets/            manifest.ts (tự sinh: texture, nhân vật, động tác), textures.ts (tải lúc vào game, getTextures),
+                     characters.ts (mẫu người có xương + clip động tác Mesh2Motion CC0: createCharacter, getClip)
   main.ts            khởi tạo renderer, physics, khu phố, Game; vòng lặp khung hình; móc __HEM__
   game/game.ts       vòng chơi: đi bộ ⇄ lái xe, bước vật lý cố định + nội suy, camera, HUD
   core/              fixedStep, input (phím + chuột/pointer lock), random (seed), rect
@@ -84,8 +87,9 @@ src/
     city/nightMaterials.ts  bảng LED chạy chữ, vũng đèn tiệm hắt ra vỉa hè, vệt bảng hiệu phản chiếu trên đường ướt
     city/build/*     dựng hình + va chạm từ bố cục: ground, buildings, streetProps, hems (đời sống trong hẻm), landmarks,
                      lightPools (vũng đèn đường), nightStreet (đèn tiệm + phản chiếu đường ướt)
-  player/            characterBody (Rapier character controller), characterModel (hoạt hoạ thủ tục),
-                     followCamera (góc nhìn 3, chống xuyên tường)
+  player/            characterBody (Rapier character controller), skinnedCharacter (nhân vật có xương: AnimationMixer,
+                     mũ bảo hiểm / thùng hàng gắn vào xương; lùi về characterModel khối hộp nếu tải lỗi),
+                     locomotion (trộn đứng/đi/chạy theo tốc độ — có unit test), followCamera (góc nhìn 3, chống xuyên tường)
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
                      trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
