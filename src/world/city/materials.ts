@@ -151,7 +151,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const sideShade = select(isFront.or(isBack), float(1), float(0.9));
   const floorBand = select(isFront.and(fv.lessThan(0.045)).and(upper), float(0.82), float(1)); // gờ sàn mỗi tầng
   const wallPlain = wall.mul(float(0.94).sub(streak)).mul(footDarken).mul(sideShade).mul(floorBand);
-  // Vữa loang lổ (texture CC0): mặt tiền nhẹ tay, tường hông / mặt sau đậm (tường hông nhà phố Sài Gòn hay bong tróc, ố mốc).
+  // Vữa loang lổ (texture CC0): mặt tiền nhẹ tay, tường hông / mặt sau đậm hơn (tường hông nhà phố Sài Gòn hay bong tróc, ố mốc).
   const plaster = getTextures('plaster');
   const plasterMean = plaster?.entry.mean;
   const wallColor =
@@ -159,8 +159,9 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
       ? wallPlain.mul(
           mix(
             vec3(1, 1, 1),
-            texture(plaster.color, vec2(u.add(seed.mul(17.3)), y).div(plaster.entry.size[0])).rgb.div(vec3(plasterMean[0], plasterMean[1], plasterMean[2])),
-            select(isFront, float(0.45), float(0.85)),
+            // Phóng to ×2 (vết loang to, thưa — đỡ rối mắt và đỡ lộ ô lặp).
+            texture(plaster.color, vec2(u.add(seed.mul(17.3)), y).div(plaster.entry.size[0] * 2)).rgb.div(vec3(plasterMean[0], plasterMean[1], plasterMean[2])),
+            select(isFront, float(0.28), float(0.6)),
           ).clamp(0.35, 1.5),
         )
       : wallPlain;
