@@ -253,9 +253,10 @@ function buildRiver(ctx: BuildContext): void {
   river.receiveShadow = true;
   river.name = 'river';
   addMesh(ctx, river);
-  // Đáy sông + lan can là vật cản: không cho rơi xuống nước.
+  // Đáy sông + lan can là vật cản: không cho rơi xuống nước. Va chạm lan can cao 2,5 m (vô hình phía trên lan can
+  // 1,1 m): nhảy (cao ~1,1 m) + tự bước lên bậc của bộ điều khiển nhân vật từng đưa được người qua lan can xuống sông.
   statics.box(0, waterY - 2, shore + 450, 2400, 1, 900);
-  statics.box(0, pad + 0.6, shore - 0.2, 2400, 1.2, 0.4);
+  statics.box(0, pad + 1.25, shore - 0.2, 2400, 2.5, 0.4);
 
   // Lan can bờ kè.
   const railMat = reflective(new THREE.MeshStandardNodeMaterial({ color: '#2d4d3a', roughness: 0.5, metalness: 0.4 }));

@@ -37,6 +37,7 @@ import { playSfx } from '@/audio/sfx';
 import { wetUniform } from '@/world/nightGlow';
 import { Rain } from '@/world/rain';
 import { SCENE_BUDGETS, type SceneBudget } from '@/systems/hardware';
+import { FallGuard, type SafeSpot } from '@/systems/fallGuard';
 import { GameClock, lightingAt } from '@/world/timeOfDay';
 import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 
@@ -74,6 +75,8 @@ export class Game {
   private lastCash = -1;
   private lastHeat = 0;
   private ambienceTimer = 0;
+  /** Lưới an toàn khi rơi khỏi mặt đất. */
+  private readonly fallGuard: FallGuard;
   readonly wallet = new Wallet();
   readonly inbox = new Inbox();
   readonly missions: MissionDirector;
@@ -143,6 +146,7 @@ export class Game {
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
     this.chase = new ChaseSystem(scene, physics, buildTrafficNetwork(city.layout), sight, city.layout.seed + 11);
     const { spawn } = city.layout;
+    this.fallGuard = new FallGuard({ x: spawn.x, y: PAD_HEIGHT, z: spawn.z, yaw: spawn.yaw });
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
     this.character.yaw = spawn.yaw;
     scene.add(this.model.root);
@@ -220,6 +224,16 @@ export class Game {
     this.chase.sim.disperse();
     this.hud.showToast(lost > 0 ? `Bị chặn đầu! Mất ${formatVnd(lost)}` : 'Bị chặn đầu! May mà túi rỗng', 3);
     this.schedule(3, () => this.inbox.receive('Phát CEO', 'Chạy đâu cho thoát hả tài xế? Lo mà trả nợ đúng hạn đi.', this.clock.hour));
+  }
+
+  /** Đưa người chơi (và xe đang lái) về chỗ an toàn sau khi rơi xuống sông / lọt khe va chạm. */
+  private rescue(spot: Readonly<SafeSpot>): void {
+    const bike = this.riding;
+    if (bike) this.dismount();
+    this.character.teleport(spot.x, spot.y + 0.3, spot.z, spot.yaw);
+    // Dắt xe lên theo, đậu bên trái người chơi (trái của hướng (sin, cos) là (cos, −sin)).
+    if (bike) bike.phys.reset(spot.x + Math.cos(spot.yaw) * 1.6, spot.y, spot.z - Math.sin(spot.yaw) * 1.6, spot.yaw);
+    this.hud.showToast(bike ? 'Ướt sũng! Tín dắt xe lên bờ…' : 'Ướt sũng! Tín bò lên bờ…', 2.4);
   }
 
   /** Tiếng máy xe, tiếng phố, âm báo tiền vào / ra và bị truy đuổi. */
@@ -513,10 +527,14 @@ export class Game {
       }
     }
 
-    // Rơi khỏi thế giới (lỗi va chạm hiếm gặp): đưa về điểm xuất phát.
-    if (this.mode === 'foot' && this.character.feet().y < -8) {
-      const s = this.city.layout.spawn;
-      this.character.teleport(s.x, PAD_HEIGHT + 0.5, s.z, s.yaw);
+    // Rơi khỏi mặt đất (xuống sông, lọt khe va chạm): quá lâu thì đưa về chỗ đứng vững gần nhất, kèm xe.
+    {
+      const bike = this.riding;
+      const p = bike ? bike.phys.body.translation() : this.character.feet();
+      const yaw = bike ? bike.phys.heading() : this.character.yaw;
+      const grounded = bike ? bike.phys.grounded() : this.character.grounded;
+      const spot = this.fallGuard.update(dt, p.x, p.y, p.z, yaw, grounded);
+      if (spot) this.rescue(spot);
     }
 
     // Đồng bộ hình ảnh.
