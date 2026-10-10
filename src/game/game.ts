@@ -401,7 +401,7 @@ export class Game {
     const input = this.input;
     if (input.mouseDX || input.mouseDY) this.camera.look(input.mouseDX, input.mouseDY);
     if (input.wheel) this.camera.addZoom(input.wheel);
-    if (input.wasPressed('Tab')) this.hud.toggleHelp();
+    if (input.wasPressed('F1')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
     if (input.wasPressed('KeyM')) this.hud.showToast(mixer.toggleMute() ? 'Đã tắt tiếng (M)' : 'Đã bật tiếng (M)', 1.4);
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
@@ -559,6 +559,8 @@ export class Game {
       this.caught();
     }
     this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
+    // Máu / giáp: chưa có chiến đấu (N5) ⇒ luôn đầy máu, chưa có giáp.
+    this.hud.setVitals(1, 0);
     this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
     if (this.nearPedestrians) this.nearPedestrians.update(this.pedestrians.walkers, alpha, dt, this.view.position.x, this.view.position.z);
     this.seated?.update(dt, this.clock.hour, this.view.position.x, this.view.position.z);

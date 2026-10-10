@@ -35,9 +35,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #120f18; col
 kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; border-radius: 5px; border: 1px solid rgba(255,255,255,.35); border-bottom-width: 2px; background: rgba(255,255,255,.08); font: 700 12px ui-monospace, monospace; text-align: center; color: var(--hud-ink); }
 .hud-prompt kbd { border-color: var(--hud-accent); color: var(--hud-accent); }
 
-/* Thông báo nhanh (giữa trên) */
-.hud-toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 30px; font-weight: 800; letter-spacing: .02em; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.4), 0 0 24px rgba(0,0,0,.45); opacity: 0; transition: opacity .3s, transform .3s; white-space: nowrap; }
-.hud-toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+/* Thông báo nhanh: xếp chồng góc dưới trái, trên thanh máu + bản đồ nhỏ; dòng mới trượt vào, tối đa 3 dòng */
+.hud-toast { position: absolute; left: 18px; bottom: 244px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: min(380px, calc(100% - 36px)); }
+.hud-toast .toast { padding: 8px 12px; border-left: 3px solid var(--hud-accent); font-size: 14.5px; font-weight: 600; line-height: 1.35; color: var(--hud-ink); animation: toast-in .28s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+
+/* Máu / giáp (ngay trên bản đồ nhỏ, kiểu GTA: hai thanh cạnh nhau) */
+.hud-vitals { position: absolute; left: 18px; bottom: 222px; width: 196px; display: flex; gap: 4px; }
+.hud-vitals .bar { flex: 1; height: 7px; border-radius: 4px; background: rgba(14, 12, 20, .7); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.hud-vitals .bar i { display: block; height: 100%; transform-origin: 0 50%; transition: transform .25s; }
+.hud-vitals .health i { background: #5fcf7a; }
+.hud-vitals .armor i { background: #4aa3ff; }
+.hud-vitals.no-armor .armor { opacity: .35; }
+.hud-vitals.low .health i { background: #ff4b3e; animation: blink .8s steps(2) infinite; }
 
 /* Bản đồ nhỏ (góc dưới trái) */
 .hud-minimap { position: absolute; left: 18px; bottom: 18px; width: 196px; height: 196px; border-radius: 50%; box-shadow: 0 4px 18px rgba(0,0,0,.45); }
@@ -46,9 +56,12 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 /* Ảnh nền khu phố: lớp riêng, chỉ đổi transform mỗi khung hình (không vẽ lại). */
 .hud-minimap-map { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 
-/* Bảng phím (trên bản đồ nhỏ) */
-.hud-help { position: absolute; left: 18px; bottom: 228px; padding: 10px 14px; font-size: 12.5px; line-height: 1.85; color: var(--hud-quiet); transition: opacity .5s; }
-.hud-help.hidden { opacity: 0; }
+/* Bảng phím: mặc định thu gọn thành nhãn "F1" dưới ô địa điểm; F1 mở bảng đầy đủ ở cùng chỗ */
+.hud-help { position: absolute; left: 18px; top: 112px; padding: 10px 14px; font-size: 12.5px; line-height: 1.85; color: var(--hud-quiet); transition: opacity .3s; }
+.hud-help.hidden { opacity: 0; visibility: hidden; }
+.hud-help-hint { position: absolute; left: 18px; top: 112px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; color: var(--hud-quiet); transition: opacity .3s; }
+.hud-help-hint.hidden { opacity: 0; }
+.hud-help-hint.ping { color: var(--hud-ink); animation: ping 1.6s ease-in-out infinite; }
 .hud-help b { color: var(--hud-ink); font-weight: 600; }
 .hud-help .title { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--hud-accent); margin-bottom: 2px; }
 
@@ -62,7 +75,9 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 #loading.error { color: #ff8a80; padding: 24px; }
 
 @media (max-width: 640px) {
-  .hud-help { display: none; }
+  .hud-help, .hud-help-hint { display: none; }
+  .hud-vitals { width: 132px; bottom: 152px; left: 12px; }
+  .hud-toast { left: 12px; bottom: 170px; }
   .hud-minimap { width: 132px; height: 132px; left: 12px; bottom: 12px; }
   .hud-speedo { width: 128px; height: 128px; right: 12px; bottom: 12px; }
   .hud-speedo .num { font-size: 32px; }
@@ -137,7 +152,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 /* Độ Nóng (dưới tiền mặt) */
 .hud-heat { position: absolute; top: 68px; right: 18px; display: flex; align-items: center; gap: 4px; }
 .hud-heat[hidden] { display: none; }
-.hud-heat span { width: 22px; height: 22px; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: rgba(255,255,255,.22); }
+.hud-heat span { width: 20px; height: 20px; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: rgba(255,255,255,.22); }
 .hud-heat span.on { background: #ff4b3e; filter: drop-shadow(0 0 6px rgba(255,75,62,.8)); }
 .hud-heat.hiding span.on { animation: blink .7s steps(2) infinite; }
 .hud-heat small { order: -1; margin-right: 8px; font-size: 12px; font-weight: 700; color: #ffb3ab; text-shadow: 0 1px 0 rgba(0,0,0,.5); }

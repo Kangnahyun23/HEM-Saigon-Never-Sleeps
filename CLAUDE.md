@@ -105,7 +105,8 @@ src/
                      (tiếng máy theo tốc độ / ga), ambience (ồn phố, dế đêm), sfx (tiền, tin nhắn, nhiệm vụ, truy đuổi, té xe),
                      horn, rainSound; soundModel (thông số âm thanh — thuần logic, có unit test).
                      Âm thanh mới nối vào mixer.bus(), KHÔNG tạo AudioContext riêng.
-  ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, gợi ý phím, thông báo), minimap (+ minimapMath có unit test)
+  ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, máu / giáp, sao truy nã, bảng phím F1, hàng thông báo — toastQueue
+                     có unit test), minimap (+ minimapMath có unit test)
                      phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví, Cài đặt)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
                      save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
