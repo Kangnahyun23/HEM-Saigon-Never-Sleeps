@@ -12,7 +12,7 @@ export interface CharacterView {
 }
 
 /** Thứ tự cố định: 0..3 khớp locomotionWeights (đứng, đi, chạy nhẹ, chạy nhanh). */
-const ACTIONS: readonly AnimationName[] = ['idle', 'walk', 'jog', 'sprint', 'jumpAir', 'drive'];
+const ACTIONS: readonly AnimationName[] = ['idle', 'walk', 'jog', 'sprint', 'jumpAir', 'drive', 'phone'];
 /** Hông nhân vật khối hộp cũ cao 0,95 m so với gốc khi ngồi xe — yên xe được canh theo mốc đó. */
 const RIDE_HIP_HEIGHT = 0.95;
 
@@ -46,6 +46,8 @@ export class SkinnedCharacter implements CharacterView {
   private readonly targets: number[] = [];
   private readonly loco = [0, 0, 0, 0];
   private readonly helmet = new THREE.Group();
+  /** Điện thoại cầm tay phải (hiện khi mở điện thoại lúc đi bộ). */
+  private readonly handset = new THREE.Group();
   /** Độ cao đặt mẫu khi ngồi xe để hông ở đúng mốc yên xe. */
   private readonly rideOffset: number;
 
@@ -96,6 +98,14 @@ export class SkinnedCharacter implements CharacterView {
       this.helmet.visible = false;
       attachToBone(this.root, head, this.helmet, new THREE.Vector3(0, 0.07, 0.01));
     }
+    const hand = body.getObjectByName('hand_r');
+    if (hand) {
+      const phone = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.01), new THREE.MeshStandardNodeMaterial({ color: '#15171c', roughness: 0.3 }));
+      this.handset.add(phone);
+      this.handset.visible = false;
+      // Trong lòng bàn tay phải (tư thế gốc chữ T: tay phải duỗi về phía −X).
+      attachToBone(this.root, hand, this.handset, new THREE.Vector3(-0.08, -0.02, 0.03));
+    }
     const back = body.getObjectByName('spine_03');
     if (back) {
       // Thùng giao hàng sau lưng (áo khoác + thùng cam của tài xế xe ôm công nghệ).
@@ -125,10 +135,16 @@ export class SkinnedCharacter implements CharacterView {
       } else {
         locomotionWeights(s.speed, this.loco);
         for (let k = 0; k < 4; k++) t[k] = this.loco[k]!;
+        // Mở điện thoại lúc đứng: áp máy lên tai (thay cho động tác đứng).
+        if (s.phone && s.speed < 0.4) {
+          t[ACTIONS.indexOf('phone')] = t[0]!;
+          t[0] = 0;
+        }
         // Nhịp bước theo tốc độ thật (đỡ trượt chân).
         for (let k = 0; k < 3; k++) this.actions[k + 1]!.timeScale = clipTimeScale(k, s.speed);
       }
     }
+    this.handset.visible = s.mode === 'foot' && s.phone === true;
     for (let i = 0; i < this.actions.length; i++) {
       const w = damp(this.weights[i]!, t[i]!, rate, dt);
       this.weights[i] = w < 0.002 ? 0 : w;

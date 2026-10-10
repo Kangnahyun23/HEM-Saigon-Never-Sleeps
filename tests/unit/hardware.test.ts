@@ -44,6 +44,7 @@ describe('nhận diện card đồ hoạ', () => {
     expect(SCENE_BUDGETS.low.traffic).toBeLessThan(SCENE_BUDGETS.medium.traffic);
     expect(SCENE_BUDGETS.medium.traffic).toBeLessThan(SCENE_BUDGETS.high.traffic);
     expect(SCENE_BUDGETS.low.shadowMapSize).toBeLessThan(SCENE_BUDGETS.high.shadowMapSize);
+    expect(SCENE_BUDGETS.low.nearPedestrians).toBeLessThan(SCENE_BUDGETS.high.nearPedestrians);
   });
 
   it('rút gọn tên card', () => {

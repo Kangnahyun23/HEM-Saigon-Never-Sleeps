@@ -62,6 +62,8 @@ export interface SceneBudget {
   traffic: number;
   /** Người đi bộ. */
   pedestrians: number;
+  /** Người đi bộ gần camera vẽ bằng nhân vật có xương (còn lại là khối hộp instanced). */
+  nearPedestrians: number;
   /** Hạt mưa quanh camera. */
   rain: number;
   /** Cạnh bản đồ bóng đổ (điểm ảnh). */
@@ -69,9 +71,9 @@ export interface SceneBudget {
 }
 
 export const SCENE_BUDGETS: Record<Tier, SceneBudget> = {
-  low: { traffic: 40, pedestrians: 30, rain: 4000, shadowMapSize: 1024 },
-  medium: { traffic: 60, pedestrians: 45, rain: 6500, shadowMapSize: 2048 },
-  high: { traffic: 80, pedestrians: 60, rain: 9000, shadowMapSize: 2048 },
+  low: { traffic: 40, pedestrians: 30, nearPedestrians: 3, rain: 4000, shadowMapSize: 1024 },
+  medium: { traffic: 60, pedestrians: 45, nearPedestrians: 6, rain: 6500, shadowMapSize: 2048 },
+  high: { traffic: 80, pedestrians: 60, nearPedestrians: 10, rain: 9000, shadowMapSize: 2048 },
 };
 
 export const TIER_LABELS: Record<Tier, string> = { low: 'yếu', medium: 'trung bình', high: 'mạnh' };

@@ -120,6 +120,26 @@ export function shopsClosedFraction(hour: number): number {
   return lerp(0.15, 0.85, smooth(21, 23.5, h));
 }
 
+/**
+ * Tỉ lệ ghế quán cóc có người theo giờ: đông bữa sáng (6–9 h), trưa (11–13 h) và tối (17–22 h, nhậu / ăn khuya),
+ * khuya gần như vắng. Nội suy mượt giữa các mốc.
+ */
+const EATERY: ReadonlyArray<readonly [number, number]> = [
+  [0, 0.12], [4.5, 0.05], [6, 0.55], [7.5, 0.75], [9.5, 0.35], [11.5, 0.6], [13, 0.55], [14.5, 0.25],
+  [17, 0.45], [19, 0.8], [21.5, 0.7], [23, 0.3], [24, 0.12],
+];
+export function eateryOccupancy(hour: number): number {
+  const h = wrapHour(hour);
+  for (let i = 1; i < EATERY.length; i++) {
+    const [h1, v1] = EATERY[i]!;
+    if (h <= h1) {
+      const [h0, v0] = EATERY[i - 1]!;
+      return lerp(v0, v1, smooth(h0, h1, h));
+    }
+  }
+  return EATERY[0]![1];
+}
+
 /** Độ mạnh bloom theo mức đêm (0 ban ngày ⇒ khỏi chạy lượt bloom; mạnh dần lúc chạng vạng, đủ khi tối hẳn). */
 export const BLOOM_MAX = 0.55;
 export function bloomStrength(night: number): number {

@@ -28,6 +28,20 @@ export interface BuildContext {
   lamps: THREE.Vector3[];
   /** Tiệm mặt đường (buildBuildings điền) — cho vũng đèn hắt ra vỉa hè và bảng hiệu phản chiếu trên đường ướt. */
   shopFronts: ShopFront[];
+  /** Chỗ ngồi quán cóc / chỗ đứng bán hàng (streetProps điền) — để đặt người ngồi ăn, người bán gần camera. */
+  seats: Seat[];
+}
+
+/** Chỗ có người: ghế đẩu quán cóc (ngồi) hoặc cạnh xe đẩy (người bán đứng). */
+export interface Seat {
+  readonly id: number;
+  readonly x: number;
+  /** Độ cao mặt ghế (ngồi) hoặc mặt vỉa hè (đứng). */
+  readonly y: number;
+  readonly z: number;
+  /** Hướng mặt (yaw: (sin, cos) là hướng nhìn). */
+  readonly yaw: number;
+  readonly kind: 'stool' | 'vendor';
 }
 
 export interface ShopFront {

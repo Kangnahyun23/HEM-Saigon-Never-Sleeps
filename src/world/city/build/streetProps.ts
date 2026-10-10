@@ -252,7 +252,11 @@ function buildSidewalkLife(ctx: BuildContext): void {
         const nS = 3 + Math.floor(rng() * 2);
         for (let j = 0; j < nS; j++) {
           const a = (j / nS) * Math.PI * 2 + rng();
-          stools.add(x + Math.cos(a) * 0.55, pad + 0.14, z + Math.sin(a) * 0.55, 0.3, 0.28, 0.3, rng() * 3, sc);
+          const sx = x + Math.cos(a) * 0.55;
+          const sz = z + Math.sin(a) * 0.55;
+          stools.add(sx, pad + 0.14, sz, 0.3, 0.28, 0.3, rng() * 3, sc);
+          // Người ngồi ghế quay mặt vào bàn.
+          ctx.seats.push({ id: ctx.seats.length, x: sx, y: pad + 0.28, z: sz, yaw: Math.atan2(-Math.cos(a), -Math.sin(a)), kind: 'stool' });
         }
       }
     } else {
@@ -264,6 +268,8 @@ function buildSidewalkLife(ctx: BuildContext): void {
       for (const side of [-1, 1]) wheels.add(x + nx * side * 0.33, pad + 0.22, z + nz * side * 0.33, 0.06, 0.22, 0.22, yaw + Math.PI / 2);
       umbrellas.add(x, pad + 2.15, z, 2.2, 0.45, 2.2, yaw + Math.PI / 4, CITY_COLORS.awning[Math.floor(rng() * CITY_COLORS.awning.length)] as string);
       statics.box(x, pad + 0.6, z, 1.25, 1.2, 0.62, yaw + Math.PI / 2, GROUP.PROP);
+      // Người bán đứng phía trong (sát nhà), nhìn ra đường.
+      ctx.seats.push({ id: ctx.seats.length, x: x - nx * 0.7, y: pad, z: z - nz * 0.7, yaw, kind: 'vendor' });
     }
   }
   for (const b of [stools, tables, carts, wheels, umbrellas]) addMesh(ctx, b.build());

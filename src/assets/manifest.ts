@@ -127,6 +127,7 @@ export const ANIMATIONS = {
       "push",
       "roll",
       "sit",
+      "sitTalk",
       "sprint",
       "slashA",
       "slashB",
@@ -158,5 +159,5 @@ export const ANIMATIONS = {
 export type AnimationName = (typeof ANIMATIONS)[keyof typeof ANIMATIONS]['clips'][number];
 
 /** Tổng dung lượng thư mục public/media (byte) và ngân sách cho phép. */
-export const MEDIA_BYTES = 3338128;
+export const MEDIA_BYTES = 3368448;
 export const MEDIA_BUDGET = 26214400;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOOM_MAX, bloomStrength, GameClock, lightingAt, nightFactor, shopsClosedFraction, sunDirection, wrapHour } from '@/world/timeOfDay';
+import { BLOOM_MAX, bloomStrength, eateryOccupancy, GameClock, lightingAt, nightFactor, shopsClosedFraction, sunDirection, wrapHour } from '@/world/timeOfDay';
 
 describe('timeOfDay', () => {
   it('mặt trời mọc phía đông (+X), lặn phía tây (−X), trưa trên cao, nửa đêm dưới chân trời', () => {
@@ -88,5 +88,17 @@ describe('timeOfDay', () => {
     expect(bloomStrength(1)).toBeCloseTo(BLOOM_MAX);
     expect(bloomStrength(nightFactor(12))).toBe(0);
     expect(bloomStrength(nightFactor(22))).toBeCloseTo(BLOOM_MAX);
+  });
+
+  it('quán cóc: đông bữa sáng và buổi tối, vắng lúc khuya và giữa chiều; luôn trong 0..1, liền mạch qua nửa đêm', () => {
+    expect(eateryOccupancy(7.5)).toBeGreaterThan(0.6);
+    expect(eateryOccupancy(19.5)).toBeGreaterThan(0.6);
+    expect(eateryOccupancy(3)).toBeLessThan(0.15);
+    expect(eateryOccupancy(15)).toBeLessThan(eateryOccupancy(19));
+    expect(eateryOccupancy(23.99)).toBeCloseTo(eateryOccupancy(0.01), 2);
+    for (let h = 0; h < 24; h += 0.25) {
+      expect(eateryOccupancy(h)).toBeGreaterThanOrEqual(0);
+      expect(eateryOccupancy(h)).toBeLessThanOrEqual(1);
+    }
   });
 });
