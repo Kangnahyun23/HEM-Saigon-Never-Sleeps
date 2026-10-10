@@ -35,16 +35,24 @@ test('rơi xuống sông: được đưa lên bờ cùng xe', async ({ page }) =
   await simulate(0.3);
   expect(await page.evaluate(() => (window.__HEM__!.game as unknown as Game).mode)).toBe('ride');
 
-  await simulate(3);
+  // Chạy từng bước nhỏ tới lúc được cứu, đọc thông báo ngay khi đó (tin nhắn cốt truyện có thể đè thông báo sau đó).
   const after = await page.evaluate(() => {
     const g = window.__HEM__!.game as unknown as Game;
-    return { mode: g.mode, feet: g.character.feet(), bike: g.bikes[0]!.phys.body.translation() };
+    const step = window.__HEM__!.simulate as (n: number) => void;
+    let t = 0;
+    while (g.mode === 'ride' && t < 5) {
+      step(1 / 30);
+      t += 1 / 30;
+    }
+    const toast = document.querySelector('.hud-toast')?.textContent ?? '';
+    return { mode: g.mode, t, toast, feet: g.character.feet(), bike: g.bikes[0]!.phys.body.translation() };
   });
   expect(after.mode).toBe('foot');
+  expect(after.t).toBeGreaterThan(1); // để khoảnh khắc rơi còn kịp thấy (FALL_GRACE)
+  expect(after.toast).toContain('Ướt sũng');
   expect(after.feet.y).toBeGreaterThan(-0.5);
   expect(after.feet.z).toBeLessThan(shore);
   expect(after.bike.y).toBeGreaterThan(-0.5);
   expect(after.bike.z).toBeLessThan(shore);
-  await expect(page.locator('.hud-toast')).toContainText('Ướt sũng');
   expect(errors).toEqual([]);
 });
