@@ -202,6 +202,12 @@ export class Game {
     this.schedule(3, () => this.inbox.receive('Phát CEO', 'Chạy đâu cho thoát hả tài xế? Lo mà trả nợ đúng hạn đi.', this.clock.hour));
   }
 
+  /** Độ nhạy chuột / đảo trục dọc từ cài đặt. */
+  setLookOptions(sensitivity: number, invertY: boolean): void {
+    this.camera.sensitivity = sensitivity;
+    this.camera.invertY = invertY;
+  }
+
   /** Hẹn một việc sau `seconds` giây chơi. */
   schedule(seconds: number, run: () => void): void {
     this.scheduled.push({ at: this.playTime + seconds, run });
@@ -334,7 +340,7 @@ export class Game {
       if (input.wasPressed('KeyP')) phone.toggle();
       else if (phone.open && input.wasPressed('Escape')) phone.setOpen(false);
       if (phone.open) {
-        const tabs: PhoneTab[] = ['jobs', 'map', 'messages', 'wallet'];
+        const tabs: PhoneTab[] = ['jobs', 'map', 'messages', 'wallet', 'settings'];
         tabs.forEach((t, i) => {
           if (input.wasPressed(`Digit${i + 1}`)) phone.show(t);
         });

@@ -26,6 +26,8 @@ export class ResolutionGovernor {
   readonly options: ResolutionOptions;
   /** Tỉ lệ điểm ảnh hiện tại. */
   pixelRatio: number;
+  /** Đã hạ hết nấc mà vẫn chậm (để gợi ý người chơi chọn chất lượng "Thấp"). */
+  struggling = false;
   /** Vẽ lại bản đồ bóng đổ sau mỗi ngần này khung hình (1 = mọi khung hình). */
   shadowInterval: 1 | 2 = 1;
   /** Còn bao lâu mới được bật lại bóng đổ mọi khung hình (s) — tránh bật/tắt qua lại. */
@@ -63,6 +65,7 @@ export class ResolutionGovernor {
 
     if (avgMs > slowMs) {
       this.goodWindows = 0;
+      if (this.shadowInterval === 2 && this.pixelRatio <= min) this.struggling = true;
       if (this.shadowInterval === 1) {
         // Nấc rẻ nhất trước: bóng đổ cách khung.
         this.shadowInterval = 2;

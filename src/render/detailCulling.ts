@@ -33,7 +33,8 @@ export class DetailCuller {
 
   constructor(
     readonly mesh: THREE.InstancedMesh,
-    readonly distance: number,
+    /** Tầm nhìn (m); đổi được theo cài đặt chất lượng — có hiệu lực ở lần `update` sau. */
+    public distance: number,
   ) {
     // Dung lượng bộ đệm, không phải `count` (count bị thu nhỏ sau mỗi lần cập nhật).
     const total = mesh.instanceMatrix.count;

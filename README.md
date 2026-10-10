@@ -31,7 +31,7 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | `F` | lên xe (khi đứng gần) | xuống xe (khi chạy chậm) |
 | `H` / `L` / `R` | — | bóp còi · đèn pha · dựng lại xe |
 | Chuột / con lăn | xoay camera · zoom | xoay camera · zoom |
-| `P` | điện thoại (Kèo · Bản đồ · Tin nhắn · Ví), `1`–`4` đổi tab, `Esc` cất | như đi bộ |
+| `P` | điện thoại (Kèo · Bản đồ · Tin nhắn · Ví · Cài đặt), `1`–`5` đổi tab, `Esc` cất | như đi bộ |
 | `Tab` | ẩn/hiện bảng phím | |
 
 Game tự lưu (sau mỗi nhiệm vụ, mỗi 30 giây, khi rời trang); muốn chơi lại từ đầu thì mở `?moi=1`.
@@ -40,11 +40,15 @@ Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:3
 http://localhost:5173/?gio=21 (thêm `&mua=1` để xem phố đêm mưa). Trời Sài Gòn hay đổ mưa rào chiều tối.
 
 ### Bị giật / lag?
-Game tự giảm chất lượng khi máy không kịp 48 khung hình/giây (trước hết bóng đổ cập nhật cách khung, rồi hạ độ phân giải)
-và nâng lại khi dư sức; chi tiết nhỏ ở xa (chậu cây, xe đậu, cục nóng máy lạnh…) không vẽ. Thêm `?fps=1` vào địa chỉ để
-xem số khung hình/giây, tỉ lệ điểm ảnh, "bóng ½" (bóng cách khung), số lệnh vẽ.
-Laptop có hai card đồ hoạ: chọn trình duyệt chạy bằng card rời (Windows: Cài đặt → Hiển thị → Đồ hoạ). Chrome/Edge bản mới
-chạy WebGPU nhanh hơn Firefox/Safari (đang phải lùi về WebGL2).
+Mở điện thoại (`P`) → **Cài đặt** (`5`) → chọn **Chất lượng đồ hoạ**:
+- **Tự động** (mặc định): máy chậm thì bóng đổ cập nhật cách khung, rồi hạ độ phân giải; mượt lại thì nâng lên.
+- **Thấp**: tắt bóng đổ, vẽ 0,75× điểm ảnh, ít chi tiết ở xa — cho laptop card onboard (nhanh gần gấp đôi "Tự động").
+- **Vừa** / **Cao**: cố định độ phân giải 1× / 1,5× và có bóng đổ.
+
+Cũng trong Cài đặt: **Hiện FPS** (số khung hình/giây, tỉ lệ điểm ảnh, số lệnh vẽ), độ nhạy chuột, đảo trục dọc.
+Cài đặt được lưu lại (chơi lại từ đầu bằng `?moi=1` vẫn giữ). Laptop có hai card đồ hoạ: chọn trình duyệt chạy bằng
+card rời (Windows: Cài đặt → Hiển thị → Đồ hoạ). Chrome/Edge bản mới chạy WebGPU nhanh hơn Firefox/Safari (đang phải
+lùi về WebGL2).
 
 ## Công nghệ
 TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics · Vitest · Playwright.

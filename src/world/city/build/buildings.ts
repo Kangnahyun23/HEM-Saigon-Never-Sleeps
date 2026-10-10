@@ -8,13 +8,14 @@ import { createFacadeMaterial, createPavementMaterial, createSignMaterial } from
 import { CITY_COLORS, FACADE_COLORS } from '../palette';
 import { createSignAtlas, SHOP_SIGNS, SIGN_COLS, SIGN_ROWS, signOffset } from '../signs';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
+import { reflective } from '../../reflections';
 
 const FRONT_CODE: Record<Lot['front'], number> = { '+x': 0, '-x': 1, '+z': 2, '-z': 3 };
 const KIND_CODE: Record<Lot['kind'], number> = { house: 0, shophouse: 1, tower: 2 };
 
 /** Lan can ban công: song sắt dọc vẽ bằng shader (cắt bỏ phần trống bằng alphaTest). */
 function createRailingMaterial(): THREE.MeshStandardNodeMaterial {
-  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide });
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
   const p = attribute<'vec3'>('position', 'vec3');
   const along = positionWorld.x.add(positionWorld.z);
   const bar = fract(along.mul(7)).lessThan(0.22);
@@ -41,12 +42,12 @@ export function buildBuildings(ctx: BuildContext): void {
   const awnings = new InstanceBatch(GEO.box, painted, { colors: true, name: 'awnings' });
   const plantMat = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, flatShading: true });
   const plants = new InstanceBatch(GEO.blob, plantMat, { colors: true, name: 'balcony-plants' });
-  const steel = new THREE.MeshStandardNodeMaterial({ roughness: 0.28, metalness: 0.85 });
+  const steel = reflective(new THREE.MeshStandardNodeMaterial({ roughness: 0.28, metalness: 0.85 }));
   const tanks = new InstanceBatch(GEO.cyl, steel, { colors: true, name: 'water-tanks' });
   const tanksLying = new InstanceBatch(GEO.cylX, steel, { colors: true, name: 'water-tanks-lying' });
   const plain = new THREE.MeshStandardNodeMaterial({ roughness: 0.85 });
   const roofStuff = new InstanceBatch(GEO.box, plain, { colors: true, name: 'roof-stuff' });
-  const sheets = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.45, metalness: 0.4 }), { colors: true, name: 'roof-sheets' });
+  const sheets = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.45, metalness: 0.15 }), { colors: true, name: 'roof-sheets' });
   const acUnits = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.6 }), { colors: true, castShadow: false, name: 'ac-units' });
   const stools = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }), { colors: true, castShadow: false, name: 'stools' });
   const atlas = createSignAtlas();

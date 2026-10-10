@@ -7,6 +7,7 @@ import { BIKE_BODY_COLORS, BIKE_PARTS, BIKE_ROLE_COLORS, type BikePart } from '@
 import { nightUniform } from '../../nightGlow';
 import { CITY_COLORS } from '../palette';
 import { addMesh, GEO, type BuildContext } from './context';
+import { reflective } from '../../reflections';
 
 /** Cột điện bê tông + xà ngang + cuộn cáp + bình biến áp + đèn đường; dây điện võng giữa các cột. */
 function buildPoles(ctx: BuildContext): void {
@@ -18,7 +19,7 @@ function buildPoles(ctx: BuildContext): void {
   const hardware = new InstanceBatch(GEO.box, dark, { colors: true, castShadow: false, name: 'pole-hardware' });
   const coilGeo = new THREE.TorusGeometry(0.32, 0.07, 5, 10);
   const coils = new InstanceBatch(coilGeo, dark, { colors: true, castShadow: false, name: 'cable-coils' });
-  const transformers = new InstanceBatch(GEO.cyl, new THREE.MeshStandardNodeMaterial({ color: '#7d8287', roughness: 0.5, metalness: 0.5 }), {
+  const transformers = new InstanceBatch(GEO.cyl, reflective(new THREE.MeshStandardNodeMaterial({ color: '#7d8287', roughness: 0.5, metalness: 0.5 })), {
     name: 'transformers',
   });
   const lampMat = new THREE.MeshStandardNodeMaterial({ color: '#fff4d6', roughness: 0.4 });

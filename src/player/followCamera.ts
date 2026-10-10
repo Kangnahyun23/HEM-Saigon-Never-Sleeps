@@ -42,9 +42,15 @@ export class FollowCamera {
     return { x: -Math.sin(this.yaw), z: -Math.cos(this.yaw) };
   }
 
+  /** Hệ số độ nhạy chuột (cài đặt). */
+  sensitivity = 1;
+  /** Đảo trục dọc (cài đặt). */
+  invertY = false;
+
   look(dx: number, dy: number): void {
-    this.yaw = wrap(this.yaw - dx * 0.0032);
-    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.0026, -0.3, 1.25);
+    const k = this.sensitivity;
+    this.yaw = wrap(this.yaw - dx * 0.0032 * k);
+    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.0026 * k * (this.invertY ? -1 : 1), -0.3, 1.25);
   }
 
   addZoom(steps: number): void {

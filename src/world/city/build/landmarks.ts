@@ -7,6 +7,7 @@ import { nightUniform } from '../../nightGlow';
 import { createFacadeMaterial, createPavementMaterial } from '../materials';
 import { CITY_COLORS } from '../palette';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
+import { reflective } from '../../reflections';
 
 const CREAM = '#efe1bd';
 const CREAM_DARK = '#d8c69a';
@@ -139,7 +140,7 @@ function buildMarket(ctx: BuildContext): void {
   add(GEO.plane, plateMat, px, pad + 11.2, pz, tw + 2.5, (tw + 2.5) * 0.16, 1, front).castShadow = false;
 
   // Quầy dù quanh quảng trường.
-  const poleMat = new THREE.MeshStandardNodeMaterial({ color: '#c8c8c8', roughness: 0.4, metalness: 0.6 });
+  const poleMat = reflective(new THREE.MeshStandardNodeMaterial({ color: '#c8c8c8', roughness: 0.4, metalness: 0.6 }));
   const umbMat = new THREE.MeshStandardNodeMaterial({ roughness: 0.7, side: THREE.DoubleSide });
   const umbGeo = new THREE.ConeGeometry(1, 0.6, 10, 1, true).translate(0, 0.3, 0);
   const umbrellas = new InstanceBatch(umbGeo, umbMat, { colors: true, name: 'umbrellas' });
@@ -191,7 +192,7 @@ function buildPark(ctx: BuildContext): void {
   basin.castShadow = basin.receiveShadow = true;
   addMesh(ctx, basin);
   statics.cylinder(x, pad, z, radius, 0.6);
-  const water = new THREE.MeshStandardNodeMaterial({ roughness: 0.08, metalness: 0.2 });
+  const water = reflective(new THREE.MeshStandardNodeMaterial({ roughness: 0.08, metalness: 0.2 }));
   water.colorNode = mix(vec3(0.18, 0.42, 0.5), vec3(0.35, 0.6, 0.66), sin(positionWorld.x.mul(3).add(time.mul(2))).mul(0.5).add(0.5));
   const pool = new THREE.Mesh(GEO.cylBase, water);
   pool.scale.set(radius - 0.35, 0.02, radius - 0.35);
@@ -239,7 +240,7 @@ function buildRiver(ctx: BuildContext): void {
   embank.receiveShadow = true;
   addMesh(ctx, embank);
 
-  const water = new THREE.MeshStandardNodeMaterial({ roughness: 0.18, metalness: 0.1 });
+  const water = reflective(new THREE.MeshStandardNodeMaterial({ roughness: 0.18, metalness: 0.1 }));
   const c0 = new THREE.Color(CITY_COLORS.water);
   const ripple = sin(positionWorld.x.mul(0.35).add(positionWorld.z.mul(0.6)).add(time.mul(0.9)))
     .mul(sin(positionWorld.x.mul(0.9).sub(time.mul(0.6))))
@@ -257,7 +258,7 @@ function buildRiver(ctx: BuildContext): void {
   statics.box(0, pad + 0.6, shore - 0.2, 2400, 1.2, 0.4);
 
   // Lan can bờ kè.
-  const railMat = new THREE.MeshStandardNodeMaterial({ color: '#2d4d3a', roughness: 0.5, metalness: 0.4 });
+  const railMat = reflective(new THREE.MeshStandardNodeMaterial({ color: '#2d4d3a', roughness: 0.5, metalness: 0.4 }));
   const rails = new InstanceBatch(GEO.box, railMat, { name: 'river-railing' });
   const span = layout.river.promenade;
   for (let x = span.x0; x <= span.x1; x += 2.4) rails.add(x, pad + 0.55, shore - 0.15, 0.08, 1.1, 0.08);

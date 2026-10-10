@@ -8,6 +8,7 @@ import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { Hud } from '@/ui/hud';
 import { SaveSlot } from '@/systems/save';
+import { qualityProfile, SettingsStore, type Settings } from '@/systems/settings';
 import type { DebugInfo } from '@/debug';
 
 
@@ -16,7 +17,7 @@ async function main(): Promise<void> {
   const hudRoot = document.getElementById('hud') as HTMLElement;
   const loading = document.getElementById('loading') as HTMLElement;
 
-  const [{ renderer, backend, maxPixelRatio }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
+  const [{ renderer, backend }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2500);
@@ -93,12 +94,34 @@ async function main(): Promise<void> {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // Tự hạ / nâng độ phân giải theo sức máy. Chạy tự động (Playwright) thì giữ cố định để ảnh chụp so sánh được.
-  const resolution = navigator.webdriver ? null : new ResolutionGovernor({ max: maxPixelRatio, min: Math.min(0.6, maxPixelRatio) });
-  // ?fps=1: hiện số khung hình / giây, tỉ lệ điểm ảnh và số lệnh vẽ (để báo lỗi giật lag).
-  const fpsBox = new URLSearchParams(location.search).get('fps') === '1' ? hud.createPerfBox() : null;
+  // Cài đặt người chơi (tab Cài đặt trong điện thoại): chất lượng đồ hoạ, hiện FPS, độ nhạy chuột.
+  const settingsStore = SettingsStore.browser();
+  let settings = settingsStore.load();
+  // ?fps=1: luôn hiện số khung hình / giây, tỉ lệ điểm ảnh và số lệnh vẽ (để báo lỗi giật lag).
+  const fpsParam = new URLSearchParams(location.search).get('fps') === '1';
+  const fpsBox = hud.createPerfBox();
   let fpsTime = 0;
   let fpsFrames = 0;
+  /** Chất lượng tự động (chỉ ở mức "Tự động"). Chạy tự động (Playwright) thì tắt để ảnh chụp so sánh được. */
+  let resolution: ResolutionGovernor | null = null;
+  let lowHintShown = false;
+  const applySettings = (s: Settings): void => {
+    const profile = qualityProfile(s.quality, window.devicePixelRatio);
+    resolution = profile.adaptive && !navigator.webdriver ? new ResolutionGovernor({ max: profile.pixelRatio, min: Math.min(0.6, profile.pixelRatio) }) : null;
+    if (renderer.getPixelRatio() !== profile.pixelRatio) renderer.setPixelRatio(profile.pixelRatio);
+    env.setShadowInterval(1);
+    env.setShadows(profile.shadows);
+    city.setDetailScale(profile.detailScale);
+    fpsBox.hidden = !(s.showFps || fpsParam);
+    game.setLookOptions(s.mouseSensitivity, s.invertY);
+  };
+  applySettings(settings);
+  hud.phone?.setSettings(settings, (next) => {
+    settings = next;
+    settingsStore.save(next);
+    applySettings(next);
+  });
+  debug.settings = () => settings;
 
   renderer.setAnimationLoop((time) => {
     timer.update(time);
@@ -109,9 +132,14 @@ async function main(): Promise<void> {
       if (renderer.getPixelRatio() !== resolution.pixelRatio) renderer.setPixelRatio(resolution.pixelRatio);
       env.setShadowInterval(resolution.shadowInterval);
     }
+    if (resolution?.struggling && !lowHintShown) {
+      // Hạ hết nấc tự động mà vẫn chậm: gợi ý một lần (không tự tắt bóng vì đổi bóng phải dựng lại mọi shader).
+      lowHintShown = true;
+      hud.showToast('Máy hơi yếu: mở điện thoại (P) → Cài đặt (5) → chọn "Thấp" cho mượt hơn', 6);
+    }
     city.updateDetail(camera.position);
     renderer.render(scene, camera);
-    if (fpsBox) {
+    if (!fpsBox.hidden) {
       fpsTime += raw;
       fpsFrames++;
       if (fpsTime >= 0.5) {

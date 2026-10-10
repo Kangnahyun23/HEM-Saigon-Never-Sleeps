@@ -21,11 +21,15 @@ npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → pha
 ```
 Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
 (chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do), `__HEM__.setHour(21)` (đổi giờ).
-Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ.
+Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ. `__HEM__.settings()` = cài đặt hiện tại.
 Hiệu năng: chi tiết nhỏ mới thì thêm tên lô vào `DETAIL_DISTANCE` (city/buildCity.ts); khối tĩnh trong một nhóm nên dùng chung vật liệu để `mergeStaticMeshes` gộp được.
 Vòng lặp mỗi khung hình KHÔNG tạo đối tượng / mảng / closure mới (dùng lại biến tạm) — rác bộ nhớ gây khựng khi trình duyệt dọn.
 Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `world.step()` (Rapier 0.21 duyệt lại mọi collider, ~300 KB rác/bước).
 Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ.
+KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % thời gian vẽ): vật liệu kim loại / mặt nước cần phản chiếu
+thì bọc `reflective(mat)` (world/reflections.ts); ánh sáng nền thay IBL là đèn `envFill` trong environment.ts.
+Đo GPU trên máy không GPU: đổi vật liệu / đèn xong phải `await renderer.compileAsync()` rồi mới đo — three.js bỏ qua
+không vẽ vật đang biên dịch shader dở (số đo sẽ "nhanh" giả).
 Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`.
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
@@ -52,7 +56,8 @@ src/
                      resolution (chất lượng tự động theo FPS: bóng đổ cách khung → hạ độ phân giải), detailCulling (chi tiết nhỏ chỉ vẽ quanh camera),
                      merge (gộp khối tĩnh cùng vật liệu: xe, nhân vật, công trình) — đều có unit test
   world/
-    environment.ts   bầu trời SkyMesh + vòm trời đêm, PMREM, nắng/trăng + bóng đổ bám điểm nhìn, sương; setLighting()
+    environment.ts   bầu trời SkyMesh + vòm trời đêm, nắng/trăng + bóng đổ bám điểm nhìn, đèn bù sáng envFill, sương; setLighting()
+    reflections.ts   ảnh bầu trời (PMREM) chỉ cho vật liệu cần phản chiếu: reflective(mat)
     timeOfDay.ts     đồng hồ game + ánh sáng theo giờ (mặt trời, màu trời, sương, mức đêm) — thuần logic, có unit test
     nightGlow.ts     uniform "mức đêm" dùng chung cho mọi vật liệu phát sáng (cửa sổ, bảng hiệu, đèn đường, đèn xe) + độ ướt đường
     weather.ts       thời tiết có seed (nắng/mây/mưa rào chiều tối, đường ướt) + applyWeather() — có unit test
@@ -73,11 +78,12 @@ src/
                      story (5 nhiệm vụ Hồi 1: điểm hẹn, lời thoại, trả nợ — có unit test), storyRunner
   audio/             còi xe WebAudio
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, gợi ý phím, thông báo), minimap (+ minimapMath có unit test)
-                     phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví)
+                     phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví, Cài đặt)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
-                     save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng) — thuần logic, có unit test
+                     save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
+                     settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao) — thuần logic, có unit test
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
-tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save
+tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).

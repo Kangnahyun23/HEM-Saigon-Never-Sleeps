@@ -20,6 +20,8 @@ export interface City {
   stats: { meshes: number; instances: number; colliders: number };
   /** Ẩn / hiện các mảnh chi tiết nhỏ theo khoảng cách tới camera — gọi mỗi khung hình trước khi render. */
   updateDetail(eye: THREE.Vector3): void;
+  /** Nhân tầm nhìn chi tiết nhỏ (cài đặt chất lượng: thấp 0,6 … cao 1,25). */
+  setDetailScale(scale: number): void;
 }
 
 /** Camera đi được ngần này mét thì chọn lại chi tiết nhỏ quanh nó. */
@@ -74,11 +76,11 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   mergeStaticMeshes(group);
 
   // Chi tiết nhỏ chỉ vẽ quanh camera (vẫn một lệnh vẽ mỗi lô) — đỡ cả lượt vẽ chính lẫn lượt vẽ bóng đổ.
-  const details: DetailCuller[] = [];
+  const details: Array<{ culler: DetailCuller; base: number }> = [];
   for (const child of group.children) {
     const mesh = child as THREE.InstancedMesh;
     const far = mesh.isInstancedMesh ? detailDistance(mesh.name) : undefined;
-    if (far !== undefined) details.push(new DetailCuller(mesh, far));
+    if (far !== undefined) details.push({ culler: new DetailCuller(mesh, far), base: far });
   }
   let lastX = Infinity;
   let lastZ = Infinity;
@@ -107,7 +109,11 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
       if ((eye.x - lastX) ** 2 + (eye.z - lastZ) ** 2 < DETAIL_REFRESH ** 2) return;
       lastX = eye.x;
       lastZ = eye.z;
-      for (const d of details) d.update(eye.x, eye.z);
+      for (const d of details) d.culler.update(eye.x, eye.z);
+    },
+    setDetailScale(scale) {
+      for (const d of details) d.culler.distance = d.base * scale;
+      lastX = Infinity; // chọn lại ngay ở khung hình sau
     },
   };
 }

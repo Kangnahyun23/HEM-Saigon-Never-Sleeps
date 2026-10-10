@@ -68,8 +68,10 @@ describe('ResolutionGovernor', () => {
     expect(g.pixelRatio).toBe(1.5);
     run(g, 30, 1.6);
     expect(g.pixelRatio).toBeLessThan(1.5);
+    expect(g.struggling).toBe(false);
     run(g, 20, 30);
     expect(g.pixelRatio).toBe(0.6);
+    expect(g.struggling).toBe(true);
   });
 
   it('máy khoẻ (60 fps): giữ nguyên mức cao nhất', () => {
