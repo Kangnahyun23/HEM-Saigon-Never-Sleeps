@@ -18,6 +18,7 @@ import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
 import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@/systems/inventory';
 import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
+import { attackFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
 
 /** Phím di chuyển (hằng số — khỏi tạo mảng mới mỗi khung hình). */
 const MOVE_ALL = { fwd: ['KeyW', 'ArrowUp'], back: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
@@ -212,6 +213,25 @@ export class Game {
   equipped: ItemId | null = null;
   /** Hệ số thời gian (vòng chọn đồ làm game chậm lại 30 %) — main nhân vào dt. */
   timeScale = 1;
+  /** Đòn đang ra (null = không đánh), thời gian từ lúc ra đòn, đã tính trúng chưa, nhịp combo. */
+  private attack: AttackDef | null = null;
+  private attackT = 0;
+  private attackHit = false;
+  private combo = 2;
+  private sinceAttack = 99;
+  /** Cú bấm sát cuối đòn được giữ lại để nối combo ('light' / 'heavy'), null = không có. */
+  private queuedAttack: 'light' | 'heavy' | null = null;
+  /** Khựng hình khi đòn trúng (giây thật còn lại) — main nhân hệ số chậm vào dt. */
+  hitStop = 0;
+
+  /** Hệ số thời gian cho khung hình này (giây thật `realDt`): khựng hình khi trúng đòn, chậm khi mở vòng chọn đồ. */
+  tickScale(realDt: number): number {
+    if (this.hitStop > 0) {
+      this.hitStop -= realDt;
+      return 0.06;
+    }
+    return this.timeScale;
+  }
   private wheelEntries: WheelEntry[] = [];
   private wheelSel = 0;
   private wheelDX = 0;
@@ -264,6 +284,80 @@ export class Game {
         this.hud.showToast(`Đã vứt: ${ITEMS[s.id].name}`, 1.4);
       },
     );
+  }
+
+  /** Ra đòn: nhịp combo kế tiếp, tự xoay về người gần nhất phía trước (khoá mục tiêu nhẹ), phát động tác. */
+  private startAttack(heavy: boolean): void {
+    this.combo = heavy ? 0 : nextCombo(this.combo, this.sinceAttack);
+    const def = attackFor(this.equipped, this.combo, heavy);
+    const p = this.character.feet();
+    let best = -1;
+    let bestD = 2.4;
+    const yaw = this.character.yaw;
+    for (const w of this.pedestrians.walkers) {
+      if (w.dead) continue;
+      const d = Math.hypot(w.x - p.x, w.z - p.z);
+      const facing = ((w.x - p.x) * Math.sin(yaw) + (w.z - p.z) * Math.cos(yaw)) / Math.max(d, 1e-3);
+      if (d < bestD && facing > 0.25) {
+        bestD = d;
+        best = w.id;
+      }
+    }
+    if (best >= 0) {
+      const w = this.pedestrians.walkers[best]!;
+      this.character.yaw = Math.atan2(w.x - p.x, w.z - p.z);
+    }
+    this.model.attack?.(def.clip, def.duration);
+    this.attack = def;
+    this.attackT = 0;
+    this.attackHit = false;
+  }
+
+  /** Đòn đang ra: tới thời điểm chạm thì tính trúng ai (quạt phía trước), trừ máu, khựng hình, rung camera. */
+  private updateAttack(dt: number): void {
+    this.sinceAttack += dt;
+    const def = this.attack;
+    if (!def) return;
+    this.attackT += dt;
+    if (!this.attackHit && this.attackT >= def.hitAt) {
+      this.attackHit = true;
+      const p = this.character.feet();
+      const yaw = this.character.yaw;
+      let hits = 0;
+      for (const w of this.pedestrians.walkers) {
+        if (w.dead || !inStrike(p.x, p.z, yaw, def.reach, def.arc, w.x, w.z)) continue;
+        const r = this.pedestrians.hit(w.id, def.damage, p.x, p.z, def.knock);
+        if (r) hits++;
+      }
+      if (hits > 0) {
+        this.hitStop = def.knock ? 0.11 : 0.06;
+        this.camera.shake(def.knock ? 0.07 : 0.035);
+        playSfx(def.knock ? 'hitHeavy' : 'hit');
+        // Người xung quanh thấy đánh nhau thì bỏ chạy.
+        this.pedestrians.scare(p.x, p.z, 16);
+        this.wearWeapon(hits);
+      } else playSfx('swing');
+    }
+    if (this.attackT >= def.duration) {
+      this.attack = null;
+      this.sinceAttack = 0;
+    }
+  }
+
+  /** Mỗi lần đánh trúng hao 1 độ bền vũ khí; hết độ bền thì gãy (mất khỏi balo). */
+  private wearWeapon(hits: number): void {
+    if (!this.equipped) return;
+    for (let i = 0; i < this.inventory.slots.length; i++) {
+      const sl = this.inventory.slots[i];
+      if (sl?.id !== this.equipped || sl.durability === undefined) continue;
+      sl.durability -= hits;
+      if (sl.durability <= 0) {
+        this.hud.showToast(`${ITEMS[sl.id].name} gãy rồi!`, 2);
+        this.inventory.remove(i, 1);
+        this.hud.backpack.invalidate();
+      }
+      return;
+    }
   }
 
   /** Vũ khí bị vứt / hỏng ⇒ về tay không; cập nhật hình cầm tay + ô vũ khí trên HUD. */
@@ -547,6 +641,20 @@ export class Game {
       if (input.wasPressed('Digit4') && food) this.applyWheel(food);
     }
     this.syncWeapon();
+    // Cận chiến (đi bộ, không mở điện thoại / balo / vòng chọn đồ): chuột trái đòn nhẹ (combo 3 nhịp), chuột phải đòn mạnh.
+    const busyUi = this.hud.phone?.open || this.hud.backpack.open || wheelWanted;
+    if (this.mode === 'foot' && !busyUi && input.wasPressed('Mouse0', 'Mouse2')) {
+      const heavy = input.wasPressed('Mouse2');
+      if (!this.attack) this.startAttack(heavy);
+      // Bấm trong 0,35 s cuối đòn: giữ lại, đòn xong thì ra đòn kế (nối combo mượt).
+      else if (this.attack.duration - this.attackT < 0.35) this.queuedAttack = heavy ? 'heavy' : 'light';
+    }
+    this.updateAttack(dt);
+    if (!this.attack && this.queuedAttack && this.mode === 'foot') {
+      const heavy = this.queuedAttack === 'heavy';
+      this.queuedAttack = null;
+      this.startAttack(heavy);
+    }
     if (input.wheel) this.camera.addZoom(input.wheel);
     if (input.wasPressed('F1')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
@@ -669,8 +777,10 @@ export class Game {
       }
       if (this.mode === 'foot') {
         // Phải của hướng nhìn (fx, fz) là (−fz, fx).
-        const mx = cam.x * fwd - cam.z * strafe;
-        const mz = cam.z * fwd + cam.x * strafe;
+        // Đang ra đòn thì đứng tấn (không đi).
+        const still = this.attack ? 0 : 1;
+        const mx = (cam.x * fwd - cam.z * strafe) * still;
+        const mz = (cam.z * fwd + cam.x * strafe) * still;
         this.character.update(STEP, { x: mx, z: mz, run: input.isDown('ShiftLeft', 'ShiftRight'), jump: this.jumpQueued });
         this.jumpQueued = false;
       }

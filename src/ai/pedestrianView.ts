@@ -53,6 +53,8 @@ const _x = new THREE.Vector3(1, 0, 0);
 const _c = new THREE.Color();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const HAT_LOCAL = new THREE.Matrix4().makeTranslation(0, 1.79, -0.01);
+/** Nằm ngửa: xoay cả người −90° quanh trục X cục bộ (đầu ngả ra sau), nhấc lên khỏi mặt đất. */
+const LYING = new THREE.Matrix4().makeTranslation(0, 0.11, 0).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
 
 export class PedestrianView {
   readonly root = new THREE.Group();
@@ -105,8 +107,11 @@ export class PedestrianView {
       _p.set(w.prevX + (w.x - w.prevX) * alpha, PAD_HEIGHT, w.prevZ + (w.z - w.prevZ) * alpha);
       _q.setFromAxisAngle(_up, w.prevYaw + dyaw * alpha);
       _w.compose(_p, _q, _one);
-      // Biên độ bước theo tốc độ; đứng yên thì tay chân thả thẳng.
-      const amp = Math.min(1, w.speed / 1.3);
+      // Bị đánh ngã / gục: nằm ngửa dưới đất.
+      const lying = w.dead || w.down > 0;
+      if (lying) _w.multiply(LYING);
+      // Biên độ bước theo tốc độ; đứng yên / nằm thì tay chân thả thẳng.
+      const amp = lying ? 0 : Math.min(1, w.speed / 1.3);
       const legSwing = Math.sin(w.phase) * 0.55 * amp;
       // Nhảy tránh xe: giơ hai tay lên (hoạt hình).
       const dodging = w.dodge > 0;

@@ -1,7 +1,7 @@
 import { mixer } from './mixer';
 
 /** Các hiệu ứng âm thanh theo sự kiện trong game (tổng hợp bằng WebAudio, không dùng file). */
-export type Sfx = 'money' | 'lose' | 'message' | 'phoneOpen' | 'phoneClose' | 'start' | 'complete' | 'fail' | 'alert' | 'escaped' | 'crash';
+export type Sfx = 'money' | 'lose' | 'message' | 'phoneOpen' | 'phoneClose' | 'start' | 'complete' | 'fail' | 'alert' | 'escaped' | 'crash' | 'swing' | 'hit' | 'hitHeavy';
 
 type Wave = OscillatorType;
 
@@ -53,6 +53,10 @@ const PRIORITY: Record<Sfx, number> = {
   message: 1,
   phoneOpen: 0,
   phoneClose: 0,
+  // Tiếng đánh nhau phát dồn dập (combo) — ưu tiên cao để không bị tiếng khác nuốt.
+  swing: 2,
+  hit: 3,
+  hitHeavy: 3,
 };
 /** Trong khoảng này (giây) sau một tiếng, tiếng ưu tiên thấp hơn bị bỏ. */
 const OVERLAP = 0.4;
@@ -105,6 +109,17 @@ export function playSfx(name: Sfx): void {
         break;
       case 'escaped':
         [440, 660, 880].forEach((f, i) => note(ctx, f, t + i * 0.08, 0.22, 'sine', 0.08));
+        break;
+      case 'swing': // vụt gió: nhiễu lọc cao, rất ngắn
+        thud(ctx, t, 0.12, 2600, 0.18);
+        break;
+      case 'hit': // trúng đòn: "bịch" trầm + tiếng rít ngắn
+        thud(ctx, t, 0.14, 420, 0.75);
+        note(ctx, 140, t, 0.08, 'triangle', 0.18, 70);
+        break;
+      case 'hitHeavy': // đòn mạnh / đánh ngã: "bịch" dày hơn
+        thud(ctx, t, 0.24, 300, 0.95);
+        note(ctx, 110, t, 0.16, 'sine', 0.3, 45);
         break;
       case 'crash':
         thud(ctx, t, 0.35, 700, 0.35);

@@ -1,4 +1,5 @@
 import { createRng, range, type Rng } from '@/core/random';
+import { resolveHit, type HitResult } from '@/systems/combat';
 import type { Block, CityLayout } from '@/world/city/layout';
 
 /**
@@ -36,7 +37,19 @@ export interface Walker {
   /** Pha bước chân (rad) cho hoạt hoạ. */
   phase: number;
   generation: number;
+  /** Máu 0..100 (cận chiến). */
+  health: number;
+  /** Đang loạng choạng vì trúng đòn còn bao lâu (s). */
+  hurt: number;
+  /** Đang nằm dưới đất (bị đánh ngã) còn bao lâu (s). */
+  down: number;
+  /** Bỏ chạy còn bao lâu (s) — sau khi bị đánh / thấy đánh nhau. */
+  flee: number;
+  dead: boolean;
 }
+
+/** Tốc độ chạy trốn (m/s). */
+export const FLEE_SPEED = 4.2;
 
 export interface Threat {
   x: number;
@@ -149,7 +162,49 @@ export class PedestrianSim {
   }
 
   private blank(id: number): Walker {
-    return { id, block: 0, side: 0, t: 0, d: 1, targetD: 1, dir: 1, speed: 0, cruise: 1.3, idle: 0, dodge: 0, x: 0, z: 0, yaw: 0, prevX: 0, prevZ: 0, prevYaw: 0, phase: 0, generation: 0 };
+    return { id, block: 0, side: 0, t: 0, d: 1, targetD: 1, dir: 1, speed: 0, cruise: 1.3, idle: 0, dodge: 0, x: 0, z: 0, yaw: 0, prevX: 0, prevZ: 0, prevYaw: 0, phase: 0, generation: 0, health: 100, hurt: 0, down: 0, flee: 0, dead: false };
+  }
+
+  /**
+   * Người đi bộ `id` trúng đòn `damage` từ hướng (fromX, fromZ): loạng choạng, ngã (đòn ngã / mất nhiều máu) hoặc gục.
+   * Đứng dậy được thì bỏ chạy ngược hướng người đánh. Trả null nếu đã gục từ trước.
+   */
+  hit(id: number, damage: number, fromX: number, fromZ: number, knock: boolean): HitResult | null {
+    const w = this.walkers[id];
+    if (!w || w.dead) return null;
+    const r = resolveHit(w.health, 100, damage, knock || w.down > 0);
+    w.health = r.health;
+    w.idle = 0;
+    w.dodge = 0;
+    w.speed = 0;
+    // Quay mặt về phía người đánh (ngã ngửa ra sau).
+    w.yaw = w.prevYaw = Math.atan2(fromX - w.x, fromZ - w.z);
+    if (r.result === 'dead') {
+      w.dead = true;
+      w.down = 0;
+      w.hurt = 0;
+    } else if (r.result === 'down') w.down = 2.6;
+    else w.hurt = 0.9; // đủ dài để nhát combo kế tiếp kịp tới (nhịp chém ~0,7 s)
+    this.runFrom(w, fromX, fromZ, 7);
+    return r.result;
+  }
+
+  /** Người còn đứng được trong bán kính `radius` quanh (x, z) hoảng sợ bỏ chạy (thấy đánh nhau). */
+  scare(x: number, z: number, radius: number): void {
+    for (const w of this.walkers) {
+      if (w.dead || w.down > 0) continue;
+      const d = Math.hypot(w.x - x, w.z - z);
+      if (d < radius && d > 0.5) this.runFrom(w, x, z, 5 + (1 - d / radius) * 4);
+    }
+  }
+
+  /** Chạy dọc vỉa hè theo chiều xa (x, z) hơn trong `seconds` giây. */
+  private runFrom(w: Walker, x: number, z: number, seconds: number): void {
+    const block = this.block(w);
+    const p = this.position(block, w.side, w.t, w.d, this.here);
+    // Hướng đi hiện tại (dir) có làm xa người đánh không? Không thì quay đầu.
+    if ((p.fx * (w.x - x) + p.fz * (w.z - z)) * w.dir < 0) w.dir = w.dir === 1 ? -1 : 1;
+    w.flee = Math.max(w.flee, seconds);
   }
 
   private block(w: Walker): Block {
@@ -223,6 +278,11 @@ export class PedestrianSim {
     w.idle = 0;
     w.dodge = 0;
     w.phase = this.rng() * Math.PI * 2;
+    w.health = 100;
+    w.hurt = 0;
+    w.down = 0;
+    w.flee = 0;
+    w.dead = false;
     const p = this.position(this.block(w), w.side, w.t, w.d);
     w.x = w.prevX = p.x;
     w.z = w.prevZ = p.z;
@@ -249,6 +309,17 @@ export class PedestrianSim {
       w.prevX = w.x;
       w.prevZ = w.z;
       w.prevYaw = w.yaw;
+      // Gục / nằm / loạng choạng thì đứng yên tại chỗ.
+      if (w.dead) {
+        w.speed = 0;
+        continue;
+      }
+      if (w.down > 0 || w.hurt > 0) {
+        w.down = Math.max(0, w.down - dt);
+        w.hurt = Math.max(0, w.hurt - dt);
+        w.speed = 0;
+        continue;
+      }
       const block = this.block(w);
       const { len, width } = this.sideInfo(block, w.side, this.info);
       const lo = MARGIN;
@@ -271,7 +342,12 @@ export class PedestrianSim {
       }
 
       let desired = w.cruise;
-      if (w.dodge > 0) {
+      if (w.flee > 0) {
+        // Bỏ chạy: chạy nhanh, không đứng lại ngó nghiêng.
+        w.flee -= dt;
+        w.idle = 0;
+        desired = FLEE_SPEED;
+      } else if (w.dodge > 0) {
         w.dodge -= dt;
         desired = 0;
       } else if (w.idle > 0) {
@@ -319,7 +395,7 @@ export class PedestrianSim {
         }
       }
 
-      w.speed += clamp(desired - w.speed, -6 * dt, 3 * dt);
+      w.speed += clamp(desired - w.speed, -6 * dt, (w.flee > 0 ? 8 : 3) * dt);
       const lateralSpeed = w.dodge > 0 ? 3 : 0.9;
       w.d = clamp(w.d + clamp(w.targetD - w.d, -lateralSpeed * dt, lateralSpeed * dt), lo, hi);
       if (Math.abs(w.targetD - w.d) < 0.01 && w.dodge <= 0 && this.rng() < dt * 0.1) w.targetD = range(this.rng, lo, Math.min(hi, 1.6));
