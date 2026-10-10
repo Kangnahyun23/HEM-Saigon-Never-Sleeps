@@ -82,5 +82,8 @@ TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics
 - [Game Design Doc](docs/gdd.md)
 - [Quy ước cho Claude / người đóng góp](CLAUDE.md)
 
+## Ghi công
+Asset nhập từ ngoài (texture mặt đường, vỉa hè, tường…) đều là CC0, ghi nguồn đầy đủ trong [CREDITS.md](CREDITS.md).
+
 ## Giấy phép
 Mã nguồn: chưa chọn giấy phép. Asset bên thứ ba (nếu có) ghi rõ nguồn trong `public/assets/CREDITS.md`.

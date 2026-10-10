@@ -1,5 +1,7 @@
 import * as THREE from 'three/webgpu';
+import { loadTextures, setTextureAnisotropy } from '@/assets/textures';
 import { Input } from '@/core/input';
+import { loadFonts } from '@/ui/fonts';
 import { Game } from '@/game/game';
 import { createPhysics } from '@/physics/physics';
 import { createRenderer } from '@/render/renderer';
@@ -26,8 +28,18 @@ async function main(): Promise<void> {
     timings[name] = Math.round(now - mark);
     mark = now;
   };
+  // Texture CC0 (public/media) tải song song với dựng renderer + vật lý; tiến độ hiện ở màn hình tải.
+  const loadingSub = loading.querySelector('.sub');
+  const texturesReady = loadTextures((done, total) => {
+    if (loadingSub) loadingSub.textContent = `Sài Gòn Không Ngủ · đang tải texture ${done}/${total}…`;
+  });
+  // Font bảng hiệu phải có trước khi vẽ atlas bảng hiệu (lúc dựng phố).
+  const fontsReady = loadFonts();
   const [{ renderer, backend }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
   lap('renderer+physics');
+  await Promise.all([texturesReady, fontsReady]);
+  setTextureAnisotropy(Math.min(8, renderer.getMaxAnisotropy()));
+  lap('textures+fonts');
 
   // Sức máy ⇒ ngân sách dựng cảnh (số xe, người đi bộ, mưa, bản đồ bóng) và mức khởi đầu của chất lượng "Tự động".
   // Chạy tự động (Playwright) thì cố định bậc "mạnh" để ảnh chụp so sánh được giữa các máy.
@@ -194,8 +206,7 @@ async function main(): Promise<void> {
     debug.physicsSteps = game.physicsSteps;
   });
 
-  const sub = loading.querySelector('.sub');
-  if (sub) sub.textContent = 'Sài Gòn Không Ngủ · đang chuẩn bị đồ hoạ…';
+  if (loadingSub) loadingSub.textContent = 'Sài Gòn Không Ngủ · đang chuẩn bị đồ hoạ…';
   debug.ready = true;
   console.info(`[HẺM] sẵn sàng · render ${backend} · ${city.stats.meshes} mesh · ${city.stats.instances} instance · ${city.stats.colliders} collider`);
 }

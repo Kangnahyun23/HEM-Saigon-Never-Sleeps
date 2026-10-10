@@ -72,7 +72,7 @@ Hướng dẫn: https://code.claude.com/docs/en/cloud-environments#network-acces
 | Font | @fontsource (OFL): Oswald, Anton, Bungee, Barlow Condensed, Sriracha, Patrick Hand, Tilt Neon (đều có tiếng Việt) | Bảng hiệu, giao diện điện thoại | ~0,3 MB |
 | Tự dựng bằng code (0 MB) | — | Xe máy, xích lô, ba gác, ghế nhựa, bồn nước inox, cột điện + dây, chuồng cọp, cửa sắt kéo, nón lá, gạch bông, đường ướt, bảng hiệu, vũ khí cận chiến | — |
 
-Asset gốc nằm trong `assets-src/` (kèm file giấy phép). Script `npm run assets` nén chúng ra `public/assets/`. Test kiểm tra tổng dung lượng không vượt ngân sách.
+Bản gốc tải về nằm trong `.cache/assets/` (không commit). Script `npm run assets` nén chúng ra `public/media/` và sinh `CREDITS.md`. Test kiểm tra tổng dung lượng không vượt ngân sách.
 
 ## 5. Lộ trình v0.2 — theo thứ tự "Nhìn trước, chơi sau"
 
@@ -82,7 +82,7 @@ Cỡ PR: S ≈ nửa ngày, M ≈ 1 ngày, L ≈ 2 ngày. Mỗi PR tuân theo qu
 - CI xanh thì merge.
 
 ### N1 — Nền tảng asset (2 PR)
-- **N1.1 (M) Đường ống asset:** `assets-src/` → `npm run assets` (gltf-transform: meshopt + WebP) → `public/assets/`.
+- **N1.1 (M) Đường ống asset:** `npm run assets` tải bản gốc vào `.cache/assets/` → nén WebP → `public/media/` (có commit) + `src/assets/manifest.ts`. GLB nén meshopt thêm vào cùng script khi có mẫu đầu tiên (N3.1).
   - Bộ tải GLB có thanh tiến độ ở màn hình tải; `CREDITS.md`; test ngân sách dung lượng.
 - **N1.2 (S) Font bảng hiệu + giao diện** qua @fontsource; nạp font trước khi vẽ atlas bảng hiệu.
 
