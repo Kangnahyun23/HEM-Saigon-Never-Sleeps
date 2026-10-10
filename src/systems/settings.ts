@@ -1,3 +1,4 @@
+import type { Tier } from './hardware';
 import type { KeyValueStore } from './save';
 
 /**
@@ -81,8 +82,10 @@ export class SettingsStore {
 
 /** Thông số đồ hoạ ứng với một mức chất lượng. */
 export interface QualityProfile {
-  /** Tỉ lệ điểm ảnh tối đa (đã kẹp theo màn hình). */
+  /** Tỉ lệ điểm ảnh lúc bắt đầu (đã kẹp theo màn hình). */
   pixelRatio: number;
+  /** Tỉ lệ điểm ảnh cao nhất được nâng lên (mức Tự động; mức cố định = pixelRatio). */
+  maxPixelRatio: number;
   /** Tự hạ / nâng chất lượng theo FPS (ResolutionGovernor). */
   adaptive: boolean;
   /** Đổ bóng mặt trời. */
@@ -94,17 +97,30 @@ export interface QualityProfile {
 /**
  * Bảng mức chất lượng. Đo trên máy không GPU: bóng đổ ~8–40 % thời gian vẽ (lượt vẽ bóng + lọc bóng mỗi điểm ảnh),
  * số điểm ảnh ~40 % — nên "Thấp" tắt bóng và vẽ 0,75×, "Vừa" giữ bóng nhưng tối đa 1×.
+ * "Tự động" bắt đầu từ mức hợp với bậc máy nhận diện được (`autoTier`, xem hardware.ts) rồi tự hạ / nâng theo FPS thật.
  */
-export function qualityProfile(q: Quality, devicePixelRatio: number): QualityProfile {
+export function qualityProfile(q: Quality, devicePixelRatio: number, autoTier: Tier = 'high'): QualityProfile {
   const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const top = Math.min(dpr, 1.5);
   switch (q) {
-    case 'low':
-      return { pixelRatio: Math.min(dpr, 0.75), adaptive: false, shadows: false, detailScale: 0.6 };
-    case 'medium':
-      return { pixelRatio: Math.min(dpr, 1), adaptive: false, shadows: true, detailScale: 0.85 };
+    case 'low': {
+      const pr = Math.min(dpr, 0.75);
+      return { pixelRatio: pr, maxPixelRatio: pr, adaptive: false, shadows: false, detailScale: 0.6 };
+    }
+    case 'medium': {
+      const pr = Math.min(dpr, 1);
+      return { pixelRatio: pr, maxPixelRatio: pr, adaptive: false, shadows: true, detailScale: 0.85 };
+    }
     case 'high':
-      return { pixelRatio: Math.min(dpr, 1.5), adaptive: false, shadows: true, detailScale: 1.25 };
-    default:
-      return { pixelRatio: Math.min(dpr, 1.5), adaptive: true, shadows: true, detailScale: 1 };
+      return { pixelRatio: top, maxPixelRatio: top, adaptive: false, shadows: true, detailScale: 1.25 };
+    default: {
+      const start = autoTier === 'high' ? { ...qualityProfile('high', dpr), detailScale: 1 } : qualityProfile(autoTier, dpr);
+      return { ...start, maxPixelRatio: top, adaptive: true };
+    }
   }
+}
+
+/** Bậc máy dùng để dựng cảnh (số xe, người đi bộ, mưa, bản đồ bóng): mức cố định theo lựa chọn, Tự động theo máy. */
+export function sceneTier(q: Quality, autoTier: Tier): Tier {
+  return q === 'auto' ? autoTier : q;
 }

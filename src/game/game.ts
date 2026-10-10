@@ -32,6 +32,7 @@ import type { Environment } from '@/world/environment';
 import { RainSound } from '@/audio/rainSound';
 import { wetUniform } from '@/world/nightGlow';
 import { Rain } from '@/world/rain';
+import { SCENE_BUDGETS, type SceneBudget } from '@/systems/hardware';
 import { GameClock, lightingAt } from '@/world/timeOfDay';
 import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 
@@ -58,7 +59,7 @@ export class Game {
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
   readonly weather: WeatherSim;
-  private readonly rain = new Rain();
+  private readonly rain: Rain;
   private readonly rainSound = new RainSound();
   readonly wallet = new Wallet();
   readonly inbox = new Inbox();
@@ -102,7 +103,10 @@ export class Game {
     startSky: Sky | null = null,
     /** Nơi lưu game (null = không lưu, ví dụ khi test). */
     private readonly saveSlot: SaveSlot | null = null,
+    /** Số xe NPC / người đi bộ / hạt mưa theo sức máy (hardware.ts). */
+    budget: SceneBudget = SCENE_BUDGETS.high,
   ) {
+    this.rain = new Rain(budget.rain);
     this.clock = new GameClock(startHour);
     this.weather = new WeatherSim(city.layout.seed + 7, startSky ?? 'clear');
     this.weather.forced = startSky;
@@ -139,8 +143,8 @@ export class Game {
     this.camera = new FollowCamera(camera, physics);
     this.camera.yaw = spawn.yaw + Math.PI;
 
-    this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z });
-    this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z });
+    this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z }, { count: budget.traffic });
+    this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z }, { count: budget.pedestrians });
     this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
     scene.add(this.pedestrianView.root);
 

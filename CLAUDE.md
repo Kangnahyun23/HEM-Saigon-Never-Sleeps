@@ -30,7 +30,10 @@ KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % t
 thì bọc `reflective(mat)` (world/reflections.ts); ánh sáng nền thay IBL là đèn `envFill` trong environment.ts.
 Đo GPU trên máy không GPU: đổi vật liệu / đèn xong phải `await renderer.compileAsync()` rồi mới đo — three.js bỏ qua
 không vẽ vật đang biên dịch shader dở (số đo sẽ "nhanh" giả).
-Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`.
+Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`, `__HEM__.timings`
+(thời gian từng bước dựng cảnh lúc tải), `__HEM__.hardware` (card đồ hoạ, bậc máy, ngân sách cảnh).
+Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ, hạt mưa, cỡ bản đồ bóng lúc tải;
+thứ gì mới tốn theo số lượng thì đưa vào ngân sách đó. Playwright (navigator.webdriver) luôn dùng bậc "mạnh".
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
 
@@ -81,7 +84,8 @@ src/
                      phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví, Cài đặt)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
                      save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
-                     settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao) — thuần logic, có unit test
+                     settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
+                     hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
 tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings
 ```

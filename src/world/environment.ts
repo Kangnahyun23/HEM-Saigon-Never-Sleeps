@@ -18,6 +18,8 @@ export interface Environment {
   setShadowInterval(n: number): void;
   /** Bật / tắt đổ bóng mặt trời (cài đặt chất lượng "Thấp" tắt). Đổi thì shader biên dịch lại một lần. */
   setShadows(on: boolean): void;
+  /** Cạnh bản đồ bóng (điểm ảnh) theo sức máy — chỉ gọi lúc dựng cảnh, trước khung hình đầu. */
+  setShadowMapSize(size: number): void;
   /** Áp ánh sáng theo giờ trong ngày (trời, nắng/trăng, sương, phơi sáng, đèn ban đêm). */
   setLighting(l: SceneLighting): void;
 }
@@ -103,7 +105,7 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
   scene.add(sun);
   scene.add(sun.target);
 
-  const texel = (range * 2) / 2048;
+  let texel = (range * 2) / 2048;
   let shadowInterval = 1;
   let frame = 0;
   const snapped = new THREE.Vector3();
@@ -128,6 +130,10 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       sun.target.position.copy(snapped);
       sun.position.copy(snapped).addScaledVector(lightDir, 200);
       sun.target.updateMatrixWorld();
+    },
+    setShadowMapSize(size) {
+      sun.shadow.mapSize.set(size, size);
+      texel = (range * 2) / size;
     },
     setShadows(on) {
       if (renderer.shadowMap.enabled === on) return;

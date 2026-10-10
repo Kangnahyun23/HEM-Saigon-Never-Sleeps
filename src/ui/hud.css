@@ -173,3 +173,5 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .phone-screen .switch.on { background: #2e9e6b; color: #fff; }
 .phone-screen .stepper { display: flex; align-items: center; gap: 10px; }
 .phone-screen .stepper button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #ebe4d8; font-weight: 700; font-size: 16px; }
+.phone-screen .setting.reload { background: #fff4e6; font-size: 12.5px; }
+.phone-screen .setting.reload b { color: #d2650f; white-space: nowrap; }

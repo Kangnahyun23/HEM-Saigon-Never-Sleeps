@@ -12,6 +12,8 @@ export interface ResolutionOptions {
   max: number;
   /** Tỉ lệ thấp nhất được phép hạ xuống. */
   min: number;
+  /** Tỉ lệ điểm ảnh lúc bắt đầu (mặc định = max). */
+  start?: number;
   /** Mỗi lần đánh giá sau ngần này giây. */
   window: number;
   /** Trung bình khung hình chậm hơn mức này (ms) ⇒ hạ. */
@@ -42,7 +44,7 @@ export class ResolutionGovernor {
   constructor(options: Partial<ResolutionOptions> = {}) {
     this.options = { ...DEFAULTS, ...options };
     this.options.min = Math.min(this.options.min, this.options.max);
-    this.pixelRatio = this.options.max;
+    this.pixelRatio = Math.min(this.options.max, Math.max(this.options.min, this.options.start ?? this.options.max));
   }
 
   /** Ghi một khung hình (dt giây). Trả về true khi tỉ lệ điểm ảnh hoặc nhịp vẽ bóng đổ vừa đổi. */
