@@ -6,6 +6,7 @@ import { buildTrafficNetwork } from '@/ai/trafficNetwork';
 import { PedestrianSim, type Threat } from '@/ai/pedestrians';
 import { Heat, SightGrid } from '@/systems/heat';
 import type { SaveSlot } from '@/systems/save';
+import { NearPedestrianView } from '@/ai/nearPedestrians';
 import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
 import { MissionDirector } from '@/missions/director';
@@ -63,6 +64,9 @@ export class Game {
   readonly traffic: TrafficSystem;
   readonly pedestrians: PedestrianSim;
   private readonly pedestrianView: PedestrianView;
+  /** Người đi bộ gần camera vẽ bằng nhân vật có xương (null nếu chưa tải được mẫu người). */
+  private readonly nearPedestrians: NearPedestrianView | null;
+  private readonly view: THREE.PerspectiveCamera;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
   readonly weather: WeatherSim;
@@ -167,6 +171,9 @@ export class Game {
     this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z }, { count: budget.pedestrians });
     this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
     scene.add(this.pedestrianView.root);
+    this.view = camera;
+    this.nearPedestrians = NearPedestrianView.available() && budget.nearPedestrians > 0 ? new NearPedestrianView(budget.nearPedestrians) : null;
+    if (this.nearPedestrians) scene.add(this.nearPedestrians.root);
 
     // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
     this.loaded = this.restore();
@@ -548,7 +555,8 @@ export class Game {
     }
     this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
     this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
-    this.pedestrianView.update(this.pedestrians.walkers, alpha);
+    if (this.nearPedestrians) this.nearPedestrians.update(this.pedestrians.walkers, alpha, dt, this.view.position.x, this.view.position.z);
+    this.pedestrianView.update(this.pedestrians.walkers, alpha, this.nearPedestrians?.lod);
     let speedKmh: number | null = null;
     const cp = this.character.prev;
     const cc = this.character.curr;

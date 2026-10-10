@@ -90,10 +90,16 @@ export class PedestrianView {
     return look;
   }
 
-  update(walkers: readonly Walker[], alpha: number): void {
+  /** `skip`: người đang được vẽ bằng nhân vật có xương (gần camera) — ở đây ẩn đi. */
+  update(walkers: readonly Walker[], alpha: number, skip?: { has(id: number): boolean }): void {
     const n = Math.min(walkers.length, this.capacity);
     for (let i = 0; i < n; i++) {
       const w = walkers[i] as Walker;
+      if (skip?.has(w.id)) {
+        for (let k = 0; k < PARTS.length; k++) this.bodies.setMatrixAt(i * PARTS.length + k, ZERO);
+        this.hats.setMatrixAt(i, ZERO);
+        continue;
+      }
       const look = this.look(w);
       const dyaw = Math.atan2(Math.sin(w.yaw - w.prevYaw), Math.cos(w.yaw - w.prevYaw));
       _p.set(w.prevX + (w.x - w.prevX) * alpha, PAD_HEIGHT, w.prevZ + (w.z - w.prevZ) * alpha);

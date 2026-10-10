@@ -41,7 +41,8 @@ thì bọc `reflective(mat)` (world/reflections.ts); ánh sáng nền thay IBL l
 không vẽ vật đang biên dịch shader dở (số đo sẽ "nhanh" giả).
 Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`, `__HEM__.timings`
 (thời gian từng bước dựng cảnh lúc tải), `__HEM__.hardware` (card đồ hoạ, bậc máy, ngân sách cảnh).
-Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ, hạt mưa, cỡ bản đồ bóng lúc tải;
+Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ (và số người gần vẽ bằng nhân vật
+có xương), hạt mưa, cỡ bản đồ bóng lúc tải;
 thứ gì mới tốn theo số lượng thì đưa vào ngân sách đó. Playwright (navigator.webdriver) luôn dùng bậc "mạnh".
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
@@ -93,7 +94,8 @@ src/
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
                      trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
-                     pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe — có unit test), pedestrianView
+                     pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe — có unit test), pedestrianView (khối hộp instanced),
+                     nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test)
                      chase (đàn em của Phát truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test), chaseSystem
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker
