@@ -7,6 +7,7 @@ import {
   float,
   floor,
   fract,
+  fwidth,
   hash,
   max,
   mix,
@@ -25,6 +26,14 @@ import type { TextureId } from '@/assets/manifest';
 import { getTextures } from '@/assets/textures';
 import { closedUniform, nightUniform, wetUniform } from '../nightGlow';
 import { FLOOR_HEIGHT } from './layout';
+
+/**
+ * Mức "quá dày để thấy" của hoa văn lặp chu kỳ `period` (m) theo toạ độ `coord`: 0 khi mỗi chu kỳ chiếm ≥ ~4 điểm ảnh,
+ * 1 khi dưới ~1,5 điểm ảnh (nhìn xa / nhìn xiên). Dùng để hoà nan cửa, song sắt về màu trung bình thay vì nhiễu răng cưa.
+ */
+function patternFade(coord: THREE.Node<'float'>, period: number) {
+  return smoothstep(0.25, 0.65, fwidth(coord).div(period));
+}
 
 /**
  * Texture lặp CC0 (public/media, xem CREDITS.md) chiếu từ trên xuống theo toạ độ thế giới cho mặt đất.
@@ -76,7 +85,8 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
 
   const faceCode = select(n.x.greaterThan(0.5), float(0), select(n.x.lessThan(-0.5), float(1), select(n.z.greaterThan(0.5), float(2), float(3))));
   const frontCode = info.x;
-  const backCode = select(fract(frontCode.mul(0.5)).lessThan(0.25), frontCode.add(1), frontCode.sub(1));
+  // Thuộc tính instance tới fragment qua nội suy nên số nguyên có thể thành 0,9999… ⇒ không fract() đúng tại số nguyên.
+  const backCode = select(fract(frontCode.mul(0.5).add(0.25)).lessThan(0.5), frontCode.add(1), frontCode.sub(1));
   const isFront = abs(faceCode.sub(frontCode)).lessThan(0.5);
   const isBack = abs(faceCode.sub(backCode)).lessThan(0.5);
   const seed = info.y;
@@ -110,7 +120,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const fy = select(isFront.or(isTower), select(isTower, abs(fv.sub(0.52)).greaterThan(0.37), abs(fv.sub(0.43)).greaterThan(0.33)), abs(fv.sub(0.55)).greaterThan(0.14));
   const isFrame = isWindow.and(fx.or(fy));
   // Song sắt chia ô (đặc trưng nhà phố): vạch dọc mảnh.
-  const bars = isWindow.and(isTower.not()).and(fract(cu.mul(9)).lessThan(0.06));
+  const bars = isWindow.and(isTower.not()).and(fract(cu.mul(9)).lessThan(0.06)).and(patternFade(u, 0.5).lessThan(0.5));
 
   // Kính: phản chiếu trời giả bằng gradient theo chiều cao ô + rèm màu ở một số ô.
   const winHash = hash(col.add(floorIdx.mul(17)).add(seed.mul(9973)).add(faceCode.mul(131)));
@@ -125,17 +135,32 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   // Nhà mặt đường: cửa hàng (mở cửa thấy bên trong, hoặc kéo cửa cuốn).
   // Nhà trong hẻm: cửa sắt xếp sơn màu (đóng/mở), bên trong là phòng khách.
   const inHem = info.w.greaterThan(0.5);
+  // Nhà trong hẻm (w = 1 cửa trái, 1,5 cửa phải; phông nền xa w = 2 giữ kiểu cũ): một ô cửa ra vào + một cửa sổ song sắt,
+  // phần còn lại là tường — thay cho cửa sắt kéo kín cả bề ngang trông như vách container. Khớp hemDoorSpan() bên JS.
+  const hemHouse = inHem.and(info.w.lessThan(1.75));
+  const doorRight = info.w.greaterThan(1.25);
+  const doorW = faceW.mul(0.5).min(2.4);
+  const doorA = select(doorRight, faceW.sub(0.15).sub(doorW), float(0.15));
+  const inDoor = u.greaterThan(doorA).and(u.lessThan(doorA.add(doorW)));
+  const hemWinW = faceW.mul(0.3).min(1.4);
+  const hemWinA = select(doorRight, float(0.35), faceW.sub(0.35).sub(hemWinW));
+  const groundFront = isFront.and(isTower.not()).and(floorIdx.lessThan(0.5));
+  const isHemWindow = hemHouse.and(groundFront).and(u.greaterThan(hemWinA)).and(u.lessThan(hemWinA.add(hemWinW))).and(fv.greaterThan(0.32)).and(fv.lessThan(0.72));
   const shopU = u.div(faceW);
-  const isShop = isFront.and(isTower.not()).and(floorIdx.lessThan(0.5)).and(shopU.greaterThan(0.05)).and(shopU.lessThan(0.95)).and(fv.lessThan(0.84));
+  const openingSpan = select(hemHouse, inDoor, shopU.greaterThan(0.05).and(shopU.lessThan(0.95)));
+  const isShop = groundFront.and(openingSpan).and(fv.lessThan(0.84));
   // Tỉ lệ tiệm kéo cửa theo giờ (closedUniform: ban ngày ít, khuya hầu hết); nhà trong hẻm đóng cửa nhiều hơn.
   const closedChance = select(inHem, closedUniform.add(0.25).min(0.97), closedUniform);
   const shutterClosed = hash(seed.mul(4567)).lessThan(closedChance);
-  const shutter = vec3(0.6, 0.61, 0.63).mul(float(0.82).add(select(fract(y.mul(7)).lessThan(0.5), float(0.12), float(0))));
+  const shutter = vec3(0.6, 0.61, 0.63).mul(float(0.82).add(mix(select(fract(y.mul(7)).lessThan(0.5), float(0.12), float(0)), float(0.06), patternFade(y, 1 / 7))));
   const gatePaint = mix(vec3(0.2, 0.42, 0.33), vec3(0.22, 0.33, 0.52), hash(seed.mul(911)));
   // Cửa sắt xếp: nan dọc dày (mỗi ~12 cm) + hai thanh ngang.
   const slat = fract(u.mul(8)).lessThan(0.5);
   const rail = abs(fv.sub(0.08)).lessThan(0.015).or(abs(fv.sub(0.76)).lessThan(0.015));
-  const gate = select(rail, gatePaint.mul(0.7), select(slat, gatePaint, gatePaint.mul(0.78)));
+  // Cửa xếp: thêm song chéo hình thoi đặc trưng.
+  const lattice = abs(fract(u.add(y).mul(2.2)).sub(0.5)).lessThan(0.045).or(abs(fract(u.sub(y).mul(2.2)).sub(0.5)).lessThan(0.045));
+  const gateSharp = select(rail.or(lattice), gatePaint.mul(0.7), select(slat, gatePaint, gatePaint.mul(0.78)));
+  const gate = mix(gateSharp, gatePaint.mul(0.8), patternFade(u, 0.125));
   // Nội thất giả (interior mapping): dò tia nhìn vào một căn phòng hộp sau ô cửa — tường sau, hai tường bên, sàn, trần —
   // nên nhìn xiên vẫn thấy chiều sâu, kệ hàng, đèn tuýp mà không cần thêm hình khối nào.
   const view = positionWorld.sub(cameraPosition).normalize();
@@ -143,8 +168,8 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const du = select(zFace, view.x, view.z);
   const dd = view.dot(nW).negate().max(0.001); // đi sâu vào trong
   const dy = view.y;
-  const uMin = faceW.mul(0.05);
-  const uMax = faceW.mul(0.95);
+  const uMin = select(hemHouse, doorA, faceW.mul(0.05));
+  const uMax = select(hemHouse, doorA.add(doorW), faceW.mul(0.95));
   const yTop = float(FLOOR_HEIGHT * 0.84);
   const roomD = select(zFace, size.z, size.x).mul(0.5).min(4.5);
   const tBack = roomD.div(dd);
@@ -182,10 +207,16 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   // Trần: đèn tuýp mỗi 1,6 m theo chiều sâu.
   const tube = fract(hd.div(1.6)).greaterThan(0.45).and(fract(hd.div(1.6)).lessThan(0.53)).and(abs(hu.sub(faceW.mul(0.5))).lessThan(faceW.mul(0.22)));
   const ceiling = select(tube, vec3(1, 1, 0.98), vec3(0.7, 0.7, 0.68));
-  const roomColor = select(hitFloor, floorTile, select(hitBack.or(hitSide), select(altar, vec3(0.75, 0.08, 0.06), wallHit), ceiling));
+  const roomDetail = select(hitFloor, floorTile, select(hitBack.or(hitSide), select(altar, vec3(0.75, 0.08, 0.06), wallHit), ceiling));
+  // Chống răng cưa: nhìn xiên (hẻm hẹp) toạ độ trong phòng giãn rất nhanh giữa hai điểm ảnh ⇒ hoa văn (gạch, kệ, đèn tuýp)
+  // thành nhiễu lấm tấm. Giãn càng nhiều càng hoà về màu trung bình của phòng.
+  const stretch = fwidth(hu).add(fwidth(hd)).add(fwidth(hy));
+  const roomColor = mix(roomDetail, roomWall.mul(0.85), smoothstep(0.08, 0.35, stretch));
   // Càng sâu càng tối (ánh sáng ngoài phố không chiếu tới).
   const depthShade = mix(float(0.55), float(0.22), hd.div(roomD.add(0.5)).clamp(0, 1));
-  const interior = roomColor.mul(depthShade);
+  // Nhìn rất xiên (tia gần song song mặt tường): mỗi điểm ảnh rơi vào một mặt phòng khác nhau ⇒ nhiễu. Hoà về khoảng tối.
+  const grazing = smoothstep(0.06, 0.28, dd);
+  const interior = mix(roomWall.mul(0.3), roomColor.mul(depthShade), grazing);
   const shopColor = select(shutterClosed, select(inHem, gate, shutter), interior);
   // Lanh tô / bảng hiệu nền phía trên cửa hàng.
   const isLintel = isFront.and(isTower.not()).and(floorIdx.lessThan(0.5)).and(fv.greaterThanEqual(0.84));
@@ -219,7 +250,9 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const roofColor = vec3(0.47, 0.45, 0.42).mul(float(0.85).add(hash(floor(positionWorld.x.mul(0.5)).add(floor(positionWorld.z.mul(0.5)).mul(57))).mul(0.15)));
 
   const base = select(isTower, towerWall, wallColor);
-  const withShop = select(isShop, shopColor, select(isLintel, lintel, base));
+  // Cửa sổ tầng trệt nhà trong hẻm: kính tối + song sắt dọc.
+  const hemWindow = mix(select(fract(u.mul(9)).lessThan(0.14), frameColor, glassDark.mul(1.4)), mix(glassDark.mul(1.4), frameColor, 0.14), patternFade(u, 1 / 9));
+  const withShop = select(isShop, shopColor, select(isHemWindow, hemWindow, select(isLintel.and(hemHouse.not()), lintel, base)));
   const withLobby = select(isLobby, mix(glassDark, glassSky, fv.mul(0.6)), withShop);
   const withWindows = select(isFrame.or(bars), frameColor, select(isWindow, glassColor, withLobby));
   mat.colorNode = select(roof, roofColor, withWindows);
@@ -239,8 +272,9 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const windowGlow = select(winHash.greaterThan(0.72).and(isTower.not()), curtainPalette.mul(0.6), lampTone.mul(mix(float(0.45), float(0.85), litHash.mul(2.2))));
   // Tiệm còn mở ban đêm: phòng sáng đèn (tuýp trắng xanh hoặc vàng ấm), đèn tuýp trên trần sáng rực, bàn thờ đỏ.
   const roomLight = mix(vec3(1.0, 0.84, 0.6), vec3(0.88, 0.96, 1.0), hash(seed.mul(53)));
-  const shopLit = roomColor.mul(roomLight).mul(mix(float(0.62), float(0.3), hd.div(roomD.add(0.5)).clamp(0, 1))).add(select(tube.and(hitBack.or(hitSide).or(hitFloor).not()), vec3(0.8, 0.8, 0.8), vec3(0, 0, 0)));
-  const shopGlow = select(isShop.and(shutterClosed.not()), select(altar, vec3(1.0, 0.12, 0.08), shopLit), vec3(0, 0, 0));
+  // Nhà trong hẻm: phòng khách đèn dịu hơn tiệm mặt đường.
+  const shopLit = roomColor.mul(roomLight).mul(mix(float(0.62), float(0.3), hd.div(roomD.add(0.5)).clamp(0, 1))).mul(select(hemHouse, float(0.3), float(1))).add(select(tube.and(hitBack.or(hitSide).or(hitFloor).not()), vec3(0.8, 0.8, 0.8), vec3(0, 0, 0)));
+  const shopGlow = select(isShop.and(shutterClosed.not()), select(altar, vec3(1.0, 0.12, 0.08), shopLit).mul(mix(float(0.35), float(1), grazing)), vec3(0, 0, 0));
   const lobbyGlow = select(isLobby, vec3(0.9, 0.85, 0.7).mul(0.7), vec3(0, 0, 0));
   const glow = select(roof, vec3(0, 0, 0), select(lit, windowGlow, shopGlow.add(lobbyGlow)));
   mat.emissiveNode = glow.mul(nightUniform);
@@ -339,7 +373,8 @@ export function createCageMaterial(): THREE.MeshStandardNodeMaterial {
   const size = attribute<'vec3'>('aSize', 'vec3');
   const local = attribute<'vec3'>('position', 'vec3').add(0.5).mul(size);
   const along = positionWorld.x.add(positionWorld.z);
-  const bar = fract(along.mul(6.2)).lessThan(0.16);
+  // Nhìn xa / xiên: song dày quá thì thưa bớt (bỏ bớt song) thay vì nhiễu răng cưa.
+  const bar = fract(along.mul(6.2)).lessThan(0.16).and(patternFade(along, 1 / 6.2).lessThan(0.5)).or(fract(along.mul(1.55)).lessThan(0.06));
   const band = fract(local.y.div(0.75)).lessThan(0.05);
   const frame = local.y.lessThan(0.05).or(local.y.greaterThan(size.y.sub(0.05)));
   // Mặt trên (mái lồng): lưới ô vuông theo toạ độ thế giới.

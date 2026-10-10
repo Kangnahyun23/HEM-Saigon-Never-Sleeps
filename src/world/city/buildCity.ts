@@ -9,6 +9,7 @@ import type { BuildContext } from './build/context';
 import { buildGround } from './build/ground';
 import { buildLandmarks } from './build/landmarks';
 import { buildLightPools } from './build/lightPools';
+import { buildHemLife } from './build/hems';
 import { buildStreetProps } from './build/streetProps';
 import { generateCity, PAD_HEIGHT, type CityLayout, type CityOptions } from './layout';
 
@@ -44,6 +45,11 @@ const DETAIL_DISTANCE: Record<string, number> = {
   railings: 160,
   laundry: 110,
   'sidewalk-': 110,
+  'hem-meters': 90,
+  'hem-pots': 90,
+  'hem-plants': 90,
+  'hem-altars': 110,
+  'hem-tarps': 140,
   'tree-limewash': 120,
   'water-tanks': 180,
   'roof-sheets': 160,
@@ -72,6 +78,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   buildGround(ctx);
   buildBuildings(ctx);
   buildStreetProps(ctx);
+  buildHemLife(ctx);
   buildLandmarks(ctx);
   buildLightPools(ctx);
 
