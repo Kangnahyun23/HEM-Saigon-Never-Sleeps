@@ -5,9 +5,25 @@ import { euler, InstanceBatch } from '@/render/instancing';
 import { GROUP } from '@/physics/groups';
 import { BIKE_BODY_COLORS, BIKE_PARTS, BIKE_ROLE_COLORS, type BikePart } from '@/vehicles/bikeModel';
 import { nightUniform } from '../../nightGlow';
+import type { Lot } from '../layout';
 import { CITY_COLORS } from '../palette';
 import { addMesh, GEO, type BuildContext } from './context';
 import { reflective } from '../../reflections';
+
+/** Điểm trên chân mặt tiền một lô, `t` 0..1 dọc mặt tiền → [x, z]. */
+function facadePoint(l: Lot, t: number): [number, number] {
+  const r = l.rect;
+  switch (l.front) {
+    case '+z':
+      return [r.x0 + (r.x1 - r.x0) * t, r.z1];
+    case '-z':
+      return [r.x0 + (r.x1 - r.x0) * t, r.z0];
+    case '+x':
+      return [r.x1, r.z0 + (r.z1 - r.z0) * t];
+    default:
+      return [r.x0, r.z0 + (r.z1 - r.z0) * t];
+  }
+}
 
 /** Cột điện bê tông + xà ngang + cuộn cáp + bình biến áp + đèn đường; dây điện võng giữa các cột. */
 function buildPoles(ctx: BuildContext): void {
@@ -68,11 +84,30 @@ function buildPoles(ctx: BuildContext): void {
   }
   for (const b of [poles, hardware, coils, transformers, lampHeads]) addMesh(ctx, b.build());
 
+  // Dây rẽ vào nhà: từ cột kéo vào mặt tiền các nhà gần đó (1–3 sợi mỗi cột) — "mạng nhện" dây điện Sài Gòn.
+  const drops: { a: [number, number, number]; b: [number, number, number]; sag: number }[] = [];
+  for (const p of layout.poles) {
+    const near = layout.lots
+      .filter((l) => l.row === 'front' && l.kind !== 'tower')
+      .map((l) => ({ l, f: facadePoint(l, 0.5) }))
+      .map((e) => ({ ...e, d: Math.hypot(e.f[0] - p.x, e.f[1] - p.z) }))
+      .filter((e) => e.d < 13)
+      .sort((a, b) => a.d - b.d);
+    const n = Math.min(near.length, 1 + Math.floor(rng() * 3));
+    for (let k = 0; k < n; k++) {
+      const { l } = near[k]!;
+      const [fx, fz] = facadePoint(l, range(rng, 0.2, 0.8));
+      const fy = Math.min(l.height - 0.8, range(rng, 3.6, 6.2));
+      drops.push({ a: [p.x, p.height - 1.6 - rng() * 0.9, p.z], b: [fx, fy, fz], sag: range(rng, 0.25, 0.7) });
+    }
+  }
+  const allWires = [...layout.wires, ...drops];
+
   // Dây điện: parabol võng giữa hai điểm treo.
   const segs = 10;
-  const pos = new Float32Array(layout.wires.length * segs * 2 * 3);
+  const pos = new Float32Array(allWires.length * segs * 2 * 3);
   let o = 0;
-  for (const w of layout.wires) {
+  for (const w of allWires) {
     const [ax, ay, az] = w.a;
     const [bx, by, bz] = w.b;
     for (let i = 0; i < segs; i++) {
@@ -103,6 +138,8 @@ function buildTrees(ctx: BuildContext): void {
   const leafMat = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, flatShading: true });
   const canopies = new InstanceBatch(GEO.blob, leafMat, { colors: true, name: 'canopies' });
   const grates = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ color: '#4a4540', roughness: 0.9 }), { castShadow: false, name: 'tree-grates' });
+  // Gốc cây quét vôi trắng (chống sâu, dễ thấy ban đêm) — rất đặc trưng đường phố Sài Gòn.
+  const limewash = new InstanceBatch(GEO.cylBase, new THREE.MeshStandardNodeMaterial({ color: '#efede6', roughness: 0.95 }), { castShadow: false, name: 'tree-limewash' });
 
   for (const t of layout.trees) {
     const trunkH = t.kind === 'tall' ? t.height * 0.62 : t.height * 0.48;
@@ -110,25 +147,31 @@ function buildTrees(ctx: BuildContext): void {
     const lean = range(rng, -0.05, 0.05);
     trunks.add(t.x, pad, t.z, r, trunkH + t.canopy * 0.4, r, euler(lean, rng() * 6.28, lean));
     statics.cylinder(t.x, pad, t.z, r + 0.05, 3);
-    if (t.kind !== 'park') grates.add(t.x, pad + 0.004, t.z, 1.1, 0.008, 1.1);
-    const blobs = t.kind === 'tall' ? 4 : 2 + Math.floor(rng() * 2);
+    if (t.kind !== 'park') {
+      grates.add(t.x, pad + 0.004, t.z, 1.1, 0.008, 1.1);
+      limewash.add(t.x, pad, t.z, r * 0.92 + 0.03, 1.15, r * 0.92 + 0.03);
+    }
+    // Cây me ven đường: tán xoè rộng, dẹt; cây sao / dầu (tall): tán cao, gọn.
+    const tamarind = t.kind === 'street';
+    const blobs = t.kind === 'tall' ? 4 : tamarind ? 3 : 2 + Math.floor(rng() * 2);
     const baseY = pad + trunkH + t.canopy * 0.55;
     for (let k = 0; k < blobs; k++) {
       const s = t.canopy * range(rng, 0.65, 1.0);
       const g = CITY_COLORS.leaf[Math.floor(rng() * CITY_COLORS.leaf.length)] as string;
+      const spread = tamarind ? 0.75 : 0.5;
       canopies.add(
-        t.x + range(rng, -0.5, 0.5) * t.canopy,
-        baseY + range(rng, -0.2, 0.5) * t.canopy + (t.kind === 'tall' ? k * 0.9 : 0),
-        t.z + range(rng, -0.5, 0.5) * t.canopy,
-        s,
-        s * range(rng, 0.65, 0.85),
-        s,
+        t.x + range(rng, -spread, spread) * t.canopy,
+        baseY + range(rng, -0.2, tamarind ? 0.25 : 0.5) * t.canopy + (t.kind === 'tall' ? k * 0.9 : 0),
+        t.z + range(rng, -spread, spread) * t.canopy,
+        s * (tamarind ? 1.15 : 1),
+        s * (tamarind ? range(rng, 0.45, 0.6) : range(rng, 0.65, 0.85)),
+        s * (tamarind ? 1.15 : 1),
         rng() * 6.28,
         g,
       );
     }
   }
-  for (const b of [trunks, canopies, grates]) addMesh(ctx, b.build());
+  for (const b of [trunks, canopies, grates, limewash]) addMesh(ctx, b.build());
 }
 
 /** Xe máy đậu trên vỉa hè: mỗi bộ phận của mẫu xe là một InstancedMesh. */
@@ -171,8 +214,64 @@ function buildParkedBikes(ctx: BuildContext): void {
   for (const { batch } of parts.values()) addMesh(ctx, batch.build());
 }
 
+/**
+ * Đời sống vỉa hè: quán cóc (bàn nhựa thấp + ghế đẩu) và xe đẩy bán đồ ăn có dù trước một số nhà mặt đường.
+ * Chỉ để nhìn (xe đẩy có va chạm); đặt cách mặt tiền 1,6–2,6 m, ngoài hàng xe máy đậu sát nhà.
+ */
+function buildSidewalkLife(ctx: BuildContext): void {
+  const { layout, statics, rng, pad } = ctx;
+  const plastic = new THREE.MeshStandardNodeMaterial({ roughness: 0.5 });
+  const stools = new InstanceBatch(GEO.box, plastic, { colors: true, castShadow: false, name: 'sidewalk-stools' });
+  const tables = new InstanceBatch(GEO.box, plastic, { colors: true, castShadow: false, name: 'sidewalk-tables' });
+  const carts = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0.2 }), { colors: true, name: 'sidewalk-carts' });
+  const wheels = new InstanceBatch(GEO.cylX, new THREE.MeshStandardNodeMaterial({ color: '#1d1d1d', roughness: 0.8 }), { castShadow: false, name: 'sidewalk-cart-wheels' });
+  const umbrellas = new InstanceBatch(GEO.cone4, new THREE.MeshStandardNodeMaterial({ roughness: 0.7, side: THREE.DoubleSide }), { colors: true, name: 'sidewalk-umbrellas' });
+  const yawOf = (l: Lot): number => (l.front === '+z' ? 0 : l.front === '-z' ? Math.PI : l.front === '+x' ? Math.PI / 2 : -Math.PI / 2);
+
+  for (const l of layout.lots) {
+    if (l.row !== 'front' || l.frontage === 'hem' || l.kind === 'tower') continue;
+    const r = rng();
+    if (r > 0.13) continue;
+    const yaw = yawOf(l);
+    // Hướng ra đường (pháp tuyến mặt tiền) và dọc mặt tiền.
+    const nx = Math.sin(yaw);
+    const nz = Math.cos(yaw);
+    const tx = Math.cos(yaw);
+    const tz = -Math.sin(yaw);
+    const [fx, fz] = facadePoint(l, 0.5);
+    const at = (along: number, out: number): [number, number] => [fx + tx * along + nx * out, fz + tz * along + nz * out];
+    if (r < 0.08) {
+      // Quán cóc: 1–2 bàn thấp, mỗi bàn 3–4 ghế đẩu.
+      const sc = CITY_COLORS.stool[Math.floor(rng() * CITY_COLORS.stool.length)] as string;
+      const nT = 1 + Math.floor(rng() * 2);
+      for (let k = 0; k < nT; k++) {
+        const along = (k - (nT - 1) / 2) * 1.5 + range(rng, -0.2, 0.2);
+        const out = range(rng, 1.8, 2.3);
+        const [x, z] = at(along, out);
+        tables.add(x, pad + 0.22, z, 0.6, 0.44, 0.6, yaw + range(rng, -0.2, 0.2), rng() < 0.5 ? '#2e7dd1' : '#d84a3a');
+        const nS = 3 + Math.floor(rng() * 2);
+        for (let j = 0; j < nS; j++) {
+          const a = (j / nS) * Math.PI * 2 + rng();
+          stools.add(x + Math.cos(a) * 0.55, pad + 0.14, z + Math.sin(a) * 0.55, 0.3, 0.28, 0.3, rng() * 3, sc);
+        }
+      }
+    } else {
+      // Xe đẩy bánh mì / hủ tiếu: tủ kính trên thùng gỗ sơn, hai bánh, dù che.
+      const [x, z] = at(range(rng, -0.6, 0.6), range(rng, 2.0, 2.4));
+      const body = rng() < 0.5 ? '#c0392b' : '#1f6fb2';
+      carts.add(x, pad + 0.55, z, 1.25, 0.5, 0.62, yaw + Math.PI / 2, body);
+      carts.add(x, pad + 1.02, z, 1.1, 0.44, 0.55, yaw + Math.PI / 2, '#dfe8ea');
+      for (const side of [-1, 1]) wheels.add(x + nx * side * 0.33, pad + 0.22, z + nz * side * 0.33, 0.06, 0.22, 0.22, yaw + Math.PI / 2);
+      umbrellas.add(x, pad + 2.15, z, 2.2, 0.45, 2.2, yaw + Math.PI / 4, CITY_COLORS.awning[Math.floor(rng() * CITY_COLORS.awning.length)] as string);
+      statics.box(x, pad + 0.6, z, 1.25, 1.2, 0.62, yaw + Math.PI / 2, GROUP.PROP);
+    }
+  }
+  for (const b of [stools, tables, carts, wheels, umbrellas]) addMesh(ctx, b.build());
+}
+
 export function buildStreetProps(ctx: BuildContext): void {
   buildPoles(ctx);
   buildTrees(ctx);
   buildParkedBikes(ctx);
+  buildSidewalkLife(ctx);
 }
