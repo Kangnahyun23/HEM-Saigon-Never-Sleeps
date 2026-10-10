@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { loadTextures, setTextureAnisotropy } from '@/assets/textures';
 import { Input } from '@/core/input';
+import { loadFonts } from '@/ui/fonts';
 import { Game } from '@/game/game';
 import { createPhysics } from '@/physics/physics';
 import { createRenderer } from '@/render/renderer';
@@ -32,11 +33,13 @@ async function main(): Promise<void> {
   const texturesReady = loadTextures((done, total) => {
     if (loadingSub) loadingSub.textContent = `Sài Gòn Không Ngủ · đang tải texture ${done}/${total}…`;
   });
+  // Font bảng hiệu phải có trước khi vẽ atlas bảng hiệu (lúc dựng phố).
+  const fontsReady = loadFonts();
   const [{ renderer, backend }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
   lap('renderer+physics');
-  await texturesReady;
+  await Promise.all([texturesReady, fontsReady]);
   setTextureAnisotropy(Math.min(8, renderer.getMaxAnisotropy()));
-  lap('textures');
+  lap('textures+fonts');
 
   // Sức máy ⇒ ngân sách dựng cảnh (số xe, người đi bộ, mưa, bản đồ bóng) và mức khởi đầu của chất lượng "Tự động".
   // Chạy tự động (Playwright) thì cố định bậc "mạnh" để ảnh chụp so sánh được giữa các máy.

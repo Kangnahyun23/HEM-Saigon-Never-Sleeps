@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { signFont } from '@/ui/fonts';
 import { float, hash, floor, mix, positionWorld, sin, time, vec3 } from 'three/tsl';
 import { range } from '@/core/random';
 import { centerX, centerZ, depth, width, type Rect } from '@/core/rect';
@@ -27,7 +28,7 @@ function textPlate(text: string, bg: string, fg: string, w = 1024, h = 160): THR
   g.fillStyle = fg;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.font = `800 ${Math.round(h * 0.55)}px "Be Vietnam Pro", "Segoe UI", Arial, sans-serif`;
+  g.font = signFont('tall', Math.round(h * 0.6));
   g.fillText(text, w / 2, h / 2 + 4);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;

@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { signFont, type SignFont } from '@/ui/fonts';
 
 /** Bảng hiệu cửa hàng hư cấu: [chữ, nền, màu chữ]. Không dùng tên thương hiệu có thật. */
 export const SHOP_SIGNS: ReadonlyArray<readonly [string, string, string]> = [
@@ -36,6 +37,15 @@ export const SHOP_SIGNS: ReadonlyArray<readonly [string, string, string]> = [
   ['ĐỒNG HỒ', '#1c1c1c', '#e0c38c'],
 ];
 
+/** Quán ăn uống: chữ vẽ tay hoặc chữ đứng đậm xen kẽ; quán chơi đêm: chữ khối / neon; còn lại: chữ alu chữ nổi. */
+const FOOD = /PHỞ|BÁNH|CƠM|HỦ TIẾU|BÚN|ỐC|LẨU|CHÈ|NƯỚC MÍA|CÀ PHÊ/;
+const NIGHT = /KARAOKE|TRÀ SỮA/;
+export function signStyle(text: string, i: number): SignFont {
+  if (NIGHT.test(text)) return i % 2 ? 'neon' : 'block';
+  if (FOOD.test(text)) return i % 2 ? 'brush' : 'condensed';
+  return (['condensed', 'tall', 'condensed', 'narrow'] as const)[i % 4]!;
+}
+
 export const SIGN_COLS = 4;
 export const SIGN_ROWS = 8;
 
@@ -61,9 +71,10 @@ export function createSignAtlas(): THREE.CanvasTexture {
     ctx.fillStyle = fg;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    let size = 40;
+    const style = signStyle(text, i);
+    let size = 44;
     do {
-      ctx.font = `800 ${size}px "Be Vietnam Pro", "Segoe UI", Arial, sans-serif`;
+      ctx.font = signFont(style, size);
       size -= 2;
     } while (ctx.measureText(text).width > cw - 24 && size > 16);
     ctx.fillText(text, x + cw / 2, y + ch / 2 + 2);
