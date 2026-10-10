@@ -172,7 +172,11 @@ async function main(): Promise<void> {
     const firstFrame = debug.frames === 0 ? performance.now() : 0;
     renderer.render(scene, camera);
     // Khung hình đầu biên dịch toàn bộ shader — thường là bước tải lâu nhất.
-    if (firstFrame) timings.firstFrame = Math.round(performance.now() - firstFrame);
+    if (firstFrame) {
+      timings.firstFrame = Math.round(performance.now() - firstFrame);
+      // Chỉ bỏ màn hình tải khi khung hình đầu đã vẽ xong — tránh cảnh game đứng hình vài giây lúc biên dịch shader.
+      loading.classList.add('done');
+    }
     if (!fpsBox.hidden) {
       fpsTime += raw;
       fpsFrames++;
@@ -190,7 +194,8 @@ async function main(): Promise<void> {
     debug.physicsSteps = game.physicsSteps;
   });
 
-  loading.classList.add('done');
+  const sub = loading.querySelector('.sub');
+  if (sub) sub.textContent = 'Sài Gòn Không Ngủ · đang chuẩn bị đồ hoạ…';
   debug.ready = true;
   console.info(`[HẺM] sẵn sàng · render ${backend} · ${city.stats.meshes} mesh · ${city.stats.instances} instance · ${city.stats.colliders} collider`);
 }
