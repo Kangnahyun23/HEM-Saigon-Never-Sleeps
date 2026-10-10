@@ -1,5 +1,6 @@
 import type { Contact, Inbox } from '@/systems/inbox';
-import { clampSensitivity, QUALITY_LABELS, type Quality, type Settings } from '@/systems/settings';
+import { TIER_LABELS, type Tier } from '@/systems/hardware';
+import { clampSensitivity, QUALITY_LABELS, sceneTier, type Quality, type Settings } from '@/systems/settings';
 import { formatVnd, LENDER, type Wallet } from '@/systems/wallet';
 import type { Minimap } from './minimap';
 
@@ -46,6 +47,7 @@ export class Phone {
   private onCancel: (() => void) | null = null;
   private settings: Settings | null = null;
   private onSettings: ((s: Settings) => void) | null = null;
+  private hardware: { summary: string; autoTier: Tier; loadedTier: Tier } | null = null;
   private readonly screen: HTMLElement;
   private readonly clock: HTMLElement;
   private readonly tabBar: HTMLElement;
@@ -136,7 +138,17 @@ export class Phone {
     this.dirty = true;
   }
 
+  /** Máy nhận diện được (tên card, bậc gợi ý) và bậc đã dùng để dựng cảnh lần tải này. */
+  setHardware(summary: string, autoTier: Tier, loadedTier: Tier): void {
+    this.hardware = { summary, autoTier, loadedTier };
+    this.dirty = true;
+  }
+
   private handleSettingsClick(el: HTMLElement): void {
+    if (el.closest('[data-reload]')) {
+      location.reload();
+      return;
+    }
     const s = this.settings;
     if (!s) return;
     let next: Settings | null = null;
@@ -151,6 +163,14 @@ export class Phone {
     this.settings = next;
     this.onSettings?.(next);
     this.dirty = true;
+  }
+
+  private hardwareNote(s: Settings): string {
+    const hw = this.hardware;
+    if (!hw) return '';
+    const note = `<p class="muted small">Máy: ${esc(hw.summary)} — nhận là máy <b>${TIER_LABELS[hw.autoTier]}</b>.</p>`;
+    if (sceneTier(s.quality, hw.autoTier) === hw.loadedTier) return note;
+    return `${note}<button type="button" class="setting reload" data-reload><span>Số xe, người đi bộ, độ nét bóng đổ theo mức mới áp dụng khi tải lại</span><b>Tải lại</b></button>`;
   }
 
   /** Báo dữ liệu đổi (tiền, tin nhắn…) để vẽ lại khi đang mở. */
@@ -225,7 +245,7 @@ export class Phone {
           <div class="seg">${(Object.keys(QUALITY_LABELS) as Quality[])
             .map((q) => `<button type="button" data-quality="${q}" class="${q === s.quality ? 'on' : ''}">${QUALITY_LABELS[q]}</button>`)
             .join('')}</div>
-          <p class="muted small">${QUALITY_HINT[s.quality]}</p>
+          <p class="muted small">${QUALITY_HINT[s.quality]}</p>${this.hardwareNote(s)}
           <button type="button" class="setting" data-toggle="showFps"><span>Hiện FPS</span>${onOff(s.showFps)}</button>
           <h4>Điều khiển</h4>
           <div class="setting"><span>Độ nhạy chuột</span><span class="stepper"><button type="button" data-sens="-0.1">−</button><b>${s.mouseSensitivity.toFixed(1)}</b><button type="button" data-sens="0.1">+</button></span></div>

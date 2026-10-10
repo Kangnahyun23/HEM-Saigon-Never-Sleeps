@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KeyValueStore } from '@/systems/save';
-import { DEFAULT_SETTINGS, parseSettings, qualityProfile, SETTINGS_KEY, SettingsStore } from '@/systems/settings';
+import { DEFAULT_SETTINGS, parseSettings, qualityProfile, sceneTier, SETTINGS_KEY, SettingsStore } from '@/systems/settings';
 
 class MemoryStore implements KeyValueStore {
   readonly data = new Map<string, string>();
@@ -62,5 +62,16 @@ describe('cài đặt', () => {
     expect(qualityProfile('auto', 3).adaptive).toBe(true);
     expect(qualityProfile('high', 2).adaptive).toBe(false);
     expect(qualityProfile('low', 0.5).pixelRatio).toBe(0.5);
+  });
+
+  it('Tự động bắt đầu theo bậc máy rồi vẫn được nâng tới 1,5×', () => {
+    const weak = qualityProfile('auto', 2, 'low');
+    expect(weak).toMatchObject({ pixelRatio: 0.75, maxPixelRatio: 1.5, adaptive: true, shadows: false });
+    const mid = qualityProfile('auto', 2, 'medium');
+    expect(mid).toMatchObject({ pixelRatio: 1, maxPixelRatio: 1.5, adaptive: true, shadows: true });
+    const strong = qualityProfile('auto', 2, 'high');
+    expect(strong).toMatchObject({ pixelRatio: 1.5, maxPixelRatio: 1.5, adaptive: true, shadows: true, detailScale: 1 });
+    expect(sceneTier('auto', 'low')).toBe('low');
+    expect(sceneTier('high', 'low')).toBe('high');
   });
 });

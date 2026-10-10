@@ -40,7 +40,9 @@ Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:3
 http://localhost:5173/?gio=21 (thêm `&mua=1` để xem phố đêm mưa). Trời Sài Gòn hay đổ mưa rào chiều tối.
 
 ### Bị giật / lag?
-Mở điện thoại (`P`) → **Cài đặt** (`5`) → chọn **Chất lượng đồ hoạ**:
+Lúc tải, game đọc card đồ hoạ / CPU / RAM để dựng cảnh vừa sức máy (số xe, người đi bộ, mưa, độ nét bóng đổ) và
+chọn mức khởi đầu cho chất lượng "Tự động" — tab Cài đặt ghi rõ máy được nhận là yếu / trung bình / mạnh.
+Muốn đổi: mở điện thoại (`P`) → **Cài đặt** (`5`) → chọn **Chất lượng đồ hoạ**:
 - **Tự động** (mặc định): máy chậm thì bóng đổ cập nhật cách khung, rồi hạ độ phân giải; mượt lại thì nâng lên.
 - **Thấp**: tắt bóng đổ, vẽ 0,75× điểm ảnh, ít chi tiết ở xa — cho laptop card onboard (nhanh gần gấp đôi "Tự động").
 - **Vừa** / **Cao**: cố định độ phân giải 1× / 1,5× và có bóng đổ.
