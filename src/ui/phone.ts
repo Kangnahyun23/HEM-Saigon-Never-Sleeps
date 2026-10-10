@@ -1,8 +1,9 @@
 import type { Contact, Inbox } from '@/systems/inbox';
+import { clampSensitivity, QUALITY_LABELS, type Quality, type Settings } from '@/systems/settings';
 import { formatVnd, LENDER, type Wallet } from '@/systems/wallet';
 import type { Minimap } from './minimap';
 
-export type PhoneTab = 'jobs' | 'map' | 'messages' | 'wallet';
+export type PhoneTab = 'jobs' | 'map' | 'messages' | 'wallet' | 'settings';
 
 /** Một kèo hiện trong tab "Kèo" (M3 cung cấp). */
 export interface PhoneJob {
@@ -19,13 +20,21 @@ const TABS: Array<{ id: PhoneTab; label: string; key: string }> = [
   { id: 'map', label: 'Bản đồ', key: '2' },
   { id: 'messages', label: 'Tin nhắn', key: '3' },
   { id: 'wallet', label: 'Ví', key: '4' },
+  { id: 'settings', label: 'Cài đặt', key: '5' },
 ];
+
+const QUALITY_HINT: Record<Quality, string> = {
+  auto: 'Game tự giảm bóng đổ rồi độ phân giải khi máy chậm, tự nâng lại khi máy dư sức.',
+  low: 'Tắt bóng đổ, vẽ ít điểm ảnh, ít chi tiết ở xa — cho laptop yếu.',
+  medium: 'Có bóng đổ, độ phân giải chuẩn.',
+  high: 'Nét nhất, nhiều chi tiết ở xa — cho máy có card đồ hoạ rời.',
+};
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
 
 /**
- * Điện thoại của Tín (phím P): Kèo, Bản đồ, Tin nhắn, Ví. Game vẫn chạy khi mở điện thoại (như ngoài đời — đừng vừa
- * chạy xe vừa bấm nhé). Bấm chuột hoặc phím 1–4 để đổi tab, P / Esc để cất điện thoại.
+ * Điện thoại của Tín (phím P): Kèo, Bản đồ, Tin nhắn, Ví, Cài đặt. Game vẫn chạy khi mở điện thoại (như ngoài đời — đừng
+ * vừa chạy xe vừa bấm nhé). Bấm chuột hoặc phím 1–5 để đổi tab, P / Esc để cất điện thoại.
  */
 export class Phone {
   readonly root: HTMLElement;
@@ -35,6 +44,8 @@ export class Phone {
   private jobs: PhoneJob[] = [];
   private onAccept: ((id: string) => void) | null = null;
   private onCancel: (() => void) | null = null;
+  private settings: Settings | null = null;
+  private onSettings: ((s: Settings) => void) | null = null;
   private readonly screen: HTMLElement;
   private readonly clock: HTMLElement;
   private readonly tabBar: HTMLElement;
@@ -81,6 +92,7 @@ export class Phone {
       const job = el.closest('[data-accept]') as HTMLElement | null;
       if (job) this.onAccept?.(job.dataset.accept as string);
       if (el.closest('[data-cancel]')) this.onCancel?.();
+      this.handleSettingsClick(el);
       const pay = el.closest('[data-pay]') as HTMLElement | null;
       if (pay) {
         this.wallet.payDebt(Number(pay.dataset.pay));
@@ -114,6 +126,30 @@ export class Phone {
     this.jobs = jobs;
     this.onAccept = onAccept;
     this.onCancel = onCancel;
+    this.dirty = true;
+  }
+
+  /** Cài đặt hiện tại + nơi nhận cài đặt mới khi người chơi đổi (tab Cài đặt). */
+  setSettings(settings: Settings, onChange: (s: Settings) => void): void {
+    this.settings = settings;
+    this.onSettings = onChange;
+    this.dirty = true;
+  }
+
+  private handleSettingsClick(el: HTMLElement): void {
+    const s = this.settings;
+    if (!s) return;
+    let next: Settings | null = null;
+    const q = el.closest('[data-quality]') as HTMLElement | null;
+    if (q) next = { ...s, quality: q.dataset.quality as Quality };
+    const toggle = el.closest('[data-toggle]') as HTMLElement | null;
+    if (toggle?.dataset.toggle === 'showFps') next = { ...s, showFps: !s.showFps };
+    if (toggle?.dataset.toggle === 'invertY') next = { ...s, invertY: !s.invertY };
+    const sens = el.closest('[data-sens]') as HTMLElement | null;
+    if (sens) next = { ...s, mouseSensitivity: clampSensitivity(s.mouseSensitivity + Number(sens.dataset.sens)) };
+    if (!next) return;
+    this.settings = next;
+    this.onSettings?.(next);
     this.dirty = true;
   }
 
@@ -179,6 +215,22 @@ export class Phone {
             )}</span>${t.unread ? `<i>${t.unread}</i>` : ''}</button>`;
           })
           .join('')}`;
+      }
+      case 'settings': {
+        const s = this.settings;
+        if (!s) return '<h3>Cài đặt</h3>';
+        const onOff = (on: boolean): string => `<span class="switch${on ? ' on' : ''}">${on ? 'Bật' : 'Tắt'}</span>`;
+        return `<h3>Cài đặt</h3>
+          <h4>Chất lượng đồ hoạ</h4>
+          <div class="seg">${(Object.keys(QUALITY_LABELS) as Quality[])
+            .map((q) => `<button type="button" data-quality="${q}" class="${q === s.quality ? 'on' : ''}">${QUALITY_LABELS[q]}</button>`)
+            .join('')}</div>
+          <p class="muted small">${QUALITY_HINT[s.quality]}</p>
+          <button type="button" class="setting" data-toggle="showFps"><span>Hiện FPS</span>${onOff(s.showFps)}</button>
+          <h4>Điều khiển</h4>
+          <div class="setting"><span>Độ nhạy chuột</span><span class="stepper"><button type="button" data-sens="-0.1">−</button><b>${s.mouseSensitivity.toFixed(1)}</b><button type="button" data-sens="0.1">+</button></span></div>
+          <button type="button" class="setting" data-toggle="invertY"><span>Đảo trục dọc</span>${onOff(s.invertY)}</button>
+          <p class="muted small">Cài đặt được lưu lại cho lần chơi sau.</p>`;
       }
       case 'wallet': {
         const w = this.wallet;

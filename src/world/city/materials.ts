@@ -135,7 +135,9 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const glassy = isWindow.and(isFrame.not()).or(isLobby);
   const metalShutter = isShop.and(shutterClosed).and(inHem.not());
   mat.roughnessNode = select(glassy, float(0.12), select(metalShutter, float(0.5), float(0.9)));
-  mat.metalnessNode = select(glassy, float(0.3), select(metalShutter, float(0.45), float(0)));
+  // Không gắn ảnh bầu trời cho mặt tiền (đắt: chiếm phần lớn khung hình) ⇒ kính / cửa cuốn ít kim loại để khỏi tối;
+  // ánh trời trên kính đã vẽ giả bằng gradient ở trên.
+  mat.metalnessNode = select(glassy, float(0.05), select(metalShutter, float(0.15), float(0)));
 
   // --- Ban đêm: đèn trong nhà hắt ra cửa sổ, cửa hàng còn mở sáng trưng -----------------------------------------
   // Khoảng 45 % ô cửa sáng đèn; nửa đèn vàng ấm, nửa đèn tuýp trắng xanh (rất "Sài Gòn"). Ô có rèm sáng màu rèm.

@@ -91,7 +91,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .phone-screen h4 { margin: 14px 0 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #8a7f8e; }
 .phone-screen .muted { color: #8a7f8e; line-height: 1.5; }
 .phone-screen button { font: inherit; cursor: pointer; }
-.phone-tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #ddd3c6; background: #ebe4d8; }
+.phone-tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid #ddd3c6; background: #ebe4d8; }
 .phone-tabs button { padding: 9px 2px 10px; border: 0; background: none; font: 600 11.5px system-ui, sans-serif; color: #6c6370; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .phone-tabs button.on { color: #d2650f; }
 .phone-tabs kbd { color: inherit; border-color: currentColor; background: none; font-size: 10px; padding: 0 4px; }
@@ -162,3 +162,14 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
   font: 600 12px/1.4 ui-monospace, monospace;
   pointer-events: none;
 }
+
+/* Tab Cài đặt */
+.phone-screen .small { font-size: 12.5px; margin: 6px 0 12px; }
+.phone-screen .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 3px; border-radius: 12px; background: #e3dace; }
+.phone-screen .seg button { padding: 8px 0; border: 0; border-radius: 9px; background: none; font-weight: 600; font-size: 12.5px; color: #5b5262; }
+.phone-screen .seg button.on { background: #fff; color: #d2650f; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.phone-screen .setting { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; padding: 10px 12px; border: 0; border-radius: 12px; background: #fff; color: inherit; text-align: left; }
+.phone-screen .switch { min-width: 42px; padding: 3px 8px; border-radius: 10px; background: #ddd3c6; color: #6c6370; font-size: 12px; font-weight: 700; text-align: center; }
+.phone-screen .switch.on { background: #2e9e6b; color: #fff; }
+.phone-screen .stepper { display: flex; align-items: center; gap: 10px; }
+.phone-screen .stepper button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #ebe4d8; font-weight: 700; font-size: 16px; }

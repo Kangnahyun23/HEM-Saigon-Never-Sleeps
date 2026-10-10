@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { mergeStaticMeshes } from '@/render/merge';
+import { reflective } from '@/world/reflections';
 import { BIKE, BIKE_PARTS, BIKE_ROLE_COLORS, type BikePart } from './bikeModel';
 import { BIKE_TUNING, type MotorbikePhysics } from './motorbikePhysics';
 
@@ -30,6 +31,8 @@ export class MotorbikeView {
           roughness: p.role === 'body' ? 0.3 : p.role === 'metal' || p.role === 'rim' ? 0.35 : 0.7,
           metalness: p.role === 'metal' || p.role === 'rim' ? 0.8 : 0.05,
         });
+        // Inox / vành xe cần ảnh bầu trời mới ra chất kim loại (xe ở gần camera, ít điểm ảnh).
+        if (p.role === 'metal' || p.role === 'rim') reflective(m);
         if (p.role === 'light') {
           m.emissive = new THREE.Color('#fff2c8');
           m.emissiveIntensity = 0.6;

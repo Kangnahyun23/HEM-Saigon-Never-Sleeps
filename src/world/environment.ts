@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { float, hash, mix, positionLocal, smoothstep, step, uniform, vec3 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { addNightOnly, nightUniform, setNightLevel } from './nightGlow';
+import { setReflectionIntensity, setReflectionMap } from './reflections';
 import type { Lighting, RGB } from './timeOfDay';
 
 /** Ánh sáng đã áp thời tiết (sương, mây là tuỳ chọn). */
@@ -15,9 +16,14 @@ export interface Environment {
   update(focus: THREE.Vector3): void;
   /** Vẽ lại bản đồ bóng đổ sau mỗi `n` khung hình (1 = mọi khung hình; 2 khi máy yếu). */
   setShadowInterval(n: number): void;
+  /** Bật / tắt đổ bóng mặt trời (cài đặt chất lượng "Thấp" tắt). Đổi thì shader biên dịch lại một lần. */
+  setShadows(on: boolean): void;
   /** Áp ánh sáng theo giờ trong ngày (trời, nắng/trăng, sương, phơi sáng, đèn ban đêm). */
   setLighting(l: SceneLighting): void;
 }
+
+/** Cường độ đèn bù sáng = ENV_FILL × cường độ IBL cũ (xem envFill). */
+const ENV_FILL = 28;
 
 function makeSky(sunDir: THREE.Vector3, clouds: boolean): SkyMesh {
   const sky = new SkyMesh();
@@ -42,15 +48,15 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
   sky.scale.setScalar(4000);
   scene.add(sky);
 
-  // Ánh sáng môi trường (phản chiếu trên kính, bồn inox, mặt nước) lấy từ chính bầu trời.
+  // Ảnh bầu trời cho phản chiếu (bồn inox, xe máy, mặt nước) — chỉ gắn cho các vật liệu đó (reflections.ts),
+  // KHÔNG đặt scene.environment: IBL cho cả cảnh tốn 25–40 % thời gian vẽ.
   const envScene = new THREE.Scene();
   const envSky = makeSky(sunDir, false);
   envSky.scale.setScalar(50);
   envScene.add(envSky);
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envTarget = await pmrem.fromSceneAsync(envScene, 0.04, 0.1, 100);
-  scene.environment = envTarget.texture;
-  scene.environmentIntensity = 0.1;
+  setReflectionMap(envTarget.texture);
   pmrem.dispose();
 
   scene.fog = new THREE.Fog('#d3d8da', 190, 760);
@@ -75,6 +81,11 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
 
   const hemi = new THREE.HemisphereLight('#cfe0f5', '#8b7a63', 1.0);
   scene.add(hemi);
+  // Thay phần ánh sáng nền mà IBL (ảnh bầu trời ban ngày cố định × cường độ theo giờ) từng góp cho mọi bề mặt:
+  // một đèn bán cầu màu trời ban ngày cố định, cường độ tỉ lệ với cường độ IBL. Hệ số đo bằng cách so độ sáng
+  // trung bình khung hình có / không IBL ở 8 h, 12 h, 16 h 30, 17 h 36, 18 h 24, 21 h (lệch < 3 %).
+  const envFill = new THREE.HemisphereLight('#cfe0f5', '#5d5a58', 0);
+  scene.add(envFill);
 
   const sun = new THREE.DirectionalLight('#ffe1b3', 3.0);
   sun.castShadow = true;
@@ -118,6 +129,17 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       sun.position.copy(snapped).addScaledVector(lightDir, 200);
       sun.target.updateMatrixWorld();
     },
+    setShadows(on) {
+      if (renderer.shadowMap.enabled === on) return;
+      // Tắt ở cấp renderer, KHÔNG đổi sun.castShadow: three.js r186 huỷ bản đồ bóng khi castShadow = false rồi dùng lại
+      // nút đã huỷ khi bật lại (văng lỗi depthTexture null). Mọi vật liệu dựng lại shader để bỏ / thêm phần lọc bóng.
+      renderer.shadowMap.enabled = on;
+      scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (Array.isArray(m)) for (const x of m) x.needsUpdate = true;
+        else if (m) m.needsUpdate = true;
+      });
+    },
     setShadowInterval(n) {
       shadowInterval = Math.max(1, Math.round(n));
       sun.shadow.autoUpdate = shadowInterval === 1;
@@ -140,7 +162,8 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       sky.cloudCoverage.value = 0.45 + 0.5 * cloud;
       sky.turbidity.value = 6.5 + 8 * cloud;
       domeCloud.value = cloud;
-      scene.environmentIntensity = l.envIntensity;
+      envFill.intensity = ENV_FILL * l.envIntensity;
+      setReflectionIntensity(l.envIntensity);
       renderer.toneMappingExposure = l.exposure;
       setNightLevel(l.night);
     },
