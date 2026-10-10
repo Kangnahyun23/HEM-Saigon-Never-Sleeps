@@ -112,6 +112,7 @@ src/
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
                      social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),
                      inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu — có unit test; giao diện ui/backpack, phím I),
+                     wheel (vòng chọn đồ: danh sách ô + chọn theo hướng chuột — có unit test; ui/weaponWheel, giữ Tab),
                      save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
                      settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test

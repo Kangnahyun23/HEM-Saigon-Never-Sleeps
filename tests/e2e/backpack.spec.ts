@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * Balo (phím I): mở balo, xem đồ khởi đầu, ăn bánh mì để hồi máu, vứt đồ, đóng balo.
+ * Vòng chọn đồ (giữ Tab): game chậm lại, rê chuột chọn mã tấu, nhả Tab thì cầm lên tay.
  * Chạy riêng: npx playwright test backpack
  */
 
@@ -39,4 +40,31 @@ test('balo: mở, ăn bánh mì hồi máu, vứt đồ', async ({ page }) => {
 
   await press(page, 'KeyI');
   await expect(page.locator('.hud-backpack')).toBeHidden();
+
+  // Vòng chọn đồ: có mã tấu trong balo, giữ Tab, rê chuột sang phải-trên (ô thứ hai), nhả Tab.
+  await page.evaluate(() => {
+    const h = window.__HEM__!;
+    (h.game as { inventory: { add(id: string): number } }).inventory.add('maTau');
+    const input = h.input as { setKey(c: string, d: boolean): void; mouseDX: number; mouseDY: number };
+    input.setKey('Tab', true);
+    (h.simulate as (s: number) => void)(1 / 60);
+    input.mouseDX = 90;
+    input.mouseDY = -60;
+    (h.simulate as (s: number) => void)(1 / 60);
+  });
+  await expect(page.locator('.hud-wheel')).toBeVisible();
+  await expect(page.locator('.wheel-item.on')).toContainText('Mã tấu');
+  expect(await page.evaluate(() => (window.__HEM__!.game as { timeScale: number }).timeScale)).toBeCloseTo(0.3);
+  await page.screenshot({ path: 'tests/e2e/__screenshots__/weapon-wheel.png' });
+  await page.evaluate(() => {
+    const h = window.__HEM__!;
+    (h.input as { setKey(c: string, d: boolean): void }).setKey('Tab', false);
+    (h.simulate as (s: number) => void)(1 / 60);
+  });
+  await expect(page.locator('.hud-wheel')).toBeHidden();
+  expect(await page.evaluate(() => (window.__HEM__!.game as { equipped: string | null }).equipped)).toBe('maTau');
+  await expect(page.locator('[data-weapon]')).toContainText('Mã tấu');
+  // Phím 1: cất vũ khí.
+  await press(page, 'Digit1');
+  expect(await page.evaluate(() => (window.__HEM__!.game as { equipped: string | null }).equipped)).toBeNull();
 });

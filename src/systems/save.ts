@@ -23,6 +23,8 @@ export interface SaveData {
   inventory?: unknown;
   /** Máu 0..100 — tuỳ chọn. */
   health?: number;
+  /** Vũ khí đang cầm (mã món) — tuỳ chọn. */
+  equipped?: string | null;
 }
 
 /** Giao diện tối thiểu của localStorage (để test bằng bộ nhớ giả). */

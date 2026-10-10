@@ -16,7 +16,8 @@ import { FIRST_INSTALLMENT } from '@/missions/story';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
-import { Inventory, ITEMS, starterInventory } from '@/systems/inventory';
+import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@/systems/inventory';
+import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
 
 /** Phím di chuyển (hằng số — khỏi tạo mảng mới mỗi khung hình). */
 const MOVE_ALL = { fwd: ['KeyW', 'ArrowUp'], back: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
@@ -207,6 +208,14 @@ export class Game {
   inventory: Inventory = starterInventory();
   /** Máu 0..100 (chiến đấu ở N5; giờ chỉ hồi bằng đồ ăn / thuốc). */
   health = 100;
+  /** Vũ khí đang cầm (null = tay không). */
+  equipped: ItemId | null = null;
+  /** Hệ số thời gian (vòng chọn đồ làm game chậm lại 30 %) — main nhân vào dt. */
+  timeScale = 1;
+  private wheelEntries: WheelEntry[] = [];
+  private wheelSel = 0;
+  private wheelDX = 0;
+  private wheelDY = 0;
 
   /** Có nạp từ bản lưu không (để bỏ tin nhắn mở màn). */
   readonly loaded: boolean;
@@ -224,6 +233,7 @@ export class Game {
     this.clock.hour = data.hour;
     if (data.inventory !== undefined) this.inventory = Inventory.fromJSON(data.inventory);
     if (typeof data.health === 'number' && Number.isFinite(data.health)) this.health = Math.max(1, Math.min(100, data.health));
+    if (typeof data.equipped === 'string' && Object.hasOwn(ITEMS, data.equipped) && ITEMS[data.equipped as ItemId].kind === 'weapon') this.equipped = data.equipped as ItemId;
     this.bindBackpack();
     const { x, z, yaw } = data.player;
     this.character.teleport(x, PAD_HEIGHT + 0.3, z, yaw);
@@ -256,6 +266,76 @@ export class Game {
     );
   }
 
+  /** Vũ khí bị vứt / hỏng ⇒ về tay không; cập nhật hình cầm tay + ô vũ khí trên HUD. */
+  private syncWeapon(): void {
+    if (this.equipped && this.inventory.count(this.equipped) === 0) this.equipped = null;
+    this.model.setWeapon?.(this.equipped);
+    if (!this.equipped) {
+      this.hud.setWeapon(null, 1);
+      return;
+    }
+    const def: ItemDef = ITEMS[this.equipped];
+    let wear = 1;
+    for (const sl of this.inventory.slots) {
+      if (sl?.id !== this.equipped) continue;
+      if (sl.durability !== undefined && def.durability) wear = sl.durability / def.durability;
+      break;
+    }
+    this.hud.setWeapon(def.name, wear);
+  }
+
+  private updateWheel(dx: number, dy: number): void {
+    const wheel = this.hud.wheel;
+    if (!wheel.open) {
+      this.wheelEntries = buildWheel(this.inventory);
+      const cur = this.wheelEntries.findIndex((e) => (e.kind === 'hand' ? this.equipped === null : e.kind === 'weapon' && e.id === this.equipped));
+      this.wheelSel = Math.max(0, cur);
+      this.wheelDX = 0;
+      this.wheelDY = 0;
+      wheel.show(this.wheelEntries, this.wheelSel, this.equipped ? ITEMS[this.equipped].name : 'Tay không');
+    }
+    // Như cần analog: cộng dồn chuyển động chuột, giới hạn bán kính ⇒ đổi hướng là đổi ô ngay.
+    this.wheelDX += dx;
+    this.wheelDY += dy;
+    const len = Math.hypot(this.wheelDX, this.wheelDY);
+    if (len > 120) {
+      this.wheelDX *= 120 / len;
+      this.wheelDY *= 120 / len;
+    }
+    this.wheelSel = sectorAt(this.wheelDX, this.wheelDY, this.wheelEntries.length, this.wheelSel);
+    wheel.select(this.wheelSel, this.equipped ? ITEMS[this.equipped].name : 'Tay không');
+    this.timeScale = 0.3;
+  }
+
+  private closeWheel(): void {
+    const e = this.wheelEntries[this.wheelSel];
+    this.hud.wheel.hide();
+    this.timeScale = 1;
+    if (e) this.applyWheel(e);
+  }
+
+  /** Dùng một ô của vòng chọn đồ: cầm / cất vũ khí, ăn / băng bó (bớt một món trong balo). */
+  private applyWheel(e: WheelEntry): void {
+    if (e.kind === 'hand') {
+      if (this.equipped) this.hud.showToast('Cất vũ khí', 1);
+      this.equipped = null;
+      return;
+    }
+    if (e.kind === 'weapon') {
+      if (this.equipped !== e.id) this.hud.showToast(`Cầm ${e.label}`, 1.2);
+      this.equipped = e.id;
+      return;
+    }
+    const index = this.inventory.slots.findIndex((sl) => sl?.id === e.id);
+    if (index < 0) return;
+    const def = this.inventory.use(index);
+    if (!def) return;
+    const before = this.health;
+    this.health = Math.min(100, this.health + (def.heal ?? 0));
+    this.hud.showToast(this.health > before ? `${def.name}: +${Math.round(this.health - before)} máu` : `${def.name}: đã đầy máu rồi`, 1.6);
+    this.hud.backpack.invalidate();
+  }
+
   private progressKey(): string {
     return `${this.story.progress.next}|${this.missions.jobsDone}`;
   }
@@ -274,6 +354,7 @@ export class Game {
       player: { x: p.x, z: p.z, yaw },
       inventory: this.inventory.toJSON(),
       health: this.health,
+      equipped: this.equipped,
     });
     if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
     return ok;
@@ -449,7 +530,23 @@ export class Game {
   /** Cập nhật mỗi khung hình (dt thực, giây). */
   update(dt: number): void {
     const input = this.input;
-    if (input.mouseDX || input.mouseDY) this.camera.look(input.mouseDX, input.mouseDY);
+    // Vòng chọn đồ: giữ Tab ⇒ mở vòng, game chậm lại, chuột chọn ô (không xoay camera); nhả Tab ⇒ dùng ô đang chọn.
+    const wheelWanted = input.isDown('Tab') && !this.hud.phone?.open && !this.hud.backpack.open;
+    if (wheelWanted) this.updateWheel(input.mouseDX, input.mouseDY);
+    else if (this.hud.wheel.open) this.closeWheel();
+    if (!wheelWanted && (input.mouseDX || input.mouseDY)) this.camera.look(input.mouseDX, input.mouseDY);
+    // Phím nhanh (điện thoại đóng): 1 tay không, 2–3 vũ khí, 4 ăn món hồi nhiều nhất.
+    if (!this.hud.phone?.open && !wheelWanted && input.wasPressed('Digit1', 'Digit2', 'Digit3', 'Digit4')) {
+      // Chỉ dựng danh sách khi có bấm phím (không tạo rác mỗi khung hình).
+      const quick = buildWheel(this.inventory);
+      const weapons = quick.filter((e) => e.kind === 'weapon');
+      const food = quick.find((e) => e.kind === 'food');
+      if (input.wasPressed('Digit1')) this.applyWheel(quick[0]!);
+      if (input.wasPressed('Digit2') && weapons[0]) this.applyWheel(weapons[0]);
+      if (input.wasPressed('Digit3') && weapons[1]) this.applyWheel(weapons[1]);
+      if (input.wasPressed('Digit4') && food) this.applyWheel(food);
+    }
+    this.syncWeapon();
     if (input.wheel) this.camera.addZoom(input.wheel);
     if (input.wasPressed('F1')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
