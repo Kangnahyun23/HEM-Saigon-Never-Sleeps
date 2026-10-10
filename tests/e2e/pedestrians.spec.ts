@@ -25,13 +25,7 @@ test('người đi bộ trên vỉa hè', async ({ page }) => {
   const moved = after.filter((a, i) => Math.hypot(a.x - before[i]!.x, a.z - before[i]!.z) > 2).length;
   expect(moved).toBeGreaterThan(after.length * 0.4);
 
-  // Ẩn bảng phím (Tab) cho ảnh chụp thoáng.
-  await page.evaluate(() => {
-    const input = window.__HEM__!.input as { setKey(c: string, d: boolean): void };
-    input.setKey('Tab', true);
-    (window.__HEM__!.simulate as (n: number) => void)(1 / 60);
-    input.setKey('Tab', false);
-  });
+  // Bảng phím đã thu gọn mặc định (F1) ⇒ ảnh chụp thoáng, không cần ẩn.
 
   // Cận cảnh hai người gần điểm xuất phát nhất.
   await page.evaluate(() => {

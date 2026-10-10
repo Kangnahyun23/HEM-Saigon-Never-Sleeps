@@ -4,6 +4,7 @@ import type { Inbox } from '@/systems/inbox';
 import { formatVnd, type Wallet } from '@/systems/wallet';
 import { Minimap } from './minimap';
 import { Phone } from './phone';
+import { ToastQueue } from './toastQueue';
 
 const SPEEDO_MAX = 80; // km/h
 const ARC_START = 135; // độ, bắt đầu từ góc dưới trái
@@ -27,7 +28,13 @@ export class Hud {
   private readonly speedArc: SVGPathElement;
   private readonly prompt: HTMLElement;
   private readonly toast: HTMLElement;
+  private readonly toasts = new ToastQueue(3);
   private readonly help: HTMLElement;
+  private readonly helpHint: HTMLElement;
+  private readonly health: HTMLElement;
+  private readonly armor: HTMLElement;
+  private readonly vitals: HTMLElement;
+  private lastVitals = '';
   private readonly fps: HTMLElement;
   private readonly clock: HTMLElement;
   /** Bản đồ nhỏ (tạo sau khi có bố cục khu phố). */
@@ -49,8 +56,8 @@ export class Hud {
   private lastSpeedHidden: boolean | null = null;
   private lastPlace = '';
   private lastPrompt = '';
-  private toastTimer = 0;
-  private helpTimer = 18;
+  /** Nhãn "F1" nhấp nháy ít giây đầu cho người mới biết chỗ xem phím. */
+  private hintTimer = 20;
   private frames = 0;
   private elapsed = 0;
 
@@ -74,16 +81,18 @@ export class Hud {
       </div>
       <div class="hud-prompt panel hidden" data-prompt></div>
       <div class="hud-toast" data-toast role="status" aria-live="polite"></div>
+      <div class="hud-vitals" data-vitals><div class="bar health"><i data-health></i></div><div class="bar armor"><i data-armor></i></div></div>
+      <div class="hud-help-hint panel" data-help-hint><kbd>F1</kbd> Phím điều khiển</div>
       <div class="hud-subtitle" data-subtitle aria-live="polite"><b></b><span></span></div>
-      <div class="hud-help panel" data-help>
+      <div class="hud-help panel hidden" data-help>
         <div class="title">Điều khiển</div>
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>đi / lái</b> · <kbd>Shift</kbd> <b>chạy</b> · <kbd>Space</kbd> <b>nhảy / phanh tay</b></div>
         <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>P</kbd> <b>điện thoại</b> · <kbd>M</kbd> <b>tắt tiếng</b></div>
-        <div>Bấm vào màn hình rồi <b>rê chuột</b> để xoay camera · <b>cuộn</b> để zoom · <kbd>Tab</kbd> <b>ẩn/hiện bảng này</b></div>
+        <div>Bấm vào màn hình rồi <b>rê chuột</b> để xoay camera · <b>cuộn</b> để zoom · <kbd>F1</kbd> <b>ẩn/hiện bảng này</b></div>
       </div>
       <div class="hud-fps" data-fps></div>
       <div class="hud-cash" data-cash></div>
-      <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
+      <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
       <div class="hud-objective panel" data-objective hidden><span data-objective-text></span><b data-objective-timer></b></div>
       <div class="hud-phone-hint panel" data-phone-hint><kbd>P</kbd> Điện thoại</div>`;
     const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as T;
@@ -95,6 +104,10 @@ export class Hud {
     this.prompt = q('[data-prompt]');
     this.toast = q('[data-toast]');
     this.help = q('[data-help]');
+    this.helpHint = q('[data-help-hint]');
+    this.vitals = q('[data-vitals]');
+    this.health = q('[data-health]');
+    this.armor = q('[data-armor]');
     this.fps = q('[data-fps]');
     this.clock = q('[data-clock]');
     this.cash = q('[data-cash]');
@@ -114,7 +127,7 @@ export class Hud {
     this.subtitleTimer = seconds;
   }
 
-  /** Độ Nóng: sao đỏ dưới tiền mặt; khuất tầm nhìn thì sao nhấp nháy và chữ đổi thành tiến độ cắt đuôi. */
+  /** Độ Nóng / truy nã: 5 ô sao dưới tiền mặt (góc trên phải); khuất tầm nhìn thì sao nhấp nháy và chữ đổi thành tiến độ cắt đuôi. */
   setHeat(level: number, escape: number, seen: boolean): void {
     const key = `${level}|${seen}|${Math.round(escape * 10)}`;
     if (key === this.lastHeat) return;
@@ -220,15 +233,52 @@ export class Hud {
     } else this.prompt.classList.add('hidden');
   }
 
+  /** Thông báo nhanh: xếp chồng ở góc dưới trái (trên bản đồ nhỏ), tối đa 3 dòng, không đè nhau. */
   showToast(text: string, seconds = 2.2): void {
-    this.toast.textContent = text;
-    this.toast.classList.add('show');
-    this.toastTimer = seconds;
+    this.toasts.push(text, seconds);
+    this.renderToasts();
   }
 
+  private renderToasts(): void {
+    const items = this.toasts.items;
+    const nodes = this.toast.children;
+    // Dùng lại thẻ có sẵn theo id (giữ hiệu ứng trượt vào cho dòng mới), bỏ thẻ của dòng đã hết hạn.
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const el = nodes[i] as HTMLElement;
+      if (!items.some((t) => String(t.id) === el.dataset.id)) el.remove();
+    }
+    for (const t of items) {
+      let el = this.toast.querySelector<HTMLElement>(`[data-id="${t.id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'toast panel';
+        el.dataset.id = String(t.id);
+        el.textContent = t.text;
+      }
+      this.toast.appendChild(el);
+    }
+  }
+
+  /** Bảng phím đầy đủ (F1); mặc định thu gọn thành nhãn nhỏ. */
   toggleHelp(): void {
-    this.helpTimer = this.help.classList.contains('hidden') ? 1e9 : 0;
-    this.help.classList.toggle('hidden', this.helpTimer === 0);
+    const show = this.help.classList.contains('hidden');
+    this.help.classList.toggle('hidden', !show);
+    this.helpHint.classList.toggle('hidden', show);
+    this.hintTimer = 0;
+    this.helpHint.classList.remove('ping');
+  }
+
+  /** Máu / giáp (0..1) — thanh ngang ngay trên bản đồ nhỏ; giáp 0 thì ẩn thanh giáp, máu thấp thì đỏ nhấp nháy. */
+  setVitals(health: number, armor: number): void {
+    const h = Math.max(0, Math.min(1, health));
+    const a = Math.max(0, Math.min(1, armor));
+    const key = `${Math.round(h * 200)}|${Math.round(a * 200)}`;
+    if (key === this.lastVitals) return;
+    this.lastVitals = key;
+    this.health.style.transform = `scaleX(${h})`;
+    this.armor.style.transform = `scaleX(${a})`;
+    this.vitals.classList.toggle('low', h < 0.25);
+    this.vitals.classList.toggle('no-armor', a <= 0);
   }
 
   update(dt: number): void {
@@ -243,13 +293,10 @@ export class Hud {
       this.subtitleTimer -= dt;
       if (this.subtitleTimer <= 0) this.subtitle.classList.remove('show');
     }
-    if (this.toastTimer > 0) {
-      this.toastTimer -= dt;
-      if (this.toastTimer <= 0) this.toast.classList.remove('show');
-    }
-    if (this.helpTimer > 0 && this.helpTimer < 1e8) {
-      this.helpTimer -= dt;
-      if (this.helpTimer <= 0) this.help.classList.add('hidden');
+    if (this.toasts.update(dt)) this.renderToasts();
+    if (this.hintTimer > 0) {
+      this.hintTimer -= dt;
+      this.helpHint.classList.toggle('ping', this.hintTimer > 0);
     }
   }
 }
