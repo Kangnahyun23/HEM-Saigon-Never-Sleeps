@@ -93,23 +93,70 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 
 /* Nhắc điện thoại (trên đồng hồ tốc độ) */
 .hud-phone-hint { position: absolute; right: 22px; bottom: 206px; padding: 6px 10px; font-size: 13px; font-weight: 600; color: var(--hud-quiet); }
-.hud-phone-hint i, .phone-tabs i, .thread i { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #e8453c; color: #fff; font: 700 11px system-ui, sans-serif; font-style: normal; }
+.hud-phone-hint i, .app-icon i, .thread i { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #e8453c; color: #fff; font: 700 11px system-ui, sans-serif; font-style: normal; }
 .hud-phone-hint.ping { color: var(--hud-ink); animation: ping 1.6s ease-in-out infinite; }
 @keyframes ping { 50% { transform: translateY(-3px); } }
 
 /* Điện thoại (phím P) */
-.hud-phone { position: absolute; right: 22px; bottom: 22px; width: 300px; height: min(560px, calc(100% - 120px)); display: flex; flex-direction: column; pointer-events: auto; border-radius: 26px; border: 3px solid #2a2532; background: #f4efe6; color: #1f1b24; box-shadow: 0 18px 50px rgba(0,0,0,.55); overflow: hidden; font-size: 14px; }
+/* Điện thoại "Sầu Riêng S9" (phím P): máy cầm tay góc dưới phải, nghiêng nhẹ, đưa lên khi mở */
+.hud-phone { position: absolute; right: 34px; bottom: 0; width: 292px; height: min(600px, calc(100% - 90px)); pointer-events: auto; transform: translateY(105%) rotate(4deg); transform-origin: 70% 100%; transition: transform .22s cubic-bezier(.2,.8,.25,1); color: #1f1b24; font-size: 14px; }
+.hud-phone.up { transform: translateY(-26px) rotate(-3deg); }
 .hud-phone[hidden] { display: none; }
-.phone-status { display: flex; justify-content: space-between; padding: 9px 18px 5px; font: 700 12px system-ui, sans-serif; color: #5b5262; }
-.phone-screen { flex: 1; overflow-y: auto; padding: 4px 14px 12px; }
-.phone-screen h3 { margin: 6px 0 10px; font-size: 19px; }
+.phone-body { position: absolute; inset: 0; padding: 9px; border-radius: 38px; background: linear-gradient(145deg, #3a3640, #141218 55%, #26222b); box-shadow: 0 22px 60px rgba(0,0,0,.6), inset 0 0 0 2px #4a4552; }
+.phone-key { position: absolute; width: 4px; border-radius: 2px; background: #2a2630; }
+.phone-key.vol-up { left: -3px; top: 110px; height: 44px; }
+.phone-key.vol-down { left: -3px; top: 164px; height: 44px; }
+.phone-key.power { right: -3px; top: 140px; height: 64px; }
+.phone-glass { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; border-radius: 30px; background: #f4efe6; }
+.phone-status { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px 4px; font: 700 12px system-ui, sans-serif; color: #2b2630; }
+.phone-status .notch { position: absolute; left: 50%; top: 7px; width: 86px; height: 22px; transform: translateX(-50%); border-radius: 12px; background: #0d0c10; }
+.phone-status .net { font-size: 10.5px; letter-spacing: .02em; }
+.phone-screen { flex: 1; overflow-y: auto; padding: 4px 14px 12px; scrollbar-width: none; }
 .phone-screen h4 { margin: 14px 0 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #8a7f8e; }
 .phone-screen .muted { color: #8a7f8e; line-height: 1.5; }
 .phone-screen button { font: inherit; cursor: pointer; }
-.phone-tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid #ddd3c6; background: #ebe4d8; }
-.phone-tabs button { padding: 9px 2px 10px; border: 0; background: none; font: 600 11.5px system-ui, sans-serif; color: #6c6370; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.phone-tabs button.on { color: #d2650f; }
-.phone-tabs kbd { color: inherit; border-color: currentColor; background: none; font-size: 10px; padding: 0 4px; }
+.phone-homebar { flex: none; width: 110px; height: 5px; margin: 6px auto 8px; padding: 0; border: 0; border-radius: 3px; background: #2b2630; opacity: .55; cursor: pointer; }
+/* Màn hình chính: hình nền đêm Sài Gòn (dải đèn, toà nhà) + đồng hồ to + lưới app */
+.phone-screen[data-view="home"] { margin-top: -38px; padding-top: 52px; color: #fff; background:
+  radial-gradient(120% 60% at 50% 100%, rgba(255,140,26,.55), transparent 60%),
+  linear-gradient(180deg, #1b1440 0%, #3d1f5c 45%, #b8476a 78%, #ff9a4a 100%); }
+.phone-screen[data-view="home"] ~ .phone-homebar { background: #fff; }
+.home-clock { margin-top: 8px; text-align: center; font-size: 54px; font-weight: 300; letter-spacing: .02em; text-shadow: 0 2px 12px rgba(0,0,0,.35); }
+.home-date { text-align: center; font-size: 12.5px; opacity: .85; margin-bottom: 26px; }
+.app-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 8px; padding: 0 4px; }
+.phone-glass:has(.phone-screen[data-view="home"]) .phone-status { color: #fff; }
+.app { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: #fff; }
+.app-icon { position: relative; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+.app-icon svg { width: 28px; height: 28px; fill: #fff; }
+.app-icon i { position: absolute; top: -5px; right: -6px; }
+.app-label { font-size: 11px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.6); white-space: nowrap; }
+.app-label kbd { min-width: 0; padding: 0 3px; margin-right: 3px; font-size: 9px; color: #fff; border-color: rgba(255,255,255,.6); background: rgba(0,0,0,.25); }
+/* Đầu mỗi app: nút về + tên app */
+.app-head { position: sticky; top: -4px; z-index: 1; display: flex; align-items: center; gap: 6px; margin: 0 -14px 8px; padding: 6px 14px 8px; background: #f4efe6; border-bottom: 1px solid #e6ddd0; }
+.app-head b { font-size: 18px; }
+.app-head .back { padding: 0 6px 2px 0; font-size: 26px; line-height: 1; }
+/* Thông báo trượt xuống trên màn hình máy */
+.phone-banner { position: absolute; z-index: 3; left: 10px; right: 10px; top: 34px; display: grid; gap: 2px; padding: 9px 12px; border-radius: 14px; background: rgba(255,255,255,.96); box-shadow: 0 6px 20px rgba(0,0,0,.25); transform: translateY(-24px); opacity: 0; visibility: hidden; transition: transform .25s, opacity .25s, visibility .25s; font-size: 13px; }
+.phone-banner.show { transform: none; opacity: 1; visibility: visible; }
+.phone-banner span { color: #6c6370; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Ngân hàng (nợ app vay) */
+.bank-card { display: grid; gap: 4px; padding: 14px; margin-bottom: 10px; border-radius: 16px; color: #fff; background: linear-gradient(135deg, #7a1020, #c0392b); box-shadow: 0 6px 16px rgba(192,57,43,.35); }
+.bank-card span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+.bank-card b { font-size: 24px; font-variant-numeric: tabular-nums; }
+.bank-card small { font-size: 11.5px; opacity: .85; }
+/* Phây — bảng tin */
+.post { padding: 10px 12px; margin-bottom: 8px; border-radius: 12px; background: #fff; }
+.post header { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.post header small { font-size: 10.5px; color: #8a7f8e; }
+.post p { margin: 5px 0 6px; line-height: 1.42; }
+.post footer { display: flex; gap: 14px; font-size: 11.5px; color: #8a7f8e; }
+.post.hot { outline: 2px solid #e8453c; }
+.post.hot header small { color: #e8453c; font-weight: 700; }
+.post.ad { background: #fff8ec; }
+/* Camera */
+.shutter { width: 100%; padding: 12px; border: 0; border-radius: 12px; background: #e11d48; color: #fff; font-weight: 800 !important; }
+.gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.gallery img { width: 100%; border-radius: 8px; display: block; }
 .thread { position: relative; display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 34px 10px 10px; margin-bottom: 6px; border: 0; border-radius: 12px; background: #fff; }
 .thread span { color: #6c6370; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .thread.unread b { color: #d2650f; }
@@ -136,7 +183,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .tx .neg { color: #c0392b; }
 .phone-map { width: 100%; display: block; border-radius: 12px; }
 @media (max-width: 640px) {
-  .hud-phone { width: calc(100% - 24px); right: 12px; bottom: 12px; }
+  .hud-phone { width: min(292px, calc(100% - 24px)); right: 12px; }
   .hud-phone-hint { bottom: 150px; right: 12px; }
 }
 

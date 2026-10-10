@@ -16,6 +16,9 @@ import { FIRST_INSTALLMENT } from '@/missions/story';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
+
+/** Phím 1–8 trên điện thoại mở thẳng app (thứ tự như màn hình chính). */
+const PHONE_KEYS: readonly PhoneTab[] = ['jobs', 'map', 'messages', 'wallet', 'settings', 'bank', 'social', 'camera'];
 import { FixedStepAccumulator } from '@/core/fixedStep';
 import type { Input } from '@/core/input';
 import { GROUP, interaction } from '@/physics/groups';
@@ -143,11 +146,20 @@ export class Game {
     scene.add(this.headlamp);
 
     this.hud.createPhone(this.inbox, this.wallet);
-    this.inbox.onMessage = (_m, contact) => {
+    this.inbox.onMessage = (m, contact) => {
       this.hud.phone?.invalidate();
-      if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
+      if (this.hud.phone?.open) this.hud.phone.notify(contact, m.text);
+      else this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
       playSfx('message');
     };
+    this.hud.phone?.setFeedSource(() => ({
+      seed: city.layout.seed,
+      day: this.clock.day,
+      hour: this.clock.hour,
+      heat: this.heat.level,
+      raining: this.weather.state.rain > 0.3,
+      debt: this.wallet.debt,
+    }));
     this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
     this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
@@ -406,16 +418,13 @@ export class Game {
     if (input.wasPressed('KeyM')) this.hud.showToast(mixer.toggleMute() ? 'Đã tắt tiếng (M)' : 'Đã bật tiếng (M)', 1.4);
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
 
-    // Điện thoại: P bật/tắt, Esc cất, 1–4 đổi tab.
+    // Điện thoại: P bật/tắt, 1–8 mở thẳng app, Backspace / Esc lùi về màn hình chính (đang ở đó thì cất máy).
     const phone = this.hud.phone;
     if (phone) {
       if (input.wasPressed('KeyP')) phone.toggle();
-      else if (phone.open && input.wasPressed('Escape')) phone.setOpen(false);
+      else if (phone.open && (input.wasPressed('Escape') || input.wasPressed('Backspace')) && !phone.back()) phone.setOpen(false);
       if (phone.open) {
-        const tabs: PhoneTab[] = ['jobs', 'map', 'messages', 'wallet', 'settings'];
-        tabs.forEach((t, i) => {
-          if (input.wasPressed(`Digit${i + 1}`)) phone.show(t);
-        });
+        for (let i = 0; i < PHONE_KEYS.length; i++) if (input.wasPressed(`Digit${i + 1}`)) phone.show(PHONE_KEYS[i]!);
       }
     }
 

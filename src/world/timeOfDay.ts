@@ -180,6 +180,8 @@ export function lightingAt(hour: number): Lighting {
 /** Đồng hồ game: mặc định 1 giờ trong game = 1 phút ngoài đời (một ngày ≈ 24 phút). */
 export class GameClock {
   hour: number;
+  /** Số lần qua nửa đêm kể từ lúc vào game (bảng tin mạng xã hội đổi theo ngày). */
+  day = 0;
 
   constructor(
     start = 16.5,
@@ -190,7 +192,9 @@ export class GameClock {
   }
 
   advance(dt: number): void {
-    this.hour = wrapHour(this.hour + dt * this.rate);
+    const next = this.hour + dt * this.rate;
+    if (next >= 24) this.day++;
+    this.hour = wrapHour(next);
   }
 
   /** "HH:MM" */

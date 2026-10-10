@@ -145,6 +145,9 @@ async function main(): Promise<void> {
   let lowHintShown = false;
   // Bloom ban đêm (neon, LED, hộp đèn): ?bloom=0 để tắt khi so hiệu năng.
   const bloom = new NightBloom(renderer, scene, camera);
+  // App Camera trên điện thoại: chụp khung hình kế tiếp.
+  let photoRequested = false;
+  if (hud.phone) hud.phone.onCapture = () => (photoRequested = true);
   const bloomParam = new URLSearchParams(location.search).get('bloom');
   const applySettings = (s: Settings): void => {
     const profile = qualityProfile(s.quality, window.devicePixelRatio, autoTier);
@@ -192,6 +195,16 @@ async function main(): Promise<void> {
     city.updateDetail(camera.position);
     const firstFrame = debug.frames === 0 ? performance.now() : 0;
     if (!bloom.render(nightUniform.value)) renderer.render(scene, camera);
+    if (photoRequested) {
+      // Chụp ngay sau lệnh vẽ (cùng tác vụ ⇒ khung hình còn trên canvas), thu nhỏ cho nhẹ.
+      photoRequested = false;
+      const src = renderer.domElement;
+      const shot = document.createElement('canvas');
+      shot.width = 320;
+      shot.height = Math.round((320 * src.height) / Math.max(1, src.width));
+      shot.getContext('2d')?.drawImage(src, 0, 0, shot.width, shot.height);
+      hud.phone?.addPhoto(shot.toDataURL('image/jpeg', 0.82));
+    }
     // Khung hình đầu biên dịch toàn bộ shader — thường là bước tải lâu nhất.
     if (firstFrame) {
       timings.firstFrame = Math.round(performance.now() - firstFrame);
