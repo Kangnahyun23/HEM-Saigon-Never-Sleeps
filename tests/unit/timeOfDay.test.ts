@@ -101,4 +101,12 @@ describe('timeOfDay', () => {
       expect(eateryOccupancy(h)).toBeLessThanOrEqual(1);
     }
   });
+
+  it('đồng hồ đếm ngày khi qua nửa đêm', () => {
+    const c = new GameClock(23.5, 1);
+    expect(c.day).toBe(0);
+    c.advance(1);
+    expect(c.day).toBe(1);
+    expect(c.hour).toBeCloseTo(0.5);
+  });
 });

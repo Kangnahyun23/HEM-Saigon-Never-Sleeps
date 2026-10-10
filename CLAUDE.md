@@ -107,8 +107,10 @@ src/
                      Âm thanh mới nối vào mixer.bus(), KHÔNG tạo AudioContext riêng.
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, máu / giáp, sao truy nã, bảng phím F1, hàng thông báo — toastQueue
                      có unit test), minimap (+ minimapMath có unit test)
-                     phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví, Cài đặt)
+                     phone (điện thoại "Sầu Riêng S9" cầm tay, phím P: màn hình chính + 8 app — Kèo, Bản đồ, Tin nhắn, Ví,
+                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
+                     social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),
                      save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
                      settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test

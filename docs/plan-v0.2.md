@@ -14,7 +14,8 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] N3.3 người đi đường gần camera là nhân vật có xương (3/6/10 người theo sức máy), xa vẫn khối hộp; người ngồi quán cóc,
   người bán xe đẩy (đông vắng theo giờ). Mẫu xa nướng động tác vào texture (VAT) để sau nếu cần;
 - [x] N4.1 HUD: hàng thông báo góc dưới trái (tối đa 3, không đè), bảng phím thu gọn (F1), thanh máu / giáp, 5 ô sao;
-- [ ] N4.2–N4.4, N5–N10.
+- [x] N4.2 điện thoại cầm tay "Sầu Riêng S9": màn hình chính 8 app (thêm Ngân hàng, Phây, Camera chụp ảnh), thông báo trượt xuống;
+- [ ] N4.3–N4.4, N5–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 
