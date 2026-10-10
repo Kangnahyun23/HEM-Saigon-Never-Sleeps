@@ -31,14 +31,18 @@ export interface Waypoint {
 }
 
 /**
- * Bản đồ nhỏ góc dưới trái: ảnh nền khu phố dựng một lần từ bố cục, mỗi khung hình chỉ vẽ lại phần quanh người
- * chơi (xoay theo camera), mũi tên người chơi, điểm đánh dấu và các chấm (xe truy đuổi…).
+ * Bản đồ nhỏ góc dưới trái. Ảnh nền khu phố vẽ MỘT lần từ bố cục rồi đặt thành một lớp riêng, mỗi khung hình chỉ đổi
+ * CSS transform (xoay/dời theo camera) — trình duyệt ghép lớp trên card đồ hoạ, không phải vẽ lại ảnh 900×860 px.
+ * (Vẽ xoay + cắt tròn ảnh đó bằng canvas 2D mỗi khung hình tốn ~8 ms khi canvas chạy bằng CPU.)
+ * Canvas nhỏ phía trên chỉ vẽ mũi tên người chơi, điểm đánh dấu, các chấm (xe truy đuổi…) và chữ "B".
  */
 export class Minimap {
   readonly root: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: HTMLCanvasElement;
+  /** Kích thước hiển thị thật / SIZE (CSS thu nhỏ bản đồ trên màn hình hẹp). */
+  private cssScale = 1;
   private readonly x0: number;
   private readonly z0: number;
   private waypoint: Waypoint | null = null;
@@ -49,7 +53,7 @@ export class Minimap {
     this.root = document.createElement('div');
     this.root.className = 'hud-minimap';
     this.canvas = document.createElement('canvas');
-    this.root.appendChild(this.canvas);
+    this.canvas.className = 'hud-minimap-overlay';
     parent.appendChild(this.root);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = SIZE * dpr;
@@ -65,7 +69,14 @@ export class Minimap {
     this.image = document.createElement('canvas');
     this.image.width = w;
     this.image.height = h;
+    this.image.className = 'hud-minimap-map';
     this.paintCity(layout);
+    this.root.append(this.image, this.canvas);
+    const measure = (): void => {
+      this.cssScale = (this.root.clientWidth || SIZE) / SIZE;
+    };
+    measure();
+    window.addEventListener('resize', measure);
   }
 
   /** Vẽ ảnh nền một lần: block, nhà, đường, hẻm, chợ, công viên, sông. */
@@ -147,17 +158,12 @@ export class Minimap {
     const radius = half - 6;
     const view: MapView = { px, pz, fx, fz, cx: half, cy: half, scale: this.zoom };
 
-    c.save();
-    c.clearRect(0, 0, SIZE, SIZE);
-    c.beginPath();
-    c.arc(half, half, radius, 0, Math.PI * 2);
-    c.clip();
-    c.fillStyle = MAP.ground;
-    c.fillRect(0, 0, SIZE, SIZE);
+    // Ảnh nền: chỉ đổi transform (pixel ảnh → pixel CSS của bản đồ, nhân tỉ lệ hiển thị).
+    const k = this.cssScale;
     const [a, b, cc, d, e, f] = mapImageTransform(view, this.x0, this.z0, PX_PER_M);
-    c.transform(a, b, cc, d, e, f);
-    c.drawImage(this.image, 0, 0);
-    c.restore();
+    this.image.style.transform = `matrix(${a * k},${b * k},${cc * k},${d * k},${e * k},${f * k})`;
+
+    c.clearRect(0, 0, SIZE, SIZE);
 
     // Viền + chữ "B" (Bắc = −Z) chạy quanh mép.
     c.strokeStyle = 'rgba(255,255,255,.22)';

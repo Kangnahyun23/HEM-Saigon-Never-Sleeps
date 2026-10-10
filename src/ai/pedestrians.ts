@@ -67,6 +67,8 @@ const MARGIN = 0.35;
 const BODY = 0.3;
 
 /** Lưới băm các vật cản tĩnh trên vỉa hè để tra cứu nhanh. */
+const NO_OBSTACLES: readonly Obstacle[] = [];
+
 class ObstacleGrid {
   private readonly cells = new Map<number, Obstacle[]>();
   /** Khoá số (không tạo chuỗi mỗi lần tra): khu phố nằm trong ±4 km. */
@@ -83,12 +85,32 @@ class ObstacleGrid {
     out.length = 0;
     const cx = Math.floor(x / CELL);
     const cz = Math.floor(z / CELL);
-    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const o of this.cells.get(ObstacleGrid.key(cx + i, cz + j)) ?? []) out.push(o);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const o of this.cells.get(ObstacleGrid.key(cx + i, cz + j)) ?? NO_OBSTACLES) out.push(o);
     return out;
   }
 }
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
+
+export interface SideInfo {
+  len: number;
+  width: number;
+}
+
+export interface SidePoint {
+  x: number;
+  z: number;
+  fx: number;
+  fz: number;
+}
+
+function set(p: SidePoint, x: number, z: number, fx: number, fz: number): SidePoint {
+  p.x = x;
+  p.z = z;
+  p.fx = fx;
+  p.fz = fz;
+  return p;
+}
 
 export class PedestrianSim {
   readonly walkers: Walker[] = [];
@@ -97,6 +119,9 @@ export class PedestrianSim {
   private readonly grid = new ObstacleGrid();
   private readonly blocks: Block[];
   private readonly scratch: Obstacle[] = [];
+  /** Đối tượng tạm dùng lại trong `step` (không tạo rác mỗi khung hình). */
+  private readonly info: SideInfo = { len: 0, width: 0 };
+  private readonly here: SidePoint = { x: 0, z: 0, fx: 0, fz: 0 };
   respawns = 0;
 
   constructor(
@@ -132,33 +157,41 @@ export class PedestrianSim {
   }
 
   /** Chiều dài cạnh và bề rộng vỉa hè của cạnh. */
-  sideInfo(block: Block, side: number): { len: number; width: number } {
+  sideInfo(block: Block, side: number, out: SideInfo = { len: 0, width: 0 }): SideInfo {
     const r = block.rect;
     const s = block.sidewalk;
     switch (side) {
       case 0:
-        return { len: r.x1 - r.x0, width: s.minZ };
+        out.len = r.x1 - r.x0;
+        out.width = s.minZ;
+        break;
       case 1:
-        return { len: r.z1 - r.z0, width: s.maxX };
+        out.len = r.z1 - r.z0;
+        out.width = s.maxX;
+        break;
       case 2:
-        return { len: r.x1 - r.x0, width: s.maxZ };
+        out.len = r.x1 - r.x0;
+        out.width = s.maxZ;
+        break;
       default:
-        return { len: r.z1 - r.z0, width: s.minX };
+        out.len = r.z1 - r.z0;
+        out.width = s.minX;
     }
+    return out;
   }
 
   /** Toạ độ thế giới + hướng đi xuôi của cạnh. */
-  position(block: Block, side: number, t: number, d: number): { x: number; z: number; fx: number; fz: number } {
+  position(block: Block, side: number, t: number, d: number, out: SidePoint = { x: 0, z: 0, fx: 0, fz: 0 }): SidePoint {
     const r = block.rect;
     switch (side) {
       case 0:
-        return { x: r.x0 + t, z: r.z0 + d, fx: 1, fz: 0 };
+        return set(out, r.x0 + t, r.z0 + d, 1, 0);
       case 1:
-        return { x: r.x1 - d, z: r.z0 + t, fx: 0, fz: 1 };
+        return set(out, r.x1 - d, r.z0 + t, 0, 1);
       case 2:
-        return { x: r.x1 - t, z: r.z1 - d, fx: -1, fz: 0 };
+        return set(out, r.x1 - t, r.z1 - d, -1, 0);
       default:
-        return { x: r.x0 + d, z: r.z1 - t, fx: 0, fz: -1 };
+        return set(out, r.x0 + d, r.z1 - t, 0, -1);
     }
   }
 
@@ -217,10 +250,10 @@ export class PedestrianSim {
       w.prevZ = w.z;
       w.prevYaw = w.yaw;
       const block = this.block(w);
-      const { len, width } = this.sideInfo(block, w.side);
+      const { len, width } = this.sideInfo(block, w.side, this.info);
       const lo = MARGIN;
       const hi = Math.max(lo, width - MARGIN);
-      const here = this.position(block, w.side, w.t, w.d);
+      const here = this.position(block, w.side, w.t, w.d, this.here);
       const fx = here.fx * w.dir;
       const fz = here.fz * w.dir;
 
@@ -253,7 +286,9 @@ export class PedestrianSim {
       if (desired > 0 && w.dodge <= 0) {
         const aheadX = w.x + fx * 1.2;
         const aheadZ = w.z + fz * 1.2;
-        let hit: { lateral: number; r: number } | null = null;
+        let hit = false;
+        let hitLateral = 0;
+        let hitR = 0;
         for (const o of this.grid.near(aheadX, aheadZ, this.scratch)) {
           const ox = o.x - w.x;
           const oz = o.z - w.z;
@@ -261,12 +296,21 @@ export class PedestrianSim {
           if (along < 0 || along > 1.8) continue;
           // Độ lệch ngang theo trục d (vào trong vỉa hè).
           const lateral = this.lateralOf(w, o.x, o.z);
-          if (Math.abs(lateral - w.d) < o.r + BODY + 0.05) hit = { lateral, r: o.r };
+          if (Math.abs(lateral - w.d) < o.r + BODY + 0.05) {
+            hit = true;
+            hitLateral = lateral;
+            hitR = o.r;
+          }
         }
         if (hit) {
-          const clear = hit.r + BODY + 0.15;
-          const options = [hit.lateral - clear, hit.lateral + clear].filter((c) => c >= lo && c <= hi);
-          if (options.length > 0) w.targetD = options.sort((a, b) => Math.abs(a - w.d) - Math.abs(b - w.d))[0] as number;
+          // Lách sang bên còn chỗ, gần vị trí hiện tại hơn.
+          const clear = hitR + BODY + 0.15;
+          const a = hitLateral - clear;
+          const b = hitLateral + clear;
+          const okA = a >= lo && a <= hi;
+          const okB = b >= lo && b <= hi;
+          if (okA && (!okB || Math.abs(a - w.d) <= Math.abs(b - w.d))) w.targetD = a;
+          else if (okB) w.targetD = b;
           else {
             // Kẹt cứng: quay đầu.
             w.dir = w.dir === 1 ? -1 : 1;
@@ -287,9 +331,9 @@ export class PedestrianSim {
         w.t = w.d;
       } else if (w.dir === -1 && w.t <= w.d) {
         w.side = (w.side + 3) % 4;
-        w.t = this.sideInfo(block, w.side).len - w.d;
+        w.t = this.sideInfo(block, w.side, this.info).len - w.d;
       }
-      const p = this.position(block, w.side, w.t, w.d);
+      const p = this.position(block, w.side, w.t, w.d, this.here);
       const mx = p.x - w.x;
       const mz = p.z - w.z;
       w.x = p.x;

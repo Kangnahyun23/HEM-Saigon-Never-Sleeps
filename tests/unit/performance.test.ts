@@ -59,10 +59,14 @@ describe('ResolutionGovernor', () => {
     for (let t = 0; t < seconds; t += 1 / fps) g.sample(1 / fps);
   };
 
-  it('máy yếu: hạ dần độ phân giải nhưng không thấp hơn mức tối thiểu', () => {
+  it('máy yếu: bóng đổ cách khung trước, rồi hạ dần độ phân giải nhưng không thấp hơn mức tối thiểu', () => {
     const g = new ResolutionGovernor({ max: 1.5, min: 0.6 });
     expect(g.pixelRatio).toBe(1.5);
-    run(g, 30, 2);
+    expect(g.shadowInterval).toBe(1);
+    run(g, 30, 1.6);
+    expect(g.shadowInterval).toBe(2);
+    expect(g.pixelRatio).toBe(1.5);
+    run(g, 30, 1.6);
     expect(g.pixelRatio).toBeLessThan(1.5);
     run(g, 20, 30);
     expect(g.pixelRatio).toBe(0.6);
@@ -72,11 +76,23 @@ describe('ResolutionGovernor', () => {
     const g = new ResolutionGovernor({ max: 1.5 });
     run(g, 60, 30);
     expect(g.pixelRatio).toBe(1.5);
+    expect(g.shadowInterval).toBe(1);
+  });
+
+  it('chậm thoáng qua: chỉ bật bóng đổ cách khung, mượt lại lâu thì bật lại mọi khung', () => {
+    const g = new ResolutionGovernor({ max: 1.5 });
+    run(g, 40, 1.6);
+    expect(g.shadowInterval).toBe(2);
+    expect(g.pixelRatio).toBe(1.5);
+    run(g, 60, 10);
+    expect(g.shadowInterval).toBe(2); // còn trong 20 giây giữ nấc
+    run(g, 60, 20);
+    expect(g.shadowInterval).toBe(1);
   });
 
   it('mượt trở lại thì nâng dần, nhưng không nâng ngay lên mức vừa bị chậm', () => {
     const g = new ResolutionGovernor({ max: 1.5, min: 0.5 });
-    run(g, 35, 1.6);
+    run(g, 35, 3.1);
     const dropped = g.pixelRatio;
     expect(dropped).toBeLessThan(1.5);
     run(g, 60, 10);

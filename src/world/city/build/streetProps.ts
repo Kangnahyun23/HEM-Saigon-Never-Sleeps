@@ -15,9 +15,9 @@ function buildPoles(ctx: BuildContext): void {
   const poleGeo = new THREE.CylinderGeometry(0.1, 0.17, 1, 6).translate(0, 0.5, 0);
   const poles = new InstanceBatch(poleGeo, concrete, { name: 'poles' });
   const dark = new THREE.MeshStandardNodeMaterial({ roughness: 0.7 });
-  const hardware = new InstanceBatch(GEO.box, dark, { colors: true, name: 'pole-hardware' });
+  const hardware = new InstanceBatch(GEO.box, dark, { colors: true, castShadow: false, name: 'pole-hardware' });
   const coilGeo = new THREE.TorusGeometry(0.32, 0.07, 5, 10);
-  const coils = new InstanceBatch(coilGeo, dark, { colors: true, name: 'cable-coils' });
+  const coils = new InstanceBatch(coilGeo, dark, { colors: true, castShadow: false, name: 'cable-coils' });
   const transformers = new InstanceBatch(GEO.cyl, new THREE.MeshStandardNodeMaterial({ color: '#7d8287', roughness: 0.5, metalness: 0.5 }), {
     name: 'transformers',
   });
