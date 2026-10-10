@@ -1,14 +1,15 @@
+import { mixer } from './mixer';
+
 /** Tiếng mưa rào: nhiễu trắng lọc thông thấp, to nhỏ theo cường độ mưa. Im lặng tới khi người chơi tương tác. */
 export class RainSound {
-  private ctx: AudioContext | null = null;
   private gain: GainNode | null = null;
 
   update(rain: number): void {
-    if (!this.ctx) {
-      if (rain < 0.02 || !navigator.userActivation?.hasBeenActive) return;
+    if (!this.gain) {
+      if (rain < 0.02) return;
+      const ctx = mixer.context();
+      if (!ctx) return;
       try {
-        this.ctx = new AudioContext();
-        const ctx = this.ctx;
         const len = ctx.sampleRate * 2;
         const buf = ctx.createBuffer(1, len, ctx.sampleRate);
         const data = buf.getChannelData(0);
@@ -21,13 +22,13 @@ export class RainSound {
         filter.frequency.value = 1800;
         this.gain = ctx.createGain();
         this.gain.gain.value = 0;
-        src.connect(filter).connect(this.gain).connect(ctx.destination);
+        src.connect(filter).connect(this.gain).connect(mixer.bus());
         src.start();
       } catch {
         return;
       }
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
-    this.gain?.gain.setTargetAtTime(rain * 0.14, this.ctx.currentTime, 0.4);
+    const ctx = mixer.context();
+    if (ctx) this.gain.gain.setTargetAtTime(rain * 0.14, ctx.currentTime, 0.4);
   }
 }

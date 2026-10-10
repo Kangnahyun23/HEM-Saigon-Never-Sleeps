@@ -44,7 +44,7 @@ test('cài đặt: chất lượng thấp, hiện FPS, độ nhạy chuột — 
   await page.locator('[data-sens="0.1"]').click();
   await tick(page);
   await expect(page.locator('.seg [data-quality="low"]')).toHaveClass(/on/);
-  await expect(page.locator('.stepper b')).toHaveText('1.1');
+  await expect(page.locator('[data-sensitivity]')).toHaveText('1.1');
   await expect(page.locator('.hud-perf')).toBeVisible();
   const low = await graphics(page);
   expect(low.pixelRatio).toBe(0.75);

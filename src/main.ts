@@ -138,6 +138,7 @@ async function main(): Promise<void> {
     city.setDetailScale(profile.detailScale);
     fpsBox.hidden = !(s.showFps || fpsParam);
     game.setLookOptions(s.mouseSensitivity, s.invertY);
+    game.setVolume(s.volume);
   };
   applySettings(settings);
   hud.phone?.setHardware(`${shortGpuName(hardware.gpu)} · ${hardware.cores || '?'} luồng CPU`, autoTier, sceneTier(settings.quality, autoTier));

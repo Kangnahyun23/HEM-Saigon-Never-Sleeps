@@ -30,6 +30,10 @@ import { PAD_HEIGHT } from '@/world/city/layout';
 import { locate } from '@/world/city/locate';
 import type { Environment } from '@/world/environment';
 import { RainSound } from '@/audio/rainSound';
+import { Ambience } from '@/audio/ambience';
+import { EngineSound } from '@/audio/engineSound';
+import { mixer } from '@/audio/mixer';
+import { playSfx } from '@/audio/sfx';
 import { wetUniform } from '@/world/nightGlow';
 import { Rain } from '@/world/rain';
 import { SCENE_BUDGETS, type SceneBudget } from '@/systems/hardware';
@@ -39,6 +43,8 @@ import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 const STEP = 1 / 60;
 const MOUNT_RANGE = 2.4;
 const DISMOUNT_MAX_SPEED = 4;
+/** Xe đang đậu: không ga, phanh tay (dùng chung, không tạo đối tượng mỗi bước). */
+const PARKED: BikeControls = { ...NO_CONTROL, handbrake: true };
 
 interface Bike {
   phys: MotorbikePhysics;
@@ -61,6 +67,13 @@ export class Game {
   readonly weather: WeatherSim;
   private readonly rain: Rain;
   private readonly rainSound = new RainSound();
+  private readonly engineSound = new EngineSound();
+  private readonly ambience = new Ambience();
+  /** Ga đang bóp (cho tiếng máy), tiền / Độ Nóng lần trước (để phát âm báo khi đổi). */
+  private throttle = 0;
+  private lastCash = -1;
+  private lastHeat = 0;
+  private ambienceTimer = 0;
   readonly wallet = new Wallet();
   readonly inbox = new Inbox();
   readonly missions: MissionDirector;
@@ -88,6 +101,8 @@ export class Game {
   private locateTimer = 0;
   /** Điều khiển giả lập từ test (ghi đè bàn phím). */
   autopilot: Partial<BikeControls> | null = null;
+  /** Điều khiển xe dùng lại mỗi bước (không tạo đối tượng mới). */
+  private readonly controls: BikeControls = { ...NO_CONTROL };
   /** Camera do debug/test điều khiển, game không đụng tới. */
   freeCamera = false;
 
@@ -121,6 +136,7 @@ export class Game {
     this.inbox.onMessage = (_m, contact) => {
       this.hud.phone?.invalidate();
       if (!this.hud.phone?.open) this.hud.showToast(`Tin nhắn mới: ${contact}`, 2.4);
+      playSfx('message');
     };
     this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
     this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
@@ -204,6 +220,31 @@ export class Game {
     this.chase.sim.disperse();
     this.hud.showToast(lost > 0 ? `Bị chặn đầu! Mất ${formatVnd(lost)}` : 'Bị chặn đầu! May mà túi rỗng', 3);
     this.schedule(3, () => this.inbox.receive('Phát CEO', 'Chạy đâu cho thoát hả tài xế? Lo mà trả nợ đúng hạn đi.', this.clock.hour));
+  }
+
+  /** Tiếng máy xe, tiếng phố, âm báo tiền vào / ra và bị truy đuổi. */
+  private updateSounds(dt: number): void {
+    const p = this.riding?.phys;
+    this.engineSound.update(this.mode === 'ride' && !!p, p ? p.speed : 0, this.throttle);
+    this.ambienceTimer -= dt;
+    if (this.ambienceTimer <= 0) {
+      // Nửa giây một lần: đếm xe NPC trong 60 m quanh người chơi.
+      this.ambienceTimer = 0.5;
+      const me = this.riding ? this.riding.view.root.position : this.tmp.copy(this.character.feet());
+      let near = 0;
+      for (const a of this.traffic.sim.agents) if ((a.x - me.x) ** 2 + (a.z - me.z) ** 2 < 3600) near++;
+      this.ambience.update(this.clock.hour, this.weather.state.rain, near);
+    }
+    const cash = this.wallet.cash;
+    if (this.lastCash >= 0 && cash !== this.lastCash) playSfx(cash > this.lastCash ? 'money' : 'lose');
+    this.lastCash = cash;
+    if (this.heat.level > this.lastHeat) playSfx('alert');
+    this.lastHeat = this.heat.level;
+  }
+
+  /** Âm lượng tổng từ cài đặt (0…1). */
+  setVolume(volume: number): void {
+    mixer.setVolume(volume);
   }
 
   /** Độ nhạy chuột / đảo trục dọc từ cài đặt. */
@@ -336,6 +377,7 @@ export class Game {
     if (input.wheel) this.camera.addZoom(input.wheel);
     if (input.wasPressed('Tab')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
+    if (input.wasPressed('KeyM')) this.hud.showToast(mixer.toggleMute() ? 'Đã tắt tiếng (M)' : 'Đã bật tiếng (M)', 1.4);
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
 
     // Điện thoại: P bật/tắt, Esc cất, 1–4 đổi tab.
@@ -433,6 +475,7 @@ export class Game {
       if (this.heat.update(STEP, this.chase.sim.seen)) {
         this.chase.sim.disperse();
         this.hud.showToast('Cắt đuôi thành công!', 2.4);
+        playSfx('escaped');
       }
       for (const h of this.traffic.sim.honks) {
         const d = Math.hypot(h.x - me.x, h.z - me.z);
@@ -447,14 +490,14 @@ export class Game {
       }
       for (const b of this.bikes) {
         if (b === this.riding) {
-          const controls: BikeControls = {
-            throttle: this.autopilot?.throttle ?? fwd,
-            steer: this.autopilot?.steer ?? -strafe,
-            handbrake: this.autopilot?.handbrake ?? input.isDown('Space'),
-          };
+          const controls = this.controls;
+          controls.throttle = this.autopilot?.throttle ?? fwd;
+          controls.steer = this.autopilot?.steer ?? -strafe;
+          controls.handbrake = this.autopilot?.handbrake ?? input.isDown('Space');
+          this.throttle = Math.max(0, controls.throttle);
           b.phys.update(STEP, controls);
         } else {
-          b.phys.update(STEP, { ...NO_CONTROL, handbrake: true });
+          b.phys.update(STEP, PARKED);
         }
       }
       this.physics.step();
@@ -465,6 +508,7 @@ export class Game {
       // Đâm xe: tốc độ tụt đột ngột ⇒ văng khỏi xe.
       if (this.riding && this.riding.phys.impact > 7) {
         this.hud.showToast('Ui da! Té xe rồi…');
+        playSfx('crash');
         this.dismount(true);
       }
     }
@@ -508,6 +552,7 @@ export class Game {
       speedKmh = p.speed * 3.6;
     }
     this.hud.setSpeed(speedKmh);
+    this.updateSounds(dt);
 
     // Camera.
     if (this.freeCamera) {

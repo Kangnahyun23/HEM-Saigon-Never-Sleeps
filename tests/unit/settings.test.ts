@@ -20,19 +20,22 @@ describe('cài đặt', () => {
     const store = new MemoryStore();
     const s = new SettingsStore(store);
     expect(s.load()).toEqual(DEFAULT_SETTINGS);
-    expect(s.save({ quality: 'low', showFps: true, mouseSensitivity: 1.6, invertY: true })).toBe(true);
-    expect(s.load()).toEqual({ quality: 'low', showFps: true, mouseSensitivity: 1.6, invertY: true });
+    expect(s.save({ quality: 'low', showFps: true, mouseSensitivity: 1.6, invertY: true, volume: 0.3 })).toBe(true);
+    expect(s.load()).toEqual({ quality: 'low', showFps: true, mouseSensitivity: 1.6, invertY: true, volume: 0.3 });
     expect(store.data.has(SETTINGS_KEY)).toBe(true);
   });
 
   it('dữ liệu hỏng: trường nào sai thì trường đó về mặc định', () => {
     expect(parseSettings('{hỏng')).toEqual(DEFAULT_SETTINGS);
-    expect(parseSettings(JSON.stringify({ quality: 'ultra', showFps: 'có', mouseSensitivity: 99, invertY: true }))).toEqual({
+    expect(parseSettings(JSON.stringify({ quality: 'ultra', showFps: 'có', mouseSensitivity: 99, invertY: true, volume: 7 }))).toEqual({
       quality: 'auto',
       showFps: false,
       mouseSensitivity: 2.5,
       invertY: true,
+      volume: 1,
     });
+    // Bản cài đặt cũ chưa có âm lượng: lấy mặc định.
+    expect(parseSettings(JSON.stringify({ quality: 'low' })).volume).toBe(0.8);
     expect(parseSettings(JSON.stringify({ quality: 'medium' })).quality).toBe('medium');
   });
 

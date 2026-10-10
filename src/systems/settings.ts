@@ -16,11 +16,13 @@ export interface Settings {
   mouseSensitivity: number;
   /** Đảo trục dọc khi xoay camera. */
   invertY: boolean;
+  /** Âm lượng tổng 0…1 (0 = tắt tiếng). */
+  volume: number;
 }
 
 export const SETTINGS_KEY = 'hem.settings.v1';
 
-export const DEFAULT_SETTINGS: Readonly<Settings> = { quality: 'auto', showFps: false, mouseSensitivity: 1, invertY: false };
+export const DEFAULT_SETTINGS: Readonly<Settings> = { quality: 'auto', showFps: false, mouseSensitivity: 1, invertY: false, volume: 0.8 };
 
 export const QUALITY_LABELS: Record<Quality, string> = { auto: 'Tự động', low: 'Thấp', medium: 'Vừa', high: 'Cao' };
 
@@ -30,6 +32,9 @@ export const SENSITIVITY_MAX = 2.5;
 const QUALITIES: readonly Quality[] = ['auto', 'low', 'medium', 'high'];
 
 export const clampSensitivity = (v: number): number => Math.round(Math.min(SENSITIVITY_MAX, Math.max(SENSITIVITY_MIN, v)) * 10) / 10;
+
+/** Âm lượng làm tròn theo nấc 10 %, trong 0…1. */
+export const clampVolume = (v: number): number => Math.round(Math.min(1, Math.max(0, v)) * 10) / 10;
 
 /** Đọc cài đặt; trường thiếu / sai kiểu thì lấy mặc định từng trường (không bỏ cả bản). */
 export function parseSettings(text: string | null): Settings {
@@ -47,6 +52,7 @@ export function parseSettings(text: string | null): Settings {
   if (typeof s.showFps === 'boolean') out.showFps = s.showFps;
   if (typeof s.mouseSensitivity === 'number' && Number.isFinite(s.mouseSensitivity)) out.mouseSensitivity = clampSensitivity(s.mouseSensitivity);
   if (typeof s.invertY === 'boolean') out.invertY = s.invertY;
+  if (typeof s.volume === 'number' && Number.isFinite(s.volume)) out.volume = clampVolume(s.volume);
   return out;
 }
 
