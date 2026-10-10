@@ -3,7 +3,7 @@
 *HẺM: Saigon Never Sleeps* — game hành động thế giới mở góc nhìn thứ 3 trên trình duyệt. Bạn là Tín, tài xế xe ôm công nghệ
 bị cuốn vào vòng nợ tín dụng đen, lách xe máy qua phố đông và những con hẻm chằng chịt của một Sài Gòn hư cấu.
 
-> Trạng thái: **M3 — nhiệm vụ + truy đuổi** (chơi được trọn Hồi 1). Một khu phố hư cấu ~520 × 440 m (1.600+ nhà ống,
+> Trạng thái: **M4 — hoàn thiện** (chơi được trọn Hồi 1, có âm thanh, chạy vừa sức máy, có bản demo cho itch.io). Một khu phố hư cấu ~520 × 440 m (1.600+ nhà ống,
 > mạng hẻm, chợ có tháp đồng hồ, công viên, bờ sông) đông xe máy, người đi bộ đội nón lá, có ngày đêm và mưa rào.
 > Tín chạy kèo giao hàng qua điện thoại để trả nợ app vay, luồn hẻm cắt đuôi đàn em của Phát, đi hết 5 nhiệm vụ Hồi 1.
 > Game tự lưu.
@@ -52,6 +52,28 @@ Cũng trong Cài đặt: **Hiện FPS** (số khung hình/giây, tỉ lệ đi�
 Cài đặt được lưu lại (chơi lại từ đầu bằng `?moi=1` vẫn giữ). Laptop có hai card đồ hoạ: chọn trình duyệt chạy bằng
 card rời (Windows: Cài đặt → Hiển thị → Đồ hoạ). Chrome/Edge bản mới chạy WebGPU nhanh hơn Firefox/Safari (đang phải
 lùi về WebGL2).
+
+## Bản demo trên itch.io
+Game là trang web tĩnh nên lên itch.io dạng **HTML** (chơi ngay trong trình duyệt). Lấy file zip bằng một trong hai cách:
+- **Tự đóng gói:** `npm run package` → `release/hem-saigon-v<phiên bản>-web.zip` (build, kiểm tra theo giới hạn của
+  itch.io: có `index.html` ở gốc, ≤ 1000 file, đường dẫn tương đối, rồi nén — khoảng 2 MB).
+- **Lấy từ CI:** GitHub → tab **Actions** → lần chạy CI mới nhất trên `main` → mục **Artifacts** → `hem-saigon-web-zip`.
+  GitHub bọc thêm một lớp zip bên ngoài: giải nén lớp đó ra, lấy file `hem-saigon-v…-web.zip` bên trong để tải lên.
+
+Tải lên lần đầu (itch.io → **Dashboard** → **Create new project**):
+1. **Kind of project:** `HTML`.
+2. **Uploads:** chọn file zip ở trên, tick **This file will be played in the browser**.
+3. **Embed options:** kích thước `1280 × 720`, tick **Fullscreen button**; không cần tick *SharedArrayBuffer support*.
+4. **Visibility:** để `Draft` chơi thử trước, ổn rồi chuyển `Public`.
+
+Đã kiểm tra bản zip chạy trong iframe khác tên miền ở thư mục con (giống cách itch.io nhúng game): tải được, lưu game được,
+phím Space / mũi tên không cuộn trang itch.io bên ngoài. Bấm vào khung game một lần để game nhận phím và chuột.
+
+**Tự đẩy bản mới lên itch.io (tuỳ chọn):** tạo API key ở itch.io → Settings → **API keys**; trong repo GitHub → Settings →
+**Secrets and variables → Actions** thêm secret `BUTLER_API_KEY` (key vừa tạo) và biến `ITCH_TARGET`
+(dạng `ten-ban/ten-game:web`). Từ đó mỗi lần merge vào `main` mà CI xanh, CI tự đẩy bản mới bằng
+[butler](https://itch.io/docs/butler/). Lần đầu đẩy xong, vào trang sửa game tick **This file will be played in the browser**
+cho bản tải lên kênh `web`.
 
 ## Công nghệ
 TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics · Vitest · Playwright.
