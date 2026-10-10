@@ -46,8 +46,10 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 - Logic thuần (không DOM/WebGL) phải có unit test trong `tests/unit/`.
 - `window.__HEM__` chỉ để test/debug, không dùng trong logic game.
 - Code và tên biến bằng tiếng Anh; comment, text hiển thị và tài liệu bằng tiếng Việt.
-- Tên khu, đường, thương hiệu trong game đều hư cấu. Không dùng asset/nhạc có bản quyền; chỉ CC0 hoặc tự làm.
-- Nội dung: đối kháng phong cách hoạt hình, không máu, không súng trong MVP (xem mục Rủi ro trong GDD).
+- Tên khu, đường, thương hiệu trong game đều hư cấu. Không dùng asset/nhạc có bản quyền; chỉ CC0 hoặc tự làm
+  (không Mixamo, không Quaternius bản QAL); asset nhập ngoài phải ghi nguồn trong CREDITS.md.
+- Nội dung: v0.1 không máu; từ v0.2 cận chiến có máu nhẹ (tắt được trong Cài đặt), nhãn 18+, không súng (xem mục Rủi ro trong GDD).
+- Kế hoạch đang làm: `docs/plan-v0.2.md` — làm theo thứ tự N1 → N10, mỗi mục một PR nhỏ.
 
 ## Cấu trúc
 ```
