@@ -168,6 +168,14 @@ export class Hud {
     return this.minimap;
   }
 
+  /** Ô hiển thị số khung hình / giây (bật bằng ?fps=1). */
+  createPerfBox(): HTMLElement {
+    const box = document.createElement('div');
+    box.className = 'hud-perf';
+    this.root.appendChild(box);
+    return box;
+  }
+
   /** Giờ trong game, dạng "HH:MM". */
   setClock(label: string): void {
     if (label === this.lastClock) return;

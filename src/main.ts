@@ -3,6 +3,7 @@ import { Input } from '@/core/input';
 import { Game } from '@/game/game';
 import { createPhysics } from '@/physics/physics';
 import { createRenderer } from '@/render/renderer';
+import { ResolutionGovernor } from '@/render/resolution';
 import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { Hud } from '@/ui/hud';
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
   const hudRoot = document.getElementById('hud') as HTMLElement;
   const loading = document.getElementById('loading') as HTMLElement;
 
-  const [{ renderer, backend }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
+  const [{ renderer, backend, maxPixelRatio }, physics] = await Promise.all([createRenderer(app), createPhysics()]);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2500);
@@ -54,6 +55,7 @@ async function main(): Promise<void> {
     },
   };
   debug.layout = city.layout;
+  debug.renderer = renderer;
   debug.game = game;
   /** Chạy nhanh logic game (không render) — cho test e2e trên máy không GPU. */
   debug.simulate = (seconds: number) => {
@@ -89,11 +91,31 @@ async function main(): Promise<void> {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  // Tự hạ / nâng độ phân giải theo sức máy. Chạy tự động (Playwright) thì giữ cố định để ảnh chụp so sánh được.
+  const resolution = navigator.webdriver ? null : new ResolutionGovernor({ max: maxPixelRatio, min: Math.min(0.6, maxPixelRatio) });
+  // ?fps=1: hiện số khung hình / giây, tỉ lệ điểm ảnh và số lệnh vẽ (để báo lỗi giật lag).
+  const fpsBox = new URLSearchParams(location.search).get('fps') === '1' ? hud.createPerfBox() : null;
+  let fpsTime = 0;
+  let fpsFrames = 0;
+
   renderer.setAnimationLoop((time) => {
     timer.update(time);
-    const dt = Math.min(timer.getDelta(), 0.1);
+    const raw = timer.getDelta();
+    const dt = Math.min(raw, 0.1);
     if (!debug.paused) game.update(dt);
+    if (resolution?.sample(raw)) renderer.setPixelRatio(resolution.pixelRatio);
+    city.updateDetail(camera.position);
     renderer.render(scene, camera);
+    if (fpsBox) {
+      fpsTime += raw;
+      fpsFrames++;
+      if (fpsTime >= 0.5) {
+        const info = renderer.info.render;
+        fpsBox.textContent = `${Math.round(fpsFrames / fpsTime)} fps · ${renderer.getPixelRatio().toFixed(2)}× · ${info.drawCalls} lệnh vẽ · ${Math.round(info.triangles / 1000)}k tam giác · ${backend}`;
+        fpsTime = 0;
+        fpsFrames = 0;
+      }
+    }
     hud.update(dt);
     input.endFrame();
     debug.frames++;
