@@ -4,10 +4,12 @@ import { Input } from '@/core/input';
 import { loadFonts } from '@/ui/fonts';
 import { Game } from '@/game/game';
 import { createPhysics } from '@/physics/physics';
+import { NightBloom } from '@/render/bloom';
 import { createRenderer } from '@/render/renderer';
 import { ResolutionGovernor } from '@/render/resolution';
 import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
+import { nightUniform } from '@/world/nightGlow';
 import { Hud } from '@/ui/hud';
 import { SaveSlot } from '@/systems/save';
 import { detectTier, probeHardware, SCENE_BUDGETS, shortGpuName, TIER_LABELS, type Tier } from '@/systems/hardware';
@@ -138,6 +140,9 @@ async function main(): Promise<void> {
   /** Chất lượng tự động (chỉ ở mức "Tự động"). Chạy tự động (Playwright) thì tắt để ảnh chụp so sánh được. */
   let resolution: ResolutionGovernor | null = null;
   let lowHintShown = false;
+  // Bloom ban đêm (neon, LED, hộp đèn): ?bloom=0 để tắt khi so hiệu năng.
+  const bloom = new NightBloom(renderer, scene, camera);
+  const bloomParam = new URLSearchParams(location.search).get('bloom');
   const applySettings = (s: Settings): void => {
     const profile = qualityProfile(s.quality, window.devicePixelRatio, autoTier);
     resolution =
@@ -148,6 +153,7 @@ async function main(): Promise<void> {
     env.setShadowInterval(1);
     env.setShadows(profile.shadows);
     city.setDetailScale(profile.detailScale);
+    bloom.setScale(bloomParam === '0' ? 0 : profile.bloom);
     fpsBox.hidden = !(s.showFps || fpsParam);
     game.setLookOptions(s.mouseSensitivity, s.invertY);
     game.setVolume(s.volume);
@@ -182,7 +188,7 @@ async function main(): Promise<void> {
     }
     city.updateDetail(camera.position);
     const firstFrame = debug.frames === 0 ? performance.now() : 0;
-    renderer.render(scene, camera);
+    if (!bloom.render(nightUniform.value)) renderer.render(scene, camera);
     // Khung hình đầu biên dịch toàn bộ shader — thường là bước tải lâu nhất.
     if (firstFrame) {
       timings.firstFrame = Math.round(performance.now() - firstFrame);
@@ -195,7 +201,8 @@ async function main(): Promise<void> {
       if (fpsTime >= 0.5) {
         const info = renderer.info.render;
         const shadow = resolution?.shadowInterval === 2 ? ' · bóng ½' : '';
-        fpsBox.textContent = `${Math.round(fpsFrames / fpsTime)} fps · ${renderer.getPixelRatio().toFixed(2)}×${shadow} · ${info.drawCalls} lệnh vẽ · ${Math.round(info.triangles / 1000)}k tam giác · ${backend}`;
+        const glow = bloom.active ? ' · bloom' : '';
+        fpsBox.textContent = `${Math.round(fpsFrames / fpsTime)} fps · ${renderer.getPixelRatio().toFixed(2)}×${shadow}${glow} · ${info.drawCalls} lệnh vẽ · ${Math.round(info.triangles / 1000)}k tam giác · ${backend}`;
         fpsTime = 0;
         fpsFrames = 0;
       }

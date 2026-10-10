@@ -273,7 +273,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   // Tiệm còn mở ban đêm: phòng sáng đèn (tuýp trắng xanh hoặc vàng ấm), đèn tuýp trên trần sáng rực, bàn thờ đỏ.
   const roomLight = mix(vec3(1.0, 0.84, 0.6), vec3(0.88, 0.96, 1.0), hash(seed.mul(53)));
   // Nhà trong hẻm: phòng khách đèn dịu hơn tiệm mặt đường.
-  const shopLit = roomColor.mul(roomLight).mul(mix(float(0.62), float(0.3), hd.div(roomD.add(0.5)).clamp(0, 1))).mul(select(hemHouse, float(0.3), float(1))).add(select(tube.and(hitBack.or(hitSide).or(hitFloor).not()), vec3(0.8, 0.8, 0.8), vec3(0, 0, 0)));
+  const shopLit = roomColor.mul(roomLight).mul(mix(float(0.5), float(0.26), hd.div(roomD.add(0.5)).clamp(0, 1))).mul(select(hemHouse, float(0.3), float(1))).add(select(tube.and(hitBack.or(hitSide).or(hitFloor).not()), vec3(0.8, 0.8, 0.8), vec3(0, 0, 0)));
   const shopGlow = select(isShop.and(shutterClosed.not()), select(altar, vec3(1.0, 0.12, 0.08), shopLit).mul(mix(float(0.35), float(1), grazing)), vec3(0, 0, 0));
   const lobbyGlow = select(isLobby, vec3(0.9, 0.85, 0.7).mul(0.7), vec3(0, 0, 0));
   const glow = select(roof, vec3(0, 0, 0), select(lit, windowGlow, shopGlow.add(lobbyGlow)));

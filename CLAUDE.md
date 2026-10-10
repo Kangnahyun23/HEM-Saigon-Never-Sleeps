@@ -23,7 +23,7 @@ npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → pha
 ```
 Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
 (chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do), `__HEM__.setHour(21)` (đổi giờ).
-Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ. `__HEM__.settings()` = cài đặt hiện tại.
+Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ, `?bloom=0` tắt bloom ban đêm (so hiệu năng). `__HEM__.settings()` = cài đặt hiện tại.
 Asset nhập ngoài: thêm dòng vào `SOURCES` (scripts/assets.mjs) rồi `npm run assets`; file nén trong `public/media/` có commit
 (ngân sách `MEDIA_BUDGET` 25 MB, test `assets.test.ts` kiểm tra), bản gốc chỉ ở `.cache/assets/`. Code lấy texture bằng
 `getTextures(id)` (src/assets/textures.ts) — luôn có đường lùi về vẽ thủ tục khi ảnh chưa tải được.
@@ -31,6 +31,8 @@ Hiệu năng: chi tiết nhỏ mới thì thêm tên lô vào `DETAIL_DISTANCE` 
 Vòng lặp mỗi khung hình KHÔNG tạo đối tượng / mảng / closure mới (dùng lại biến tạm) — rác bộ nhớ gây khựng khi trình duyệt dọn.
 Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `world.step()` (Rapier 0.21 duyệt lại mọi collider, ~300 KB rác/bước).
 Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ.
+Thuộc tính instance tới fragment qua nội suy: số nguyên có thể thành 0,9999… ⇒ giải mã bằng ngưỡng, đừng `fract()` đúng tại số nguyên.
+`material.positionNode` được gán SAU bước instancing (ghi đè cả phần dịch của instance).
 KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % thời gian vẽ): vật liệu kim loại / mặt nước cần phản chiếu
 thì bọc `reflective(mat)` (world/reflections.ts); ánh sáng nền thay IBL là đèn `envFill` trong environment.ts.
 Đo GPU trên máy không GPU: đổi vật liệu / đèn xong phải `await renderer.compileAsync()` rồi mới đo — three.js bỏ qua
@@ -65,7 +67,8 @@ src/
   physics/           Rapier: physics.ts (stepWorld — bước không tạo rác), groups.ts (nhóm va chạm), staticWorld.ts (vật cản tĩnh)
   render/            renderer (WebGPU→WebGL2, tối đa 1,5× điểm ảnh), instancing.ts (InstanceBatch),
                      resolution (chất lượng tự động theo FPS: bóng đổ cách khung → hạ độ phân giải), detailCulling (chi tiết nhỏ chỉ vẽ quanh camera),
-                     merge (gộp khối tĩnh cùng vật liệu: xe, nhân vật, công trình) — đều có unit test
+                     merge (gộp khối tĩnh cùng vật liệu: xe, nhân vật, công trình) — đều có unit test,
+                     bloom (NightBloom: hậu kỳ chỉ chạy lúc tối, tắt ở mức Thấp — QualityProfile.bloom)
   world/
     environment.ts   bầu trời SkyMesh + vòm trời đêm, nắng/trăng + bóng đổ bám điểm nhìn, đèn bù sáng envFill, sương; setLighting()
     reflections.ts   ảnh bầu trời (PMREM) chỉ cho vật liệu cần phản chiếu: reflective(mat)
@@ -75,8 +78,12 @@ src/
     rain.ts          hạt mưa quanh camera tính trên GPU (1 draw call)
     city/layout.ts   BỐ CỤC thuần dữ liệu (đường, block, hẻm, lô nhà, cột điện, cây…) — có unit test
     city/locate.ts   tên địa điểm tại (x, z) cho HUD
-    city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng…), vỉa hè, bê tông hẻm, nhựa đường
-    city/build/*     dựng hình + va chạm từ bố cục: ground, buildings, streetProps, landmarks, lightPools (vũng đèn đường)
+    city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng + nội thất giả, cửa cuốn theo giờ…), vỉa hè, bê tông hẻm, nhựa đường
+    city/signage.ts  nội dung bảng hiệu / băng rôn / câu LED (thuần logic, có unit test); signs.ts vẽ atlas
+    city/hemDetails.ts  miệng hẻm, số hẻm, vị trí cửa nhà trong hẻm (thuần logic, có unit test)
+    city/nightMaterials.ts  bảng LED chạy chữ, vũng đèn tiệm hắt ra vỉa hè, vệt bảng hiệu phản chiếu trên đường ướt
+    city/build/*     dựng hình + va chạm từ bố cục: ground, buildings, streetProps, hems (đời sống trong hẻm), landmarks,
+                     lightPools (vũng đèn đường), nightStreet (đèn tiệm + phản chiếu đường ướt)
   player/            characterBody (Rapier character controller), characterModel (hoạt hoạ thủ tục),
                      followCamera (góc nhìn 3, chống xuyên tường)
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView

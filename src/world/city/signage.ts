@@ -237,3 +237,50 @@ export function vCellPx(j: number): [number, number] {
 export function cellUv(px: readonly [number, number], size: readonly [number, number], inset = 0): [number, number, number, number] {
   return [(px[0] + inset) / ATLAS_SIZE, 1 - (px[1] + size[1] - inset) / ATLAS_SIZE, (size[0] - 2 * inset) / ATLAS_SIZE, (size[1] - 2 * inset) / ATLAS_SIZE];
 }
+
+// ---- Bảng LED chạy chữ -----------------------------------------------------------------------------------------
+/** Câu chạy trên bảng LED trước tiệm (hư cấu; dòng cuối là quảng cáo app vay của Phát). */
+export const LED_MESSAGES: readonly string[] = [
+  'CHÀO MỪNG QUÝ KHÁCH',
+  'MỞ CỬA 24/24',
+  'SALE 50% TOÀN BỘ CỬA HÀNG',
+  'CÓ WIFI MIỄN PHÍ',
+  'NHẬN SHIP TẬN NƠI',
+  'MUA 1 TẶNG 1',
+  'XẢ KHO GIÁ GỐC',
+  'THU MUA ĐIỆN THOẠI CŨ GIÁ CAO',
+  'CẮT TÓC NAM 40K',
+  'TUYỂN NHÂN VIÊN BÁN HÀNG',
+  'SIM SỐ ĐẸP GIÁ RẺ',
+  'NẠP CARD · THU HỘ TIỀN ĐIỆN NƯỚC',
+  'HÀNG MỚI VỀ',
+  'GIẢM GIÁ CỰC SỐC',
+  'SỬA ĐIỆN THOẠI LẤY LIỀN',
+  'TRÀ SỮA MUA 2 TẶNG 1',
+  'VAY LIỀN 5S · KHÔNG CẦN THẾ CHẤP',
+];
+
+/** Màu LED hay gặp: đỏ, hổ phách, xanh lá, trắng xanh. */
+export const LED_COLORS: readonly string[] = ['#ff2a1a', '#ffb31a', '#2bff5a', '#9fd8ff'];
+
+/** Số hàng điểm LED theo chiều cao bảng (đủ chỗ cho dấu tiếng Việt trên chữ hoa). */
+export const LED_ROWS = 16;
+/** Atlas chữ LED: mỗi câu một dải cao LED_ROWS px, rộng tối đa LED_ATLAS_W px (1 px = 1 điểm LED). */
+export const LED_ATLAS_W = 1024;
+
+export interface LedDesign {
+  /** Chỉ số câu trong LED_MESSAGES. */
+  readonly message: number;
+  readonly color: number;
+  /** Tốc độ chạy chữ (điểm LED / giây). */
+  readonly speed: number;
+}
+
+export function designLed(rng: Rng): LedDesign {
+  return {
+    message: Math.floor(rng() * LED_MESSAGES.length),
+    // Đỏ phổ biến nhất.
+    color: rng() < 0.45 ? 0 : 1 + Math.floor(rng() * (LED_COLORS.length - 1)),
+    speed: 14 + Math.floor(rng() * 14),
+  };
+}

@@ -26,6 +26,22 @@ export interface BuildContext {
   pad: number;
   /** Đèn (đường, chợ…) để bật lúc tối ở M2. */
   lamps: THREE.Vector3[];
+  /** Tiệm mặt đường (buildBuildings điền) — cho vũng đèn hắt ra vỉa hè và bảng hiệu phản chiếu trên đường ướt. */
+  shopFronts: ShopFront[];
+}
+
+export interface ShopFront {
+  /** Giữa chân mặt tiền (m) và yaw: trục +Z cục bộ trỏ ra đường. */
+  x: number;
+  z: number;
+  yaw: number;
+  width: number;
+  /** Seed lô như aInfo.y của mặt tiền (0..1) — để biết tiệm đang mở hay kéo cửa. */
+  seed: number;
+  /** Bề rộng vỉa hè trước tiệm (m). */
+  sidewalk: number;
+  /** Bảng hiệu tự sáng (màu chính, độ sáng ban đêm, bề rộng) — null nếu không có / gần như tối. */
+  sign: { color: string; glow: number; width: number } | null;
 }
 
 export function addMesh(ctx: BuildContext, mesh: THREE.Object3D | null): void {

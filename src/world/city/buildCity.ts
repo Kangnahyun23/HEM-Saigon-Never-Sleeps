@@ -10,6 +10,7 @@ import { buildGround } from './build/ground';
 import { buildLandmarks } from './build/landmarks';
 import { buildLightPools } from './build/lightPools';
 import { buildHemLife } from './build/hems';
+import { buildNightStreet } from './build/nightStreet';
 import { buildStreetProps } from './build/streetProps';
 import { generateCity, PAD_HEIGHT, type CityLayout, type CityOptions } from './layout';
 
@@ -50,6 +51,7 @@ const DETAIL_DISTANCE: Record<string, number> = {
   'hem-plants': 90,
   'hem-altars': 110,
   'hem-tarps': 140,
+  'led-signs': 150,
   'tree-limewash': 120,
   'water-tanks': 180,
   'roof-sheets': 160,
@@ -73,7 +75,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   const group = new THREE.Group();
   group.name = 'city';
   const statics = new StaticWorld(physics);
-  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [] };
+  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [] };
 
   buildGround(ctx);
   buildBuildings(ctx);
@@ -81,6 +83,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   buildHemLife(ctx);
   buildLandmarks(ctx);
   buildLightPools(ctx);
+  buildNightStreet(ctx);
 
   // Các khối lẻ của công trình (chợ, tháp đồng hồ, ghe…) cùng vật liệu gộp thành một mesh.
   mergeStaticMeshes(group);
