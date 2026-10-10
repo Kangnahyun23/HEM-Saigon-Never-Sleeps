@@ -1,6 +1,7 @@
 import type { Contact, Inbox } from '@/systems/inbox';
+import { playSfx } from '@/audio/sfx';
 import { TIER_LABELS, type Tier } from '@/systems/hardware';
-import { clampSensitivity, QUALITY_LABELS, sceneTier, type Quality, type Settings } from '@/systems/settings';
+import { clampSensitivity, clampVolume, QUALITY_LABELS, sceneTier, type Quality, type Settings } from '@/systems/settings';
 import { formatVnd, LENDER, type Wallet } from '@/systems/wallet';
 import type { Minimap } from './minimap';
 
@@ -109,6 +110,7 @@ export class Phone {
   }
 
   setOpen(open: boolean): void {
+    if (open !== this.open) playSfx(open ? 'phoneOpen' : 'phoneClose');
     this.open = open;
     this.root.hidden = !open;
     if (open) {
@@ -159,6 +161,8 @@ export class Phone {
     if (toggle?.dataset.toggle === 'invertY') next = { ...s, invertY: !s.invertY };
     const sens = el.closest('[data-sens]') as HTMLElement | null;
     if (sens) next = { ...s, mouseSensitivity: clampSensitivity(s.mouseSensitivity + Number(sens.dataset.sens)) };
+    const vol = el.closest('[data-vol]') as HTMLElement | null;
+    if (vol) next = { ...s, volume: clampVolume(s.volume + Number(vol.dataset.vol)) };
     if (!next) return;
     this.settings = next;
     this.onSettings?.(next);
@@ -247,8 +251,10 @@ export class Phone {
             .join('')}</div>
           <p class="muted small">${QUALITY_HINT[s.quality]}</p>${this.hardwareNote(s)}
           <button type="button" class="setting" data-toggle="showFps"><span>Hiện FPS</span>${onOff(s.showFps)}</button>
+          <h4>Âm thanh</h4>
+          <div class="setting"><span>Âm lượng <small class="muted">(M: tắt / bật tiếng)</small></span><span class="stepper"><button type="button" data-vol="-0.1">−</button><b data-volume>${Math.round(s.volume * 100)}%</b><button type="button" data-vol="0.1">+</button></span></div>
           <h4>Điều khiển</h4>
-          <div class="setting"><span>Độ nhạy chuột</span><span class="stepper"><button type="button" data-sens="-0.1">−</button><b>${s.mouseSensitivity.toFixed(1)}</b><button type="button" data-sens="0.1">+</button></span></div>
+          <div class="setting"><span>Độ nhạy chuột</span><span class="stepper"><button type="button" data-sens="-0.1">−</button><b data-sensitivity>${s.mouseSensitivity.toFixed(1)}</b><button type="button" data-sens="0.1">+</button></span></div>
           <button type="button" class="setting" data-toggle="invertY"><span>Đảo trục dọc</span>${onOff(s.invertY)}</button>
           <p class="muted small">Cài đặt được lưu lại cho lần chơi sau.</p>`;
       }

@@ -79,7 +79,10 @@ src/
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker
                      story (5 nhiệm vụ Hồi 1: điểm hẹn, lời thoại, trả nợ — có unit test), storyRunner
-  audio/             còi xe WebAudio
+  audio/             âm thanh tổng hợp WebAudio (không file): mixer (MỘT AudioContext + âm lượng, phím M), engineSound
+                     (tiếng máy theo tốc độ / ga), ambience (ồn phố, dế đêm), sfx (tiền, tin nhắn, nhiệm vụ, truy đuổi, té xe),
+                     horn, rainSound; soundModel (thông số âm thanh — thuần logic, có unit test).
+                     Âm thanh mới nối vào mixer.bus(), KHÔNG tạo AudioContext riêng.
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, gợi ý phím, thông báo), minimap (+ minimapMath có unit test)
                      phone (điện thoại phím P: Kèo, Bản đồ, Tin nhắn, Ví, Cài đặt)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
@@ -87,7 +90,7 @@ src/
                      settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
-tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings
+tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).

@@ -7,6 +7,7 @@ import type { CityLayout } from '@/world/city/layout';
 import { JobBoard } from './jobs';
 import { MissionMarker } from './marker';
 import { MissionRunner, type MissionContext, type MissionDef, type MissionEvent } from './mission';
+import { playSfx } from '@/audio/sfx';
 
 export interface StartOptions {
   /** Kèo giao hàng (lặp lại) hay nhiệm vụ cốt truyện. */
@@ -59,6 +60,7 @@ export class MissionDirector {
     this.activeOpts = opts;
     this.offers = this.offers.filter((o) => o.id !== def.id);
     this.hud.showToast(opts.kind === 'job' ? `Nhận kèo: ${def.title}` : def.title, 2.4);
+    playSfx('start');
     this.showTarget();
     this.syncPhone();
   }
@@ -154,12 +156,14 @@ export class MissionDirector {
         );
       }
       this.hud.showToast(e.reward > 0 ? `+${formatVnd(e.reward)}` : 'Xong!', 2.4);
+      playSfx('complete');
       this.finish();
       opts.onComplete?.();
       if (opts.kind === 'job') this.refreshOffers(ctx.x, ctx.z);
       return;
     }
     this.hud.showToast(`Thất bại: ${e.reason}`, 2.6);
+    playSfx('fail');
     this.finish();
     opts.onFail?.();
   }

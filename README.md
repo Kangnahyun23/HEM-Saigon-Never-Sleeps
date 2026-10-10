@@ -32,6 +32,7 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | `H` / `L` / `R` | — | bóp còi · đèn pha · dựng lại xe |
 | Chuột / con lăn | xoay camera · zoom | xoay camera · zoom |
 | `P` | điện thoại (Kèo · Bản đồ · Tin nhắn · Ví · Cài đặt), `1`–`5` đổi tab, `Esc` cất | như đi bộ |
+| `M` | tắt / bật tiếng (âm lượng chỉnh trong Cài đặt) | như đi bộ |
 | `Tab` | ẩn/hiện bảng phím | |
 
 Game tự lưu (sau mỗi nhiệm vụ, mỗi 30 giây, khi rời trang); muốn chơi lại từ đầu thì mở `?moi=1`.

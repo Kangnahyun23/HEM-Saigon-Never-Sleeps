@@ -78,7 +78,7 @@ export class Hud {
       <div class="hud-help panel" data-help>
         <div class="title">Điều khiển</div>
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>đi / lái</b> · <kbd>Shift</kbd> <b>chạy</b> · <kbd>Space</kbd> <b>nhảy / phanh tay</b></div>
-        <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>P</kbd> <b>điện thoại</b></div>
+        <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>P</kbd> <b>điện thoại</b> · <kbd>M</kbd> <b>tắt tiếng</b></div>
         <div>Bấm vào màn hình rồi <b>rê chuột</b> để xoay camera · <b>cuộn</b> để zoom · <kbd>Tab</kbd> <b>ẩn/hiện bảng này</b></div>
       </div>
       <div class="hud-fps" data-fps></div>
