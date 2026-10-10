@@ -246,13 +246,17 @@ export function createAsphaltMaterial(base: THREE.ColorRepresentation): THREE.Me
   return mat;
 }
 
-/** Bảng hiệu: lấy một ô trong atlas chữ (aSign = góc ô, đơn vị uv). */
-export function createSignMaterial(atlas: THREE.Texture, cols: number, rows: number): THREE.MeshStandardNodeMaterial {
-  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.6 });
-  const offset = attribute<'vec2'>('aSign', 'vec2');
-  const st = uv().mul(vec2(1 / cols, 1 / rows)).add(offset);
-  mat.colorNode = texture(atlas, st).rgb;
-  // Bảng hiệu có đèn: ban đêm tự phát sáng theo màu chữ/nền.
-  mat.emissiveNode = texture(atlas, st).rgb.mul(nightUniform.mul(0.75));
+/**
+ * Bảng hiệu: lấy một ô trong atlas (aSign = [u0, v0, du, dv]); aGlow = độ tự sáng ban đêm theo phong cách
+ * (hộp đèn / neon sáng rực, bảng alu có LED hắt, bảng sơn tay gần như tối).
+ */
+export function createSignMaterial(atlas: THREE.Texture): THREE.MeshStandardNodeMaterial {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.55 });
+  const cell = attribute<'vec4'>('aSign', 'vec4');
+  const glow = attribute<'float'>('aGlow', 'float');
+  const st = uv().mul(cell.zw).add(cell.xy);
+  const color = texture(atlas, st).rgb;
+  mat.colorNode = color;
+  mat.emissiveNode = color.mul(nightUniform.mul(glow));
   return mat;
 }

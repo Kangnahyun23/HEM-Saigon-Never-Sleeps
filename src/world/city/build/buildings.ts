@@ -6,7 +6,8 @@ import { euler, InstanceBatch } from '@/render/instancing';
 import { FLOOR_HEIGHT, type Lot } from '../layout';
 import { createFacadeMaterial, createPavementMaterial, createSignMaterial } from '../materials';
 import { CITY_COLORS, FACADE_COLORS } from '../palette';
-import { createSignAtlas, SHOP_SIGNS, SIGN_COLS, SIGN_ROWS, signOffset } from '../signs';
+import { createSignSet } from '../signs';
+import { BANNER_COUNT, cellUv, H_CELL, hCellPx, SHOP_SIGN_COUNT, V_CELL, V_COUNT, vCellPx } from '../signage';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
 import { reflective } from '../../reflections';
 
@@ -50,12 +51,16 @@ export function buildBuildings(ctx: BuildContext): void {
   const sheets = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.45, metalness: 0.15 }), { colors: true, name: 'roof-sheets' });
   const acUnits = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.6 }), { colors: true, castShadow: false, name: 'ac-units' });
   const stools = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }), { colors: true, castShadow: false, name: 'stools' });
-  const atlas = createSignAtlas();
-  const signs = new InstanceBatch(GEO.plane, createSignMaterial(atlas, SIGN_COLS, SIGN_ROWS), {
+  // Bảng hiệu cả phố: một atlas, một lệnh vẽ. Ô thu vào 3 px để mipmap không lem màu sang ô bên cạnh.
+  const signSet = createSignSet(layout.seed + 991);
+  const signs = new InstanceBatch(GEO.plane, createSignMaterial(signSet.atlas), {
     name: 'shop-signs',
     castShadow: false,
-    attributes: { aSign: 2 },
+    attributes: { aSign: 4, aGlow: 1 },
   });
+  const shopCell = (i: number) => ({ aSign: cellUv(hCellPx(i), H_CELL, 3), aGlow: signSet.shops[i]!.glow });
+  const bannerCell = (i: number) => ({ aSign: cellUv(hCellPx(SHOP_SIGN_COUNT + i), H_CELL, 3), aGlow: signSet.banners[i]!.glow });
+  const verticalCell = (j: number) => ({ aSign: cellUv(vCellPx(j), V_CELL, 3), aGlow: signSet.verticals[j]!.glow });
 
   const color = new THREE.Color();
 
@@ -105,10 +110,10 @@ export function buildBuildings(ctx: BuildContext): void {
 
     // ---- Ban công từng tầng -----------------------------------------------------------------------------
     const hasBalcony = lot.floors >= 2 && lotRng(1) < (isFrontRow ? 0.8 : 0.55);
+    const bw = Math.min(faceW * 0.86, faceW - 0.3);
+    const bd = isFrontRow ? 0.95 : 0.7;
     if (hasBalcony) {
       const railColor = CITY_COLORS.railing[Math.floor(lotRng(2) * CITY_COLORS.railing.length)] as string;
-      const bw = Math.min(faceW * 0.86, faceW - 0.3);
-      const bd = isFrontRow ? 0.95 : 0.7;
       for (let f = 1; f < lot.floors; f++) {
         const y = f * FLOOR_HEIGHT;
         place(slabs, 0, y + 0.08, bd / 2, bw, 0.16, bd, 0, '#bdb7ad');
@@ -127,16 +132,63 @@ export function buildBuildings(ctx: BuildContext): void {
       }
     }
 
-    // ---- Mái hiên + bảng hiệu tầng trệt -----------------------------------------------------------------------
+    // ---- Bảng hiệu + mái hiên ---------------------------------------------------------------------------------
+    const onStreet = lot.row === 'front' && lot.frontage !== 'hem';
+    const inHem = lot.row === 'front' && lot.frontage === 'hem';
+    // Mép dưới bảng hiệu treo trên cửa (để hạ mái hiên xuống dưới, không cắt vào bảng).
+    let signBottom = 3.2;
+    if ((onStreet && lotRng(5) < 0.88) || (inHem && lotRng(5) < 0.35)) {
+      const cell = shopCell(Math.floor(lotRng(6) * SHOP_SIGN_COUNT));
+      let sw: number;
+      let sh: number;
+      let y: number;
+      let z = 0.06;
+      if (inHem) {
+        // Tiệm trong hẻm: bảng nhỏ trên cửa.
+        sw = Math.min(faceW * 0.7, 2.6);
+        sh = sw / 4;
+        y = Math.min(2.95, FLOOR_HEIGHT - 0.1 - sh / 2);
+      } else if (hasBalcony && lotRng(22) < 0.6) {
+        // Treo phủ lan can tầng 1 (rất hay gặp ở nhà phố Sài Gòn).
+        sw = bw + 0.1;
+        sh = 1.05;
+        y = FLOOR_HEIGHT + 0.66;
+        z = bd + 0.04;
+      } else if (hasBalcony) {
+        // Dưới sàn ban công: bảng thấp hơn để không đâm vào sàn.
+        sw = faceW * 0.95;
+        sh = Math.min(0.9, sw / 4);
+        y = FLOOR_HEIGHT - 0.06 - sh / 2;
+      } else {
+        // Không ban công: băng ngang to phủ hết mặt tiền ngay trên cửa cuốn.
+        sw = faceW * 0.95;
+        sh = Math.min(1.25, sw / 3.6);
+        y = 2.95;
+      }
+      if (z < 0.5) signBottom = y - sh / 2;
+      const [wx, wz] = localToWorld(ox, oz, yaw, 0, z);
+      signs.add(wx, pad + y, wz, sw, sh, 1, yaw, undefined, cell);
+    }
+    // Mái hiên dưới bảng hiệu (mép trong cao hơn mép ngoài ~0,4 m).
     if (lotRng(3) < (isFrontRow ? 0.55 : 0.18)) {
       const ac = CITY_COLORS.awning[Math.floor(lotRng(4) * CITY_COLORS.awning.length)] as string;
-      place(awnings, 0, 2.5, 0.72, faceW * 0.92, 0.05, 1.5, 0.28, ac);
+      place(awnings, 0, Math.min(2.2, signBottom - 0.3), 0.72, faceW * 0.92, 0.05, 1.5, 0.28, ac);
     }
-    if (isFrontRow && lot.row === 'front' && lotRng(5) < 0.7) {
-      const idx = Math.floor(lotRng(6) * SHOP_SIGNS.length);
-      const sw = Math.min(faceW * 0.88, 4.6);
-      const [wx, wz] = localToWorld(ox, oz, yaw, 0, 0.035);
-      signs.add(wx, pad + 2.97, wz, sw, 0.5, 1, yaw, undefined, { aSign: signOffset(idx) });
+    // Bảng dọc chìa ra vỉa hè ở tầng 1–2 (hai mặt áp lưng nhau).
+    if (onStreet && lot.floors >= 3 && lotRng(23) < 0.38) {
+      const cell = verticalCell(Math.floor(lotRng(24) * V_COUNT));
+      const side = lotRng(25) < 0.5 ? -1 : 1;
+      const lx = side * (faceW / 2 - 0.12);
+      for (const face of [1, -1]) {
+        const [wx, wz] = localToWorld(ox, oz, yaw, lx + face * 0.012, 0.62);
+        signs.add(wx, pad + FLOOR_HEIGHT + 1.75, wz, 0.66, 2.64, 1, yaw + (face * Math.PI) / 2, undefined, cell);
+      }
+    }
+    // Băng rôn treo lan can tầng 2: khai trương, thanh lý, sang nhượng… và quảng cáo app vay.
+    if (onStreet && hasBalcony && lot.floors >= 3 && lotRng(26) < 0.12) {
+      const cell = bannerCell(Math.floor(lotRng(27) * BANNER_COUNT));
+      const [wx, wz] = localToWorld(ox, oz, yaw, 0, bd + 0.05);
+      signs.add(wx, pad + 2 * FLOOR_HEIGHT + 0.62, wz, bw * 0.92, Math.min(0.85, (bw * 0.92) / 4), 1, yaw, undefined, cell);
     }
 
     // ---- Ghế nhựa quán cóc trên vỉa hè (một số nhà mặt tiền) ---------------------------------------------------

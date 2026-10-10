@@ -1,93 +1,201 @@
 import * as THREE from 'three/webgpu';
+import { createRng } from '@/core/random';
 import { signFont, type SignFont } from '@/ui/fonts';
+import {
+  ATLAS_SIZE,
+  BANNER_COUNT,
+  designBanner,
+  designShopSign,
+  designVerticalSign,
+  H_CELL,
+  hCellPx,
+  SHOP_SIGN_COUNT,
+  V_CELL,
+  V_COUNT,
+  vCellPx,
+  type SignDesign,
+} from './signage';
 
-/** Bảng hiệu cửa hàng hư cấu: [chữ, nền, màu chữ]. Không dùng tên thương hiệu có thật. */
-export const SHOP_SIGNS: ReadonlyArray<readonly [string, string, string]> = [
-  ['PHỞ BẮC', '#c0392b', '#ffe08a'],
-  ['BÁNH MÌ', '#f4c430', '#a0191e'],
-  ['CƠM TẤM', '#1f6f43', '#ffffff'],
-  ['CÀ PHÊ', '#3b2416', '#f6d7a7'],
-  ['TẠP HÓA', '#1e4fa0', '#ffffff'],
-  ['SỬA XE', '#f2f2f2', '#1e4fa0'],
-  ['TIỆM VÀNG', '#b0141c', '#f9d54a'],
-  ['NHÀ THUỐC', '#0f7f6e', '#ffffff'],
-  ['TRÀ SỮA', '#f7c6d9', '#7a1f4a'],
-  ['HỦ TIẾU', '#e35d2a', '#ffffff'],
-  ['BÚN BÒ', '#8e1b1b', '#ffe9b0'],
-  ['GỘI ĐẦU', '#7b4bb3', '#ffffff'],
-  ['PHOTOCOPY', '#ffffff', '#c0392b'],
-  ['ĐIỆN THOẠI', '#123c69', '#7fd3ff'],
-  ['KARAOKE', '#2a0f45', '#ff5fd2'],
-  ['NƯỚC MÍA', '#4f9a2c', '#ffffff'],
-  ['QUÁN ỐC', '#e86a2c', '#fff3b0'],
-  ['BÁNH XÈO', '#f0b429', '#7a2e0e'],
-  ['QUẦN ÁO', '#ffffff', '#222222'],
-  ['GIÀY DÉP', '#2b2b2b', '#ffd166'],
-  ['KÍNH MẮT', '#e9eef2', '#1e4fa0'],
-  ['NHA KHOA', '#ffffff', '#0f7f6e'],
-  ['MAY ĐO', '#5a3d2b', '#ffffff'],
-  ['HOA TƯƠI', '#ffe3ec', '#c2185b'],
-  ['VÁ VỎ', '#ffd400', '#111111'],
-  ['CƠM GÀ', '#ff7b00', '#ffffff'],
-  ['VẬT LIỆU XD', '#3a5a7a', '#ffffff'],
-  ['IN ẤN', '#00897b', '#ffffff'],
-  ['LẨU', '#9b1111', '#ffd54a'],
-  ['CHÈ', '#a3d977', '#2e4d12'],
-  ['SIM SỐ', '#0057b8', '#ffd700'],
-  ['ĐỒNG HỒ', '#1c1c1c', '#e0c38c'],
-];
-
-/** Quán ăn uống: chữ vẽ tay hoặc chữ đứng đậm xen kẽ; quán chơi đêm: chữ khối / neon; còn lại: chữ alu chữ nổi. */
-const FOOD = /PHỞ|BÁNH|CƠM|HỦ TIẾU|BÚN|ỐC|LẨU|CHÈ|NƯỚC MÍA|CÀ PHÊ/;
-const NIGHT = /KARAOKE|TRÀ SỮA/;
-export function signStyle(text: string, i: number): SignFont {
-  if (NIGHT.test(text)) return i % 2 ? 'neon' : 'block';
-  if (FOOD.test(text)) return i % 2 ? 'brush' : 'condensed';
-  return (['condensed', 'tall', 'condensed', 'narrow'] as const)[i % 4]!;
+/** Bộ bảng hiệu của cả khu phố: thiết kế (thuần dữ liệu) + atlas vẽ sẵn. */
+export interface SignSet {
+  readonly shops: readonly SignDesign[];
+  readonly banners: readonly SignDesign[];
+  readonly verticals: readonly SignDesign[];
+  readonly atlas: THREE.CanvasTexture;
 }
 
-export const SIGN_COLS = 4;
-export const SIGN_ROWS = 8;
+/**
+ * Đặt font cỡ lớn nhất ≤ `max` để dòng chữ (tính cả dấu tiếng Việt nhô cao như Ầ, Ồ, Ữ) vừa khung `width` × `height`,
+ * trả về toạ độ baseline để khối chữ nằm giữa khung theo chiều dọc. Dấu bị cắt nếu chỉ canh theo cỡ chữ.
+ */
+function fitText(ctx: CanvasRenderingContext2D, text: string, kind: SignFont, max: number, width: number, top: number, height: number, min = 8): number {
+  let size = Math.floor(max);
+  let m: TextMetrics;
+  for (;;) {
+    ctx.font = signFont(kind, size);
+    m = ctx.measureText(text);
+    const h = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+    if (size <= min || (m.width <= width && h <= height)) break;
+    size -= 1;
+  }
+  return top + height / 2 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+}
 
-/** Vẽ atlas bảng hiệu lên canvas (mỗi ô 256 × 64 px). */
-export function createSignAtlas(): THREE.CanvasTexture {
-  const cw = 256;
-  const ch = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = cw * SIGN_COLS;
-  canvas.height = ch * SIGN_ROWS;
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-  SHOP_SIGNS.forEach(([text, bg, fg], i) => {
-    const x = (i % SIGN_COLS) * cw;
-    const y = Math.floor(i / SIGN_COLS) * ch;
-    ctx.fillStyle = bg;
-    ctx.fillRect(x, y, cw, ch);
-    // Viền trong mảnh cho giống bảng hiệu tôn sơn.
-    ctx.strokeStyle = fg;
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 5, y + 5, cw - 10, ch - 10);
+/** Chữ nổi: bóng đổ sẫm lệch xuống dưới (bảng alu chữ nổi, băng rôn) hoặc quầng sáng (neon). */
+function drawText(ctx: CanvasRenderingContext2D, d: SignDesign, text: string, x: number, y: number, color: string): void {
+  if (d.style === 'neon') {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.55;
+    ctx.fillText(text, x, y);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = fg;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const style = signStyle(text, i);
-    let size = 44;
-    do {
-      ctx.font = signFont(style, size);
-      size -= 2;
-    } while (ctx.measureText(text).width > cw - 24 && size > 16);
-    ctx.fillText(text, x + cw / 2, y + ch / 2 + 2);
-  });
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+    return;
+  }
+  if (d.style === 'alu' || d.style === 'banner') {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillText(text, x + 2, y + 3);
+  }
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
 }
 
-/** Góc uv trái-dưới của ô thứ i trong atlas (texture flipY mặc định: v = 0 ở đáy canvas). */
-export function signOffset(i: number): [number, number] {
-  const col = i % SIGN_COLS;
-  const row = Math.floor(i / SIGN_COLS) % SIGN_ROWS;
-  return [col / SIGN_COLS, 1 - (row + 1) / SIGN_ROWS];
+/** Nền + viền theo phong cách. */
+function drawPanel(ctx: CanvasRenderingContext2D, d: SignDesign, x: number, y: number, w: number, h: number, seed: number): void {
+  const rng = createRng(seed);
+  ctx.fillStyle = d.bg;
+  ctx.fillRect(x, y, w, h);
+  if (d.style === 'banner' || d.style === 'lightbox') {
+    const g = ctx.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, 'rgba(255,255,255,0.12)');
+    g.addColorStop(1, d.style === 'banner' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.08)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+  }
+  switch (d.style) {
+    case 'alu':
+      // Viền nẹp nhôm + đường chỉ màu nhấn.
+      ctx.strokeStyle = '#d9dcdf';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+      ctx.strokeStyle = d.accent;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 10, y + 10, w - 20, h - 20);
+      break;
+    case 'paint': {
+      // Sơn tay trên tôn: lấm tấm bụi, vệt ố chảy dọc.
+      ctx.strokeStyle = d.fg;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 6, y + 6, w - 12, h - 12);
+      for (let i = 0; i < 260; i++) {
+        ctx.fillStyle = `rgba(80,60,40,${0.05 + rng() * 0.12})`;
+        ctx.fillRect(x + rng() * w, y + rng() * h, 1 + rng() * 3, 1 + rng() * 2);
+      }
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = 'rgba(90,70,50,0.10)';
+        ctx.fillRect(x + rng() * w, y + h * 0.4, 2 + rng() * 5, h * 0.6);
+      }
+      break;
+    }
+    case 'lightbox': {
+      // Hộp đèn: dải màu nhấn trên dưới, nẹp hai đầu.
+      const band = Math.max(4, h * 0.06);
+      const side = Math.max(6, w * 0.03);
+      ctx.fillStyle = d.accent;
+      ctx.fillRect(x, y, w, band);
+      ctx.fillRect(x, y + h - band, w, band);
+      ctx.fillStyle = d.fg;
+      ctx.fillRect(x, y, side, h);
+      ctx.fillRect(x + w - side, y, side, h);
+      break;
+    }
+    case 'neon':
+      ctx.shadowColor = d.accent;
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = d.accent;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 9, y + 9, w - 18, h - 18);
+      ctx.shadowBlur = 0;
+      break;
+    case 'banner':
+      // Băng rôn: cờ đuôi nheo hai đầu.
+      ctx.fillStyle = d.accent;
+      for (const right of [false, true]) {
+        const bx = right ? x + w - 22 : x + 22;
+        for (let k = 0; k < 4; k++) {
+          const by = y + 14 + k * (h / 4.4);
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + (right ? 12 : -12), by + 6);
+          ctx.lineTo(bx, by + 12);
+          ctx.fill();
+        }
+      }
+      break;
+  }
+}
+
+function drawHorizontal(ctx: CanvasRenderingContext2D, d: SignDesign, x: number, y: number, seed: number): void {
+  const [w, h] = H_CELL;
+  drawPanel(ctx, d, x, y, w, h, seed);
+  const pad = d.style === 'banner' ? 44 : 26;
+  const inner = w - pad * 2;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const [title, second, third] = d.lines;
+  const cx = x + w / 2;
+  // Ba dải: tên nghề (to), tên tiệm / món, địa chỉ + điện thoại.
+  if (title) drawText(ctx, d, title, cx, fitText(ctx, title, d.font, 64, inner, y + 12, h * 0.5), d.fg);
+  const subColor = d.style === 'lightbox' || d.style === 'neon' ? d.accent : d.fg;
+  if (second) drawText(ctx, d, second, cx, fitText(ctx, second, d.style === 'paint' ? 'hand' : 'tall', 28, inner, y + h * 0.62, h * 0.2), subColor);
+  if (third) {
+    ctx.globalAlpha = 0.85;
+    drawText(ctx, d, third, cx, fitText(ctx, third, 'narrow', 17, inner, y + h * 0.83, h * 0.12), subColor);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawVertical(ctx: CanvasRenderingContext2D, d: SignDesign, x: number, y: number, seed: number): void {
+  const [w, h] = V_CELL;
+  drawPanel(ctx, d, x, y, w, h, seed);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const words = d.lines.slice(0, -1);
+  const phone = d.lines[d.lines.length - 1] ?? '';
+  const slot = (h - 70) / Math.max(1, words.length);
+  words.forEach((word, k) => {
+    drawText(ctx, d, word, x + w / 2, fitText(ctx, word, d.font, 64, w - 22, y + 22 + slot * k + slot * 0.1, slot * 0.8), d.fg);
+  });
+  drawText(ctx, d, phone, x + w / 2, fitText(ctx, phone, 'narrow', 16, w - 16, y + h - 40, 22), d.style === 'neon' ? d.accent : d.fg);
+}
+
+/**
+ * Sinh toàn bộ bảng hiệu (có seed) và vẽ lên MỘT atlas 2048² — mọi bảng hiệu cả phố chỉ tốn một lệnh vẽ.
+ * Gọi sau loadFonts() để chữ dùng đúng font bảng hiệu.
+ */
+export function createSignSet(seed: number): SignSet {
+  const rng = createRng(seed);
+  const shops = Array.from({ length: SHOP_SIGN_COUNT }, () => designShopSign(rng));
+  const banners = Array.from({ length: BANNER_COUNT }, (_, i) => designBanner(i, rng));
+  const verticals = Array.from({ length: V_COUNT }, () => designVerticalSign(rng));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = ATLAS_SIZE;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  [...shops, ...banners].forEach((d, i) => {
+    const [x, y] = hCellPx(i);
+    drawHorizontal(ctx, d, x, y, seed + i * 31);
+  });
+  verticals.forEach((d, j) => {
+    const [x, y] = vCellPx(j);
+    drawVertical(ctx, d, x, y, seed + 9000 + j * 17);
+  });
+  const atlas = new THREE.CanvasTexture(canvas);
+  atlas.colorSpace = THREE.SRGBColorSpace;
+  atlas.anisotropy = 8;
+  atlas.name = 'shop-signs';
+  return { shops, banners, verticals, atlas };
 }
