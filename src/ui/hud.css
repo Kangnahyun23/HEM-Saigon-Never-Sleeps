@@ -144,3 +144,18 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .hud-subtitle { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); max-width: min(720px, calc(100% - 40px)); padding: 10px 16px; border-radius: 10px; background: rgba(10, 8, 14, .72); font-size: 17px; line-height: 1.45; text-align: center; opacity: 0; transition: opacity .3s; }
 .hud-subtitle.show { opacity: 1; }
 .hud-subtitle b { color: var(--hud-accent); margin-right: 8px; }
+
+/* ?fps=1: số khung hình / giây, giữa mép trên */
+.hud-perf {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(14, 12, 20, 0.7);
+  color: #b9f5c4;
+  font: 600 12px/1.4 ui-monospace, monospace;
+  pointer-events: none;
+}

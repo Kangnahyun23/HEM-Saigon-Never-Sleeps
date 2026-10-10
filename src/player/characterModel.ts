@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { mergeStaticMeshes } from '@/render/merge';
 
 /** Trang phục của Tín: áo khoác xe ôm công nghệ (hãng hư cấu), quần jean, giày trắng, mũ bảo hiểm cam. */
 export const TIN_COLORS = {
@@ -29,8 +30,16 @@ export interface AnimState {
   steer?: number;
 }
 
+/** Mọi khối hộp dùng chung một vật liệu, màu nằm trong đỉnh — để gộp được các khối cùng khớp thành một mesh. */
+const clothMat = new THREE.MeshStandardNodeMaterial({ vertexColors: true, roughness: 0.75 });
+
 const box = (w: number, h: number, d: number, color: string, y = 0, z = 0, x = 0): THREE.Mesh => {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardNodeMaterial({ color, roughness: 0.75 }));
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const c = new THREE.Color(color);
+  const colors = new Float32Array(geo.attributes.position!.count * 3);
+  for (let i = 0; i < colors.length; i += 3) colors.set([c.r, c.g, c.b], i);
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const m = new THREE.Mesh(geo, clothMat);
   m.position.set(x, y, z);
   m.castShadow = true;
   m.receiveShadow = true;
@@ -126,6 +135,7 @@ export class CharacterModel {
       return { upper, lower };
     };
     this.arms = [arm(1), arm(-1)];
+    mergeStaticMeshes(this.root);
   }
 
   setHelmet(on: boolean): void {

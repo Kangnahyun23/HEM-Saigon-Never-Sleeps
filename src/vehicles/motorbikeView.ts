@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { mergeStaticMeshes } from '@/render/merge';
 import { BIKE, BIKE_PARTS, BIKE_ROLE_COLORS, type BikePart } from './bikeModel';
 import { BIKE_TUNING, type MotorbikePhysics } from './motorbikePhysics';
 
@@ -93,6 +94,7 @@ export class MotorbikeView {
 
     this.seat.position.set(0, -0.03, -0.27);
     this.model.add(this.seat);
+    mergeStaticMeshes(this.model);
   }
 
   /** Bật/tắt đèn pha; `night` 0..1 làm đèn hậu rực hơn khi tối. */
