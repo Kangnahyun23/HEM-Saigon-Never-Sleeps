@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { float, length, smoothstep, uv, vec3 } from 'three/tsl';
 import { containsPoint } from '@/core/rect';
 import { InstanceBatch } from '@/render/instancing';
-import { nightUniform } from '../../nightGlow';
+import { addNightOnly, nightUniform } from '../../nightGlow';
 import { addMesh, GEO, type BuildContext } from './context';
 
 const POOL_SIZE = 11;
@@ -28,6 +28,9 @@ export function buildLightPools(ctx: BuildContext): void {
     pools.add(lamp.x, (onRoad ? 0 : pad) + 0.03, lamp.z, POOL_SIZE, 1, POOL_SIZE);
   }
   const mesh = pools.build();
-  if (mesh) mesh.renderOrder = 1;
+  if (mesh) {
+    mesh.renderOrder = 1;
+    addNightOnly(mesh);
+  }
   addMesh(ctx, mesh);
 }

@@ -56,6 +56,8 @@ async function main(): Promise<void> {
   };
   debug.layout = city.layout;
   debug.renderer = renderer;
+  debug.scene = scene;
+  debug.camera = camera;
   debug.game = game;
   /** Chạy nhanh logic game (không render) — cho test e2e trên máy không GPU. */
   debug.simulate = (seconds: number) => {
@@ -103,7 +105,10 @@ async function main(): Promise<void> {
     const raw = timer.getDelta();
     const dt = Math.min(raw, 0.1);
     if (!debug.paused) game.update(dt);
-    if (resolution?.sample(raw)) renderer.setPixelRatio(resolution.pixelRatio);
+    if (resolution?.sample(raw)) {
+      if (renderer.getPixelRatio() !== resolution.pixelRatio) renderer.setPixelRatio(resolution.pixelRatio);
+      env.setShadowInterval(resolution.shadowInterval);
+    }
     city.updateDetail(camera.position);
     renderer.render(scene, camera);
     if (fpsBox) {
@@ -111,7 +116,8 @@ async function main(): Promise<void> {
       fpsFrames++;
       if (fpsTime >= 0.5) {
         const info = renderer.info.render;
-        fpsBox.textContent = `${Math.round(fpsFrames / fpsTime)} fps · ${renderer.getPixelRatio().toFixed(2)}× · ${info.drawCalls} lệnh vẽ · ${Math.round(info.triangles / 1000)}k tam giác · ${backend}`;
+        const shadow = resolution?.shadowInterval === 2 ? ' · bóng ½' : '';
+        fpsBox.textContent = `${Math.round(fpsFrames / fpsTime)} fps · ${renderer.getPixelRatio().toFixed(2)}×${shadow} · ${info.drawCalls} lệnh vẽ · ${Math.round(info.triangles / 1000)}k tam giác · ${backend}`;
         fpsTime = 0;
         fpsFrames = 0;
       }

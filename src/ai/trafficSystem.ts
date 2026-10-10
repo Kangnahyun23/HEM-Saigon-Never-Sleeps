@@ -18,6 +18,9 @@ export class TrafficSystem {
   readonly view: TrafficView;
   private readonly bodies: RAPIER.RigidBody[] = [];
   private readonly generations: number[] = [];
+  /** Vector / quaternion tạm dùng lại mỗi bước (Rapier chỉ đọc giá trị). */
+  private readonly pos = { x: 0, y: 0, z: 0 };
+  private readonly rot = { x: 0, y: 0, z: 0, w: 1 };
 
   constructor(scene: THREE.Scene, private readonly physics: PhysicsWorld, layout: CityLayout, focus: Focus, options: Partial<TrafficOptions> = {}) {
     this.sim = new TrafficSim(buildTrafficNetwork(layout), focus, options);
@@ -39,10 +42,15 @@ export class TrafficSystem {
   /** Một bước cố định, gọi TRƯỚC `physics.step()`. */
   step(dt: number, focus: Focus, obstacles: readonly Obstacle[]): void {
     this.sim.step(dt, focus, obstacles);
+    const pos = this.pos;
+    const rot = this.rot;
     this.sim.agents.forEach((a, i) => {
       const body = this.bodies[i] as RAPIER.RigidBody;
-      const pos = { x: a.x, y: BODY_HALF.y, z: a.z };
-      const rot = { x: 0, y: Math.sin(a.yaw / 2), z: 0, w: Math.cos(a.yaw / 2) };
+      pos.x = a.x;
+      pos.y = BODY_HALF.y;
+      pos.z = a.z;
+      rot.y = Math.sin(a.yaw / 2);
+      rot.w = Math.cos(a.yaw / 2);
       if (this.generations[i] !== a.generation) {
         // Xe vừa được thả lại chỗ khác: dịch chuyển tức thời, không "quét" qua cả khu phố.
         this.generations[i] = a.generation;

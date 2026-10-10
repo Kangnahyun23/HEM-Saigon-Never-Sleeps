@@ -41,7 +41,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 
 /* Bản đồ nhỏ (góc dưới trái) */
 .hud-minimap { position: absolute; left: 18px; bottom: 18px; width: 196px; height: 196px; border-radius: 50%; box-shadow: 0 4px 18px rgba(0,0,0,.45); }
-.hud-minimap canvas { width: 100%; height: 100%; display: block; }
+.hud-minimap { overflow: hidden; background: #1c1a22; isolation: isolate; }
+.hud-minimap-overlay { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* Ảnh nền khu phố: lớp riêng, chỉ đổi transform mỗi khung hình (không vẽ lại). */
+.hud-minimap-map { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 
 /* Bảng phím (trên bản đồ nhỏ) */
 .hud-help { position: absolute; left: 18px; bottom: 228px; padding: 10px 14px; font-size: 12.5px; line-height: 1.85; color: var(--hud-quiet); transition: opacity .5s; }

@@ -47,8 +47,8 @@ export function buildBuildings(ctx: BuildContext): void {
   const plain = new THREE.MeshStandardNodeMaterial({ roughness: 0.85 });
   const roofStuff = new InstanceBatch(GEO.box, plain, { colors: true, name: 'roof-stuff' });
   const sheets = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.45, metalness: 0.4 }), { colors: true, name: 'roof-sheets' });
-  const acUnits = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.6 }), { colors: true, name: 'ac-units' });
-  const stools = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }), { colors: true, name: 'stools' });
+  const acUnits = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.6 }), { colors: true, castShadow: false, name: 'ac-units' });
+  const stools = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }), { colors: true, castShadow: false, name: 'stools' });
   const atlas = createSignAtlas();
   const signs = new InstanceBatch(GEO.plane, createSignMaterial(atlas, SIGN_COLS, SIGN_ROWS), {
     name: 'shop-signs',

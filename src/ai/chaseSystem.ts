@@ -31,6 +31,8 @@ export class ChaseSystem {
   /** Một bước cố định (trước physics.step). Trả về true nếu Tín vừa bị chặn đầu. */
   step(dt: number, player: ChasePlayer, level: number): boolean {
     const caught = this.sim.update(dt, player, level);
+    // Không có ai truy đuổi (phần lớn thời gian chơi): khỏi tạo mảng tạm mỗi bước.
+    if (this.sim.chasers.length === 0 && this.owner.size === 0) return caught;
     // Gán thân vật lý cho từng xe đang có; thân thừa cất xuống dưới đất.
     const free = this.bodies.filter((b) => ![...this.owner.values()].includes(b));
     for (const id of [...this.owner.keys()]) {

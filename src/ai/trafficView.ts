@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { abs, float, mix, smoothstep, uv, vec3 } from 'three/tsl';
 import { createRng, pick } from '@/core/random';
 import { BIKE_BODY_COLORS, BIKE_PARTS, BIKE_ROLE_COLORS } from '@/vehicles/bikeModel';
-import { nightUniform } from '@/world/nightGlow';
+import { addNightOnly, nightUniform } from '@/world/nightGlow';
 /** Tư thế một xe để vẽ (xe NPC, xe truy đuổi đều dùng). */
 export interface BikePose {
   id: number;
@@ -160,6 +160,7 @@ export class TrafficView {
     this.beams.castShadow = false;
     this.beams.receiveShadow = false;
     this.beams.renderOrder = 1;
+    addNightOnly(this.beams);
     this.root.name = 'traffic';
   }
 

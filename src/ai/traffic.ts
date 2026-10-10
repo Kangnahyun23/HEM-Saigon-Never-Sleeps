@@ -115,6 +115,19 @@ const SIDE_CLEARANCE = 1.15;
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 
+interface SafeInfo {
+  speed: number;
+  gap: number;
+  lateral: number;
+  slow: boolean;
+  side: number;
+  byObstacle: boolean;
+  leaderSpeed: number;
+  look: number;
+  fx: number;
+  fz: number;
+}
+
 export class TrafficSim {
   readonly agents: TrafficAgent[] = [];
   readonly options: TrafficOptions;
@@ -293,40 +306,46 @@ export class TrafficSim {
     agent.next = this.chooseNext(agent.lane);
   }
 
+  /** Kết quả `safeSpeed` (dùng lại một đối tượng, không tạo rác mỗi bước). */
+  private readonly safe: SafeInfo = { speed: 0, gap: 0, lateral: 0, slow: false, side: 0, byObstacle: false, leaderSpeed: 0, look: 0, fx: 0, fz: 0 };
+
+  /** Ghi nhận một vật phía trước nếu nó nằm trong hành lang của `agent` và gần hơn vật đã có. */
+  private consider(agent: TrafficAgent, ox: number, oz: number, halfWidth: number, ahead: number, speed: number, obstacle: boolean): void {
+    const r = this.safe;
+    const dx = ox - agent.x;
+    const dz = oz - agent.z;
+    const d = dx * r.fx + dz * r.fz;
+    if (d <= 0 || d > r.look) return;
+    const l = dx * -r.fz + dz * r.fx;
+    if (Math.abs(l) > AGENT.halfWidth + halfWidth) return;
+    const g = d - ahead;
+    if (g < r.gap) {
+      r.gap = g;
+      r.lateral = l;
+      r.leaderSpeed = speed;
+      r.slow = speed < agent.speed * 0.7 || speed < 1;
+      r.byObstacle = obstacle;
+    }
+  }
+
   /** Tốc độ an toàn khi xét các vật cản phía trước; trả về luôn vật cản gần nhất để tính đường lách. */
-  private safeSpeed(
-    agent: TrafficAgent,
-    obstacles: readonly Obstacle[],
-  ): { speed: number; gap: number; lateral: number; slow: boolean; side: number; byObstacle: boolean } {
+  private safeSpeed(agent: TrafficAgent, obstacles: readonly Obstacle[]): SafeInfo {
     const fx = Math.sin(agent.yaw);
     const fz = Math.cos(agent.yaw);
     const rx = -fz;
     const rz = fx;
     const look = Math.max(7, agent.speed * 1.8 + 5);
-    let gap = Infinity;
-    let lateral = 0;
-    let slow = false;
-    let leaderSpeed = 0;
+    const r = this.safe;
+    r.fx = fx;
+    r.fz = fz;
+    r.look = look;
+    r.gap = Infinity;
+    r.lateral = 0;
+    r.slow = false;
+    r.leaderSpeed = 0;
     /** Độ lệch ngang của xe chạy song song gần nhất (0 = không có). */
-    let side = 0;
-    let byObstacle = false;
-
-    const consider = (ox: number, oz: number, halfWidth: number, ahead: number, speed: number, obstacle: boolean): void => {
-      const dx = ox - agent.x;
-      const dz = oz - agent.z;
-      const d = dx * fx + dz * fz;
-      if (d <= 0 || d > look) return;
-      const l = dx * rx + dz * rz;
-      if (Math.abs(l) > AGENT.halfWidth + halfWidth) return;
-      const g = d - ahead;
-      if (g < gap) {
-        gap = g;
-        lateral = l;
-        leaderSpeed = speed;
-        slow = speed < agent.speed * 0.7 || speed < 1;
-        byObstacle = obstacle;
-      }
-    };
+    r.side = 0;
+    r.byObstacle = false;
 
     if (agent.creep <= 0) {
       for (const o of this.agents) {
@@ -345,21 +364,24 @@ export class TrafficSim {
           // Xe chạy song song sát sườn: ghi lại để dạt ra.
           const l = (o.x - agent.x) * rx + (o.z - agent.z) * rz;
           const d = (o.x - agent.x) * fx + (o.z - agent.z) * fz;
-          if (Math.abs(d) < AGENT.length && Math.abs(l) < SIDE_CLEARANCE && (side === 0 || Math.abs(l) < Math.abs(side))) side = l || 0.01;
+          if (Math.abs(d) < AGENT.length && Math.abs(l) < SIDE_CLEARANCE && (r.side === 0 || Math.abs(l) < Math.abs(r.side))) r.side = l || 0.01;
         }
-        consider(o.x, o.z, AGENT.halfWidth, AGENT.length, Math.max(0, o.speed * align), false);
+        this.consider(agent, o.x, o.z, AGENT.halfWidth, AGENT.length, Math.max(0, o.speed * align), false);
       }
     }
     for (const ob of obstacles) {
       if (Math.abs(ob.x - agent.x) > look || Math.abs(ob.z - agent.z) > look) continue;
-      consider(ob.x, ob.z, ob.radius, ob.radius + AGENT.length / 2, 0, true);
+      this.consider(agent, ob.x, ob.z, ob.radius, ob.radius + AGENT.length / 2, 0, true);
     }
 
-    if (gap === Infinity) return { speed: Infinity, gap, lateral, slow, side, byObstacle };
+    if (r.gap === Infinity) {
+      r.speed = Infinity;
+      return r;
+    }
     // Theo xe trước: không vượt quá tốc độ xe trước + phần khoảng hở dư.
-    const free = Math.max(0, gap - AGENT.minGap);
-    const speed = Math.min(free / AGENT.headway, leaderSpeed + free * 0.9);
-    return { speed: Math.max(0, speed), gap, lateral, slow, side, byObstacle };
+    const free = Math.max(0, r.gap - AGENT.minGap);
+    r.speed = Math.max(0, Math.min(free / AGENT.headway, r.leaderSpeed + free * 0.9));
+    return r;
   }
 
   /** Một bước mô phỏng. `obstacles`: người chơi, xe của người chơi… (vật cản xe NPC phải tránh). */
@@ -455,9 +477,9 @@ export class TrafficSim {
         x = u * u * tr.p0x + 2 * u * t * tr.p1x + t * t * tr.p2x;
         z = u * u * tr.p0z + 2 * u * t * tr.p1z + t * t * tr.p2z;
       } else {
-        const p = lanePoint(this.lane(agent.lane), agent.s, agent.offset);
-        x = p.x;
-        z = p.z;
+        const l = this.lane(agent.lane);
+        x = l.x0 + l.dx * agent.s + l.rx * agent.offset;
+        z = l.z0 + l.dz * agent.s + l.rz * agent.offset;
       }
       const mx = x - agent.x;
       const mz = z - agent.z;

@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { float, hash, mix, positionLocal, smoothstep, step, uniform, vec3 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
-import { nightUniform } from './nightGlow';
+import { addNightOnly, nightUniform, setNightLevel } from './nightGlow';
 import type { Lighting, RGB } from './timeOfDay';
 
 /** Ánh sáng đã áp thời tiết (sương, mây là tuỳ chọn). */
@@ -13,6 +13,8 @@ export interface Environment {
   sky: SkyMesh;
   /** Gọi mỗi khung hình: kéo vùng đổ bóng theo điểm đang nhìn. */
   update(focus: THREE.Vector3): void;
+  /** Vẽ lại bản đồ bóng đổ sau mỗi `n` khung hình (1 = mọi khung hình; 2 khi máy yếu). */
+  setShadowInterval(n: number): void;
   /** Áp ánh sáng theo giờ trong ngày (trời, nắng/trăng, sương, phơi sáng, đèn ban đêm). */
   setLighting(l: SceneLighting): void;
 }
@@ -69,6 +71,7 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
   dome.frustumCulled = false;
   dome.renderOrder = -1;
   scene.add(dome);
+  addNightOnly(dome);
 
   const hemi = new THREE.HemisphereLight('#cfe0f5', '#8b7a63', 1.0);
   scene.add(hemi);
@@ -90,6 +93,8 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
   scene.add(sun.target);
 
   const texel = (range * 2) / 2048;
+  let shadowInterval = 1;
+  let frame = 0;
   const snapped = new THREE.Vector3();
   const lightDir = sunDir.clone();
   const fog = scene.fog;
@@ -101,11 +106,22 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
     hemi,
     sky,
     update(focus) {
+      frame++;
+      if (shadowInterval > 1) {
+        // Khung không vẽ lại bóng: giữ nguyên camera bóng cho khớp bản đồ bóng cũ (dời đi là bóng lệch / nhảy).
+        if (frame % shadowInterval !== 0) return;
+        sun.shadow.needsUpdate = true;
+      }
       // Bám theo điểm nhìn, làm tròn theo kích thước texel để bóng không "rung".
       snapped.set(Math.round(focus.x / texel) * texel, 0, Math.round(focus.z / texel) * texel);
       sun.target.position.copy(snapped);
       sun.position.copy(snapped).addScaledVector(lightDir, 200);
       sun.target.updateMatrixWorld();
+    },
+    setShadowInterval(n) {
+      shadowInterval = Math.max(1, Math.round(n));
+      sun.shadow.autoUpdate = shadowInterval === 1;
+      sun.shadow.needsUpdate = true;
     },
     setLighting(l) {
       sky.sunPosition.value.set(l.sunDir[0], l.sunDir[1], l.sunDir[2]);
@@ -126,7 +142,7 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       domeCloud.value = cloud;
       scene.environmentIntensity = l.envIntensity;
       renderer.toneMappingExposure = l.exposure;
-      nightUniform.value = l.night;
+      setNightLevel(l.night);
     },
   };
 }

@@ -40,8 +40,9 @@ Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:3
 http://localhost:5173/?gio=21 (thêm `&mua=1` để xem phố đêm mưa). Trời Sài Gòn hay đổ mưa rào chiều tối.
 
 ### Bị giật / lag?
-Game tự hạ độ phân giải khi máy không kịp 48 khung hình/giây (và nâng lại khi dư sức); chi tiết nhỏ ở xa (chậu cây,
-xe đậu, cục nóng máy lạnh…) không vẽ. Thêm `?fps=1` vào địa chỉ để xem số khung hình/giây, tỉ lệ điểm ảnh, số lệnh vẽ.
+Game tự giảm chất lượng khi máy không kịp 48 khung hình/giây (trước hết bóng đổ cập nhật cách khung, rồi hạ độ phân giải)
+và nâng lại khi dư sức; chi tiết nhỏ ở xa (chậu cây, xe đậu, cục nóng máy lạnh…) không vẽ. Thêm `?fps=1` vào địa chỉ để
+xem số khung hình/giây, tỉ lệ điểm ảnh, "bóng ½" (bóng cách khung), số lệnh vẽ.
 Laptop có hai card đồ hoạ: chọn trình duyệt chạy bằng card rời (Windows: Cài đặt → Hiển thị → Đồ hoạ). Chrome/Edge bản mới
 chạy WebGPU nhanh hơn Firefox/Safari (đang phải lùi về WebGL2).
 

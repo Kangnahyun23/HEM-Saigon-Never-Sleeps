@@ -45,6 +45,8 @@ export class Hud {
   private lastCash = NaN;
   private lastUnread = -1;
   private lastClock = '';
+  private lastSpeed = -1;
+  private lastSpeedHidden: boolean | null = null;
   private lastPlace = '';
   private lastPrompt = '';
   private toastTimer = 0;
@@ -193,14 +195,18 @@ export class Hud {
   }
 
   setSpeed(kmh: number | null): void {
-    if (kmh === null) {
-      this.speedo.classList.add('hidden');
-      return;
+    // Chỉ chạm vào DOM khi giá trị hiển thị thật sự đổi (ghi lại mỗi khung hình bắt trình duyệt vẽ lại đồng hồ).
+    const hidden = kmh === null;
+    if (hidden !== this.lastSpeedHidden) {
+      this.lastSpeedHidden = hidden;
+      this.speedo.classList.toggle('hidden', hidden);
     }
-    this.speedo.classList.remove('hidden');
+    if (kmh === null) return;
     const v = Math.round(Math.abs(kmh));
+    if (v === this.lastSpeed) return;
+    this.lastSpeed = v;
     this.speedNum.textContent = String(v);
-    const f = Math.min(1, Math.abs(kmh) / SPEEDO_MAX);
+    const f = Math.min(1, v / SPEEDO_MAX);
     this.speedArc.setAttribute('d', f > 0.005 ? arcPath(86, 86, 66, ARC_START, ARC_START + ARC_SWEEP * f) : '');
   }
 
