@@ -7,6 +7,9 @@ import { uniform } from 'three/tsl';
  */
 export const nightUniform = uniform(0);
 
+/** Tỉ lệ tiệm mặt đường đã kéo cửa cuốn 0..1 theo giờ (xem shopsClosedFraction trong timeOfDay.ts). */
+export const closedUniform = uniform(0.15);
+
 /** Độ ướt mặt đường 0..1 (mưa): nhựa đường, vỉa hè sẫm lại và bóng lên. */
 export const wetUniform = uniform(0);
 

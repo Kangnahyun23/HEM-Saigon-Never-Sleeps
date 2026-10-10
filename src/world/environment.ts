@@ -1,9 +1,9 @@
 import * as THREE from 'three/webgpu';
 import { float, hash, mix, positionLocal, smoothstep, step, uniform, vec3 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
-import { addNightOnly, nightUniform, setNightLevel } from './nightGlow';
+import { addNightOnly, closedUniform, nightUniform, setNightLevel } from './nightGlow';
 import { setReflectionIntensity, setReflectionMap } from './reflections';
-import type { Lighting, RGB } from './timeOfDay';
+import { shopsClosedFraction, type Lighting, type RGB } from './timeOfDay';
 
 /** Ánh sáng đã áp thời tiết (sương, mây là tuỳ chọn). */
 export type SceneLighting = Lighting & { fogNear?: number; fogFar?: number; cloud?: number };
@@ -172,6 +172,7 @@ export async function createEnvironment(scene: THREE.Scene, renderer: THREE.WebG
       setReflectionIntensity(l.envIntensity);
       renderer.toneMappingExposure = l.exposure;
       setNightLevel(l.night);
+      closedUniform.value = shopsClosedFraction(l.hour);
     },
   };
 }

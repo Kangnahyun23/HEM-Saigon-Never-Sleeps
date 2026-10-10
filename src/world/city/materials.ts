@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import {
   abs,
   attribute,
+  cameraPosition,
   cameraViewMatrix,
   float,
   floor,
@@ -22,7 +23,7 @@ import {
 } from 'three/tsl';
 import type { TextureId } from '@/assets/manifest';
 import { getTextures } from '@/assets/textures';
-import { nightUniform, wetUniform } from '../nightGlow';
+import { closedUniform, nightUniform, wetUniform } from '../nightGlow';
 import { FLOOR_HEIGHT } from './layout';
 
 /**
@@ -126,7 +127,8 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const inHem = info.w.greaterThan(0.5);
   const shopU = u.div(faceW);
   const isShop = isFront.and(isTower.not()).and(floorIdx.lessThan(0.5)).and(shopU.greaterThan(0.05)).and(shopU.lessThan(0.95)).and(fv.lessThan(0.84));
-  const closedChance = select(inHem, float(0.4), float(0.25));
+  // Tỉ lệ tiệm kéo cửa theo giờ (closedUniform: ban ngày ít, khuya hầu hết); nhà trong hẻm đóng cửa nhiều hơn.
+  const closedChance = select(inHem, closedUniform.add(0.25).min(0.97), closedUniform);
   const shutterClosed = hash(seed.mul(4567)).lessThan(closedChance);
   const shutter = vec3(0.6, 0.61, 0.63).mul(float(0.82).add(select(fract(y.mul(7)).lessThan(0.5), float(0.12), float(0))));
   const gatePaint = mix(vec3(0.2, 0.42, 0.33), vec3(0.22, 0.33, 0.52), hash(seed.mul(911)));
@@ -134,9 +136,56 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const slat = fract(u.mul(8)).lessThan(0.5);
   const rail = abs(fv.sub(0.08)).lessThan(0.015).or(abs(fv.sub(0.76)).lessThan(0.015));
   const gate = select(rail, gatePaint.mul(0.7), select(slat, gatePaint, gatePaint.mul(0.78)));
-  const interiorDepth = smoothstep(0.0, 0.84, fv);
-  const warm = mix(vec3(0.62, 0.46, 0.3), vec3(0.75, 0.62, 0.48), hash(seed.mul(77)));
-  const interior = mix(warm, warm.mul(0.45), interiorDepth);
+  // Nội thất giả (interior mapping): dò tia nhìn vào một căn phòng hộp sau ô cửa — tường sau, hai tường bên, sàn, trần —
+  // nên nhìn xiên vẫn thấy chiều sâu, kệ hàng, đèn tuýp mà không cần thêm hình khối nào.
+  const view = positionWorld.sub(cameraPosition).normalize();
+  const nW = n; // mặt tiền thẳng trục thế giới (InstanceBatch không xoay nhà) ⇒ pháp tuyến cục bộ = thế giới
+  const du = select(zFace, view.x, view.z);
+  const dd = view.dot(nW).negate().max(0.001); // đi sâu vào trong
+  const dy = view.y;
+  const uMin = faceW.mul(0.05);
+  const uMax = faceW.mul(0.95);
+  const yTop = float(FLOOR_HEIGHT * 0.84);
+  const roomD = select(zFace, size.z, size.x).mul(0.5).min(4.5);
+  const tBack = roomD.div(dd);
+  const tSide = select(du.greaterThan(0), uMax.sub(u), uMin.sub(u)).div(select(abs(du).lessThan(0.0001), float(0.0001), du));
+  const tY = select(dy.greaterThan(0), yTop.sub(y), y.negate()).div(select(abs(dy).lessThan(0.0001), float(0.0001), dy));
+  const t = tBack.min(tSide).min(tY);
+  const hu = u.add(du.mul(t));
+  const hy = y.add(dy.mul(t));
+  const hd = dd.mul(t);
+  const hitBack = tBack.lessThanEqual(tSide).and(tBack.lessThanEqual(tY));
+  const hitSide = hitBack.not().and(tSide.lessThanEqual(tY));
+  const hitFloor = hitBack.not().and(hitSide.not()).and(dy.lessThan(0));
+  // Tường: kem / xanh nhạt; kệ hàng (tiệm tạp hoá, điện thoại, quần áo…) khoảng 2/3 số tiệm mặt đường.
+  const roomWall = mix(vec3(0.78, 0.72, 0.6), vec3(0.62, 0.7, 0.72), hash(seed.mul(77)));
+  const shelves = inHem.not().and(hash(seed.mul(3.7)).lessThan(0.66));
+  const along = select(hitBack, hu, hd); // toạ độ ngang trên mặt tường đang nhìn
+  const band = fract(hy.div(0.42));
+  const inShelfZone = hy.greaterThan(0.25).and(hy.lessThan(2.15));
+  const board = inShelfZone.and(band.lessThan(0.07));
+  const goodsHash = hash(floor(along.mul(5)).add(floor(hy.div(0.42)).mul(13)).add(seed.mul(57)));
+  const goods = inShelfZone.and(band.greaterThan(0.1)).and(band.lessThan(0.8)).and(goodsHash.greaterThan(0.22));
+  // Hàng hoá: bảng màu bao bì đậm (đỏ, vàng, xanh dương, xanh lá, cam, trắng).
+  const gk = hash(goodsHash.mul(7.1));
+  const goodsColor = select(
+    gk.lessThan(0.2),
+    vec3(0.75, 0.08, 0.06),
+    select(gk.lessThan(0.38), vec3(0.95, 0.72, 0.05), select(gk.lessThan(0.55), vec3(0.06, 0.3, 0.75), select(gk.lessThan(0.7), vec3(0.1, 0.55, 0.2), select(gk.lessThan(0.85), vec3(0.95, 0.42, 0.06), vec3(0.92, 0.92, 0.9))))),
+  );
+  const wallHit = select(shelves.and(board), vec3(0.35, 0.3, 0.26), select(shelves.and(goods), goodsColor, roomWall));
+  // Nhà trong hẻm: bàn thờ đỏ trên tường sau.
+  const altar = inHem.and(hitBack).and(abs(hu.sub(faceW.mul(0.5))).lessThan(0.35)).and(hy.greaterThan(1.5)).and(hy.lessThan(1.95));
+  const tileU = fract(hu.div(0.4)).lessThan(0.5);
+  const tileD = fract(hd.div(0.4)).lessThan(0.5);
+  const floorTile = select(tileU.and(tileD).or(tileU.not().and(tileD.not())), vec3(0.82, 0.8, 0.76), vec3(0.68, 0.66, 0.62));
+  // Trần: đèn tuýp mỗi 1,6 m theo chiều sâu.
+  const tube = fract(hd.div(1.6)).greaterThan(0.45).and(fract(hd.div(1.6)).lessThan(0.53)).and(abs(hu.sub(faceW.mul(0.5))).lessThan(faceW.mul(0.22)));
+  const ceiling = select(tube, vec3(1, 1, 0.98), vec3(0.7, 0.7, 0.68));
+  const roomColor = select(hitFloor, floorTile, select(hitBack.or(hitSide), select(altar, vec3(0.75, 0.08, 0.06), wallHit), ceiling));
+  // Càng sâu càng tối (ánh sáng ngoài phố không chiếu tới).
+  const depthShade = mix(float(0.55), float(0.22), hd.div(roomD.add(0.5)).clamp(0, 1));
+  const interior = roomColor.mul(depthShade);
   const shopColor = select(shutterClosed, select(inHem, gate, shutter), interior);
   // Lanh tô / bảng hiệu nền phía trên cửa hàng.
   const isLintel = isFront.and(isTower.not()).and(floorIdx.lessThan(0.5)).and(fv.greaterThanEqual(0.84));
@@ -188,7 +237,10 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const lit = isWindow.and(isFrame.not()).and(bars.not()).and(litHash.lessThan(0.45));
   const lampTone = mix(vec3(1.0, 0.78, 0.48), vec3(0.78, 0.9, 1.0), select(hash(winHash.mul(5.3)).greaterThan(0.5), float(1), float(0)));
   const windowGlow = select(winHash.greaterThan(0.72).and(isTower.not()), curtainPalette.mul(0.6), lampTone.mul(mix(float(0.45), float(0.85), litHash.mul(2.2))));
-  const shopGlow = select(isShop.and(shutterClosed.not()), mix(vec3(1.0, 0.82, 0.55), vec3(0.85, 0.95, 1.0), hash(seed.mul(53))).mul(float(1.0).sub(interiorDepth.mul(0.6))), vec3(0, 0, 0));
+  // Tiệm còn mở ban đêm: phòng sáng đèn (tuýp trắng xanh hoặc vàng ấm), đèn tuýp trên trần sáng rực, bàn thờ đỏ.
+  const roomLight = mix(vec3(1.0, 0.84, 0.6), vec3(0.88, 0.96, 1.0), hash(seed.mul(53)));
+  const shopLit = roomColor.mul(roomLight).mul(mix(float(0.62), float(0.3), hd.div(roomD.add(0.5)).clamp(0, 1))).add(select(tube.and(hitBack.or(hitSide).or(hitFloor).not()), vec3(0.8, 0.8, 0.8), vec3(0, 0, 0)));
+  const shopGlow = select(isShop.and(shutterClosed.not()), select(altar, vec3(1.0, 0.12, 0.08), shopLit), vec3(0, 0, 0));
   const lobbyGlow = select(isLobby, vec3(0.9, 0.85, 0.7).mul(0.7), vec3(0, 0, 0));
   const glow = select(roof, vec3(0, 0, 0), select(lit, windowGlow, shopGlow.add(lobbyGlow)));
   mat.emissiveNode = glow.mul(nightUniform);
