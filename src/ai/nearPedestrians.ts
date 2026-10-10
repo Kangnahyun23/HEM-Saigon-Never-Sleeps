@@ -1,49 +1,29 @@
 import * as THREE from 'three/webgpu';
-import { createCharacter, getClip, hasCharacter } from '@/assets/characters';
-import type { AnimationName, CharacterId } from '@/assets/manifest';
+import type { AnimationName } from '@/assets/manifest';
 import { createRng, pick } from '@/core/random';
 import { PAD_HEIGHT } from '@/world/city/layout';
+import { buildNpc, CIVILIANS, civiliansAvailable, stepNpc, type NpcBody } from './npcBody';
 import { PedestrianLod } from './pedestrianLod';
 import type { Walker } from './pedestrians';
 
-/** Mẫu người đi đường (CC0, xem CREDITS.md) — nữ dùng dáng đi nữ. */
-const CIVILIANS: ReadonlyArray<{ id: CharacterId; female: boolean; height: [number, number] }> = [
-  { id: 'man-shirt', female: false, height: [1.62, 1.74] },
-  { id: 'man-tee', female: false, height: [1.62, 1.74] },
-  { id: 'man-polo', female: false, height: [1.62, 1.74] },
-  { id: 'old-man', female: false, height: [1.58, 1.68] },
-  { id: 'woman-young', female: true, height: [1.52, 1.64] },
-  { id: 'woman-style', female: true, height: [1.52, 1.64] },
-  { id: 'old-woman', female: true, height: [1.48, 1.58] },
-];
 /** Lúc đứng lại: gọi điện, nói chuyện, khoanh tay, đứng thường. */
 const IDLES: readonly AnimationName[] = ['phone', 'talk', 'foldArms', 'idle', 'idle'];
 /** Bán kính (m) quanh camera vẽ người bằng nhân vật có xương. */
 const NEAR_RADIUS = 32;
 
-/** Thứ tự động tác trong một nhân vật: 0 đứng (kiểu riêng), 1 đi, 2 né xe. */
+/** Thứ tự động tác trong một NPC đi bộ: 0 đứng (kiểu riêng), 1 đi, 2 né xe. */
 const IDLE = 0;
 const WALK = 1;
 const DODGE = 2;
 
-interface Npc {
-  readonly body: THREE.Object3D;
-  /** Tỉ lệ co giãn ứng với 1 m chiều cao (để đổi chiều cao khi dùng lại cho người khác). */
-  readonly perMeter: number;
-  readonly mixer: THREE.AnimationMixer;
-  readonly actions: THREE.AnimationAction[];
-  readonly weights: number[];
-}
-
 interface Slot {
   walker: number;
   generation: number;
-  npc: Npc | null;
+  npc: NpcBody | null;
   /** Mỗi chỗ giữ sẵn hình của từng mẫu đã dùng (đổi người khỏi phải nhân bản lại). */
-  readonly cache: Map<string, Npc>;
+  readonly cache: Map<string, NpcBody>;
 }
 
-const damp = (current: number, target: number, rate: number, dt: number): number => current + (target - current) * (1 - Math.exp(-rate * dt));
 const _q = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 
@@ -65,19 +45,7 @@ export class NearPedestrianView {
 
   /** Có đủ mẫu người đi đường + động tác để dùng không (thiếu thì chỉ dùng khối hộp). */
   static available(): boolean {
-    return CIVILIANS.every((c) => hasCharacter(c.id));
-  }
-
-  private build(look: (typeof CIVILIANS)[number], height: number, idle: AnimationName): Npc | null {
-    const body = createCharacter(look.id, height);
-    if (!body) return null;
-    const perMeter = body.scale.y / height;
-    const mixer = new THREE.AnimationMixer(body);
-    const names: AnimationName[] = [idle, look.female ? 'walkFemale' : 'walk', 'dodge'];
-    const actions = names.map((n) => mixer.clipAction(getClip(n) ?? new THREE.AnimationClip(n, 1, [])));
-    for (const a of actions) a.setEffectiveWeight(0).play();
-    this.root.add(body);
-    return { body, perMeter, mixer, actions, weights: [0, 0, 0] };
+    return civiliansAvailable();
   }
 
   private assign(slot: Slot, w: Walker): void {
@@ -91,7 +59,7 @@ export class NearPedestrianView {
     const key = `${look.id}:${idle}`;
     let npc = slot.cache.get(key) ?? null;
     if (!npc) {
-      npc = this.build(look, height, idle);
+      npc = buildNpc(this.root, look.id, height, [idle, look.female ? 'walkFemale' : 'walk', 'dodge']);
       if (npc) slot.cache.set(key, npc);
     }
     slot.npc = npc;
@@ -128,12 +96,7 @@ export class NearPedestrianView {
       else t[IDLE] = 1;
       // Nhịp bước theo tốc độ đi (clip đi khớp ~1,6 m/s).
       npc.actions[WALK]!.timeScale = Math.min(1.4, Math.max(0.6, w.speed / 1.6));
-      for (let i = 0; i < 3; i++) {
-        const v = damp(npc.weights[i]!, t[i]!, 8, dt);
-        npc.weights[i] = v < 0.002 ? 0 : v;
-        npc.actions[i]!.setEffectiveWeight(npc.weights[i]!);
-      }
-      npc.mixer.update(dt);
+      stepNpc(npc, t, 8, dt);
     }
   }
 }

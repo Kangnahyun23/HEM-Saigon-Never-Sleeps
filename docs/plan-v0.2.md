@@ -10,8 +10,9 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   N2.5 hẻm (biển số hẻm, đồng hồ điện, mái bạt, bàn thờ thiên, chậu kiểng);
 - [x] N2.6 đêm Sài Gòn (bloom theo mức chất lượng, bảng LED chạy chữ, đèn tiệm hắt ra vỉa hè, phản chiếu trên đường ướt);
 - [x] N3.1 nhân vật có xương (Mesh2Motion CC0: 11 mẫu người, 43 động tác) — PR #20;
-- [~] N3.2 Tín: đứng / đi / chạy / nhảy / lái xe xong; còn lên–xuống xe, ngồi, nghe điện thoại, cầm đồ;
-- [~] N3.3 người đi đường gần camera là nhân vật có xương (3/6/10 người theo sức máy), xa vẫn khối hộp; còn hoạt cảnh nhỏ;
+- [x] N3.2 Tín: đứng / đi / chạy / nhảy / lái xe, mở điện thoại thì áp máy lên tai (lên–xuống xe, cầm đồ để N5–N6);
+- [x] N3.3 người đi đường gần camera là nhân vật có xương (3/6/10 người theo sức máy), xa vẫn khối hộp; người ngồi quán cóc,
+  người bán xe đẩy (đông vắng theo giờ). Mẫu xa nướng động tác vào texture (VAT) để sau nếu cần;
 - [ ] N4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa

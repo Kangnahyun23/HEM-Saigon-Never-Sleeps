@@ -28,6 +28,8 @@ export interface AnimState {
   footDown?: boolean;
   /** Góc lái hiện tại (rad) để tay xoay theo ghi-đông. */
   steer?: number;
+  /** Đang mở điện thoại (phím P): đứng yên thì áp máy lên tai. */
+  phone?: boolean;
 }
 
 /** Mọi khối hộp dùng chung một vật liệu, màu nằm trong đỉnh — để gộp được các khối cùng khớp thành một mesh. */

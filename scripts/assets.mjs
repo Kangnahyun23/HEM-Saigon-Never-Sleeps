@@ -80,6 +80,7 @@ const ANIMATIONS = [
       jumpLand: 'Jump_Land',
       drive: 'Driving',
       sit: 'Sitting_Idle',
+      sitTalk: 'Sitting_Talking',
       phone: 'Idle_TalkingPhone',
       talk: 'Idle_Talking',
       foldArms: 'Idle_FoldArms',

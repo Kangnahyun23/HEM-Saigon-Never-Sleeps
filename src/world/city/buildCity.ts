@@ -5,7 +5,7 @@ import { mergeStaticMeshes } from '@/render/merge';
 import type { PhysicsWorld } from '@/physics/physics';
 import { StaticWorld } from '@/physics/staticWorld';
 import { buildBuildings } from './build/buildings';
-import type { BuildContext } from './build/context';
+import type { BuildContext, Seat } from './build/context';
 import { buildGround } from './build/ground';
 import { buildLandmarks } from './build/landmarks';
 import { buildLightPools } from './build/lightPools';
@@ -19,6 +19,8 @@ export interface City {
   group: THREE.Group;
   statics: StaticWorld;
   lamps: THREE.Vector3[];
+  /** Ghế quán cóc / chỗ người bán hàng — xem build/context.ts. */
+  seats: readonly Seat[];
   stats: { meshes: number; instances: number; colliders: number };
   /** Ẩn / hiện các mảnh chi tiết nhỏ theo khoảng cách tới camera — gọi mỗi khung hình trước khi render. */
   updateDetail(eye: THREE.Vector3): void;
@@ -75,7 +77,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   const group = new THREE.Group();
   group.name = 'city';
   const statics = new StaticWorld(physics);
-  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [] };
+  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [], seats: [] };
 
   buildGround(ctx);
   buildBuildings(ctx);
@@ -117,6 +119,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
     group,
     statics,
     lamps: ctx.lamps,
+    seats: ctx.seats,
     stats: { meshes, instances, colliders: statics.colliders },
     updateDetail(eye) {
       if ((eye.x - lastX) ** 2 + (eye.z - lastZ) ** 2 < DETAIL_REFRESH ** 2) return;
