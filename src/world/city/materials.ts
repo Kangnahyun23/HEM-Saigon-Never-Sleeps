@@ -2,12 +2,15 @@ import * as THREE from 'three/webgpu';
 import {
   abs,
   attribute,
+  cameraViewMatrix,
   float,
   floor,
   fract,
   hash,
   max,
   mix,
+  normalView,
+  normalWorld,
   positionWorld,
   select,
   smoothstep,
@@ -15,9 +18,35 @@ import {
   uv,
   vec2,
   vec3,
+  vec4,
 } from 'three/tsl';
+import type { TextureId } from '@/assets/manifest';
+import { getTextures } from '@/assets/textures';
 import { nightUniform, wetUniform } from '../nightGlow';
 import { FLOOR_HEIGHT } from './layout';
+
+/**
+ * Texture lặp CC0 (public/media, xem CREDITS.md) chiếu từ trên xuống theo toạ độ thế giới cho mặt đất.
+ * Màu: giữ tông `base` của game, chỉ lấy chi tiết từ ảnh (ảnh / màu trung bình của ảnh), `strength` 0..1 là độ đậm chi tiết.
+ * Normal: chỉ cho mặt hướng lên (thành vỉa hè giữ normal hình học). Chưa tải được ảnh ⇒ null (dùng cách vẽ thủ tục).
+ */
+function groundTexture(id: TextureId, base: THREE.Color, strength: number) {
+  const set = getTextures(id);
+  const mean = set?.entry.mean;
+  if (!set?.color || !mean) return null;
+  const [sw, sh] = set.entry.size;
+  // v ngược chiều z ⇒ tiếp tuyến +X, song tiếp tuyến −Z, pháp tuyến +Y (tam diện thuận).
+  const st = vec2(positionWorld.x.div(sw), positionWorld.z.div(sh).negate());
+  const detail = texture(set.color, st).rgb.div(vec3(mean[0], mean[1], mean[2]));
+  const color = vec3(base.r, base.g, base.b).mul(mix(vec3(1, 1, 1), detail, strength));
+  let normal = null;
+  if (set.normal) {
+    const t = texture(set.normal, st).xyz.mul(2).sub(1);
+    const world = vec3(t.x, t.z, t.y.negate()).normalize();
+    normal = select(normalWorld.y.greaterThan(0.5), cameraViewMatrix.mul(vec4(world, 0)).xyz.normalize(), normalView);
+  }
+  return { color, normal };
+}
 
 /**
  * Vật liệu mặt tiền nhà ống, vẽ hoàn toàn bằng shader (TSL) nên MỘT InstancedMesh vẽ được cả nghìn căn nhà khác nhau:
@@ -121,7 +150,20 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const footDarken = smoothstep(0.0, 1.4, y).mul(0.12).add(0.88);
   const sideShade = select(isFront.or(isBack), float(1), float(0.9));
   const floorBand = select(isFront.and(fv.lessThan(0.045)).and(upper), float(0.82), float(1)); // gờ sàn mỗi tầng
-  const wallColor = wall.mul(float(0.94).sub(streak)).mul(footDarken).mul(sideShade).mul(floorBand);
+  const wallPlain = wall.mul(float(0.94).sub(streak)).mul(footDarken).mul(sideShade).mul(floorBand);
+  // Vữa loang lổ (texture CC0): mặt tiền nhẹ tay, tường hông / mặt sau đậm (tường hông nhà phố Sài Gòn hay bong tróc, ố mốc).
+  const plaster = getTextures('plaster');
+  const plasterMean = plaster?.entry.mean;
+  const wallColor =
+    plaster?.color && plasterMean
+      ? wallPlain.mul(
+          mix(
+            vec3(1, 1, 1),
+            texture(plaster.color, vec2(u.add(seed.mul(17.3)), y).div(plaster.entry.size[0])).rgb.div(vec3(plasterMean[0], plasterMean[1], plasterMean[2])),
+            select(isFront, float(0.45), float(0.85)),
+          ).clamp(0.35, 1.5),
+        )
+      : wallPlain;
   const towerWall = mix(wall, vec3(0.8, 0.82, 0.84), 0.6);
 
   const roofColor = vec3(0.47, 0.45, 0.42).mul(float(0.85).add(hash(floor(positionWorld.x.mul(0.5)).add(floor(positionWorld.z.mul(0.5)).mul(57))).mul(0.15)));
@@ -160,8 +202,12 @@ export function createPavementMaterial(base: THREE.ColorRepresentation): THREE.M
   const grout = fract(tile.x).lessThan(0.05).or(fract(tile.y).lessThan(0.05));
   const tileHash = hash(floor(tile.x).add(floor(tile.y).mul(113)));
   const color = vec3(c.r, c.g, c.b).mul(float(0.9).add(tileHash.mul(0.12)));
+  // Gạch con sâu (texture CC0) nếu đã tải; không thì ô gạch 0,5 m vẽ thủ tục.
+  const tex = groundTexture('pavers', c, 0.9);
+  const dry = tex ? tex.color : select(grout, color.mul(0.72), color);
+  if (tex?.normal) mat.normalNode = tex.normal;
   // Ướt mưa: sẫm lại và bóng lên.
-  mat.colorNode = select(grout, color.mul(0.72), color).mul(mix(float(1), float(0.72), wetUniform));
+  mat.colorNode = dry.mul(mix(float(1), float(0.72), wetUniform));
   mat.roughnessNode = mix(float(0.92), float(0.45), wetUniform);
   return mat;
 }
@@ -174,7 +220,10 @@ export function createConcreteMaterial(base: THREE.ColorRepresentation): THREE.M
   const joint = fract(slab.x).lessThan(0.012).or(fract(slab.y).lessThan(0.012));
   const slabHash = hash(floor(slab.x).add(floor(slab.y).mul(97)));
   const grain = hash(floor(positionWorld.x.mul(4)).add(floor(positionWorld.z.mul(4)).mul(733)));
-  const color = vec3(c.r, c.g, c.b).mul(float(0.84).add(slabHash.mul(0.18)).add(grain.mul(0.06)));
+  // Bê tông mòn (texture CC0) thay cho hạt lấm tấm thủ tục; khe co giãn và độ đậm nhạt từng tấm vẫn vẽ thủ tục.
+  const tex = groundTexture('concrete', c, 0.8);
+  const color = tex ? tex.color.mul(float(0.88).add(slabHash.mul(0.18))) : vec3(c.r, c.g, c.b).mul(float(0.84).add(slabHash.mul(0.18)).add(grain.mul(0.06)));
+  if (tex?.normal) mat.normalNode = tex.normal;
   mat.colorNode = select(joint, color.mul(0.6), color);
   return mat;
 }
@@ -187,7 +236,11 @@ export function createAsphaltMaterial(base: THREE.ColorRepresentation): THREE.Me
   const patch = hash(floor(positionWorld.x.div(7)).add(floor(positionWorld.z.div(7)).mul(71)));
   // Ướt mưa: nhựa đường sẫm, gần như gương (phản chiếu đèn đường, đèn xe qua môi trường); vũng nước theo mảng.
   const puddle = smoothstep(0.55, 0.85, patch).mul(wetUniform);
-  mat.colorNode = vec3(c.r, c.g, c.b).mul(float(0.88).add(grain.mul(0.1)).add(patch.mul(0.08))).mul(mix(float(1), float(0.55), wetUniform));
+  // Nhựa đường nứt (texture CC0) nếu đã tải; mảng 7 m sáng tối khác nhau để đỡ lộ ô lặp.
+  const tex = groundTexture('asphalt', c, 0.75);
+  const dry = tex ? tex.color.mul(float(0.9).add(patch.mul(0.12))) : vec3(c.r, c.g, c.b).mul(float(0.88).add(grain.mul(0.1)).add(patch.mul(0.08)));
+  if (tex?.normal) mat.normalNode = tex.normal;
+  mat.colorNode = dry.mul(mix(float(1), float(0.55), wetUniform));
   mat.roughnessNode = mix(float(0.96), float(0.32), wetUniform).sub(puddle.mul(0.25));
   mat.metalnessNode = puddle.mul(0.25);
   return mat;

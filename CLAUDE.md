@@ -15,6 +15,7 @@ npm start          # tự cài thư viện nếu cần (scripts/setup.mjs) rồi
 npm run dev        # như trên nhưng không mở trình duyệt (thêm ?webgl để ép WebGL2)
 npm run check      # lint + typecheck + unit test — chạy trước mỗi commit
 npm run build      # tsc + vite build → dist/
+npm run assets     # tải asset CC0 (Poly Haven…) theo scripts/assets.mjs → nén WebP vào public/media/, sinh src/assets/manifest.ts + CREDITS.md
 npm run package    # build + đóng gói release/hem-saigon-v<phiên bản>-web.zip cho itch.io (scripts/package.mjs, zip.mjs)
 npm run e2e        # build, chạy preview, Playwright mở game và chụp tests/e2e/__screenshots__/
 npx playwright test views      # chỉ chụp các góc nhìn khu phố
@@ -23,6 +24,9 @@ npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → pha
 Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
 (chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do), `__HEM__.setHour(21)` (đổi giờ).
 Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ. `__HEM__.settings()` = cài đặt hiện tại.
+Asset nhập ngoài: thêm dòng vào `SOURCES` (scripts/assets.mjs) rồi `npm run assets`; file nén trong `public/media/` có commit
+(ngân sách `MEDIA_BUDGET` 25 MB, test `assets.test.ts` kiểm tra), bản gốc chỉ ở `.cache/assets/`. Code lấy texture bằng
+`getTextures(id)` (src/assets/textures.ts) — luôn có đường lùi về vẽ thủ tục khi ảnh chưa tải được.
 Hiệu năng: chi tiết nhỏ mới thì thêm tên lô vào `DETAIL_DISTANCE` (city/buildCity.ts); khối tĩnh trong một nhóm nên dùng chung vật liệu để `mergeStaticMeshes` gộp được.
 Vòng lặp mỗi khung hình KHÔNG tạo đối tượng / mảng / closure mới (dùng lại biến tạm) — rác bộ nhớ gây khựng khi trình duyệt dọn.
 Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `world.step()` (Rapier 0.21 duyệt lại mọi collider, ~300 KB rác/bước).
@@ -54,6 +58,7 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 ## Cấu trúc
 ```
 src/
+  assets/            manifest.ts (tự sinh: texture, kích thước thật, màu trung bình), textures.ts (tải lúc vào game, getTextures)
   main.ts            khởi tạo renderer, physics, khu phố, Game; vòng lặp khung hình; móc __HEM__
   game/game.ts       vòng chơi: đi bộ ⇄ lái xe, bước vật lý cố định + nội suy, camera, HUD
   core/              fixedStep, input (phím + chuột/pointer lock), random (seed), rect
@@ -93,7 +98,7 @@ src/
                      settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
-scripts/             setup.mjs (tự cài thư viện), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
+scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
 tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall
 ```
