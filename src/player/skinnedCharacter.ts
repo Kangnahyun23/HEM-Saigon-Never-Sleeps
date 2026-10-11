@@ -44,6 +44,19 @@ function weaponMesh(id: ItemId): THREE.Group {
       part(new THREE.CylinderGeometry(0.016, 0.016, 0.3, 8).rotateX(Math.PI / 2), wood, 0.1);
       part(new THREE.CylinderGeometry(0.016, 0.016, 0.3, 8).rotateX(Math.PI / 2), wood, 0.36, -0.12);
       break;
+    case 'gheNhua': {
+      // Cầm một chân ghế đẩu, mặt ghế chĩa ra ngoài.
+      const red = new THREE.MeshStandardNodeMaterial({ color: '#d8342c', roughness: 0.5 });
+      part(new THREE.BoxGeometry(0.26, 0.26, 0.24), red, 0.2, 0.08);
+      part(new THREE.BoxGeometry(0.3, 0.3, 0.025), red, 0.33, 0.08);
+      break;
+    }
+    case 'muBaoHiem': {
+      // Cầm quai, vỏ mũ úp ra ngoài.
+      const shell = new THREE.MeshStandardNodeMaterial({ color: '#e7c22d', roughness: 0.3 });
+      part(new THREE.SphereGeometry(0.13, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2), shell, 0.12);
+      break;
+    }
     default:
       break;
   }

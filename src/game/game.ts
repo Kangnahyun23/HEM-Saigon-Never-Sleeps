@@ -18,7 +18,11 @@ import { formatVnd, Wallet } from '@/systems/wallet';
 import type { PhoneTab } from '@/ui/phone';
 import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@/systems/inventory';
 import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
-import { attackFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
+import { attackFor, bloodFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
+import { Pickups } from '@/systems/pickups';
+import { BloodSim } from '@/world/blood';
+import { BloodView } from '@/world/bloodView';
+import { PickupView } from '@/world/pickupView';
 
 /** Phím di chuyển (hằng số — khỏi tạo mảng mới mỗi khung hình). */
 const MOVE_ALL = { fwd: ['KeyW', 'ArrowUp'], back: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
@@ -27,6 +31,7 @@ const MOVE_WASD = { fwd: ['KeyW'], back: ['KeyS'], left: ['KeyA'], right: ['KeyD
 /** Phím 1–8 trên điện thoại mở thẳng app (thứ tự như màn hình chính). */
 const PHONE_KEYS: readonly PhoneTab[] = ['jobs', 'map', 'messages', 'wallet', 'settings', 'bank', 'social', 'camera'];
 import { FixedStepAccumulator } from '@/core/fixedStep';
+import { containsPoint } from '@/core/rect';
 import type { Input } from '@/core/input';
 import { GROUP, interaction } from '@/physics/groups';
 import type { PhysicsWorld } from '@/physics/physics';
@@ -54,6 +59,16 @@ import { GameClock, lightingAt } from '@/world/timeOfDay';
 import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 
 const STEP = 1 / 60;
+/** Gợi ý / thông báo khi nhặt đồ ngoài phố. */
+const PICKUP_PROMPT: Partial<Record<ItemId, string>> = { gheNhua: '<kbd>G</kbd> Lấy ghế nhựa', muBaoHiem: '<kbd>G</kbd> Lấy mũ bảo hiểm' };
+const PICKUP_DONE: Partial<Record<ItemId, string>> = {
+  gheNhua: 'Lấy một cái ghế nhựa — chủ quán nhìn theo, không dám nói gì',
+  muBaoHiem: 'Lấy mũ bảo hiểm trên yên xe — mong chủ xe không ra kịp',
+};
+/** Câu báo khi vũ khí hỏng (mặc định "… gãy rồi!"). */
+const BREAK_TEXT: Partial<Record<ItemId, string>> = { gheNhua: 'Ghế nhựa vỡ tan!', muBaoHiem: 'Mũ bảo hiểm bể làm đôi!' };
+/** Số vũng máu chờ loang cùng lúc tối đa. */
+const POOL_QUEUE = 8;
 const MOUNT_RANGE = 2.4;
 const DISMOUNT_MAX_SPEED = 4;
 /** Xe đang đậu: không ga, phanh tay (dùng chung, không tạo đối tượng mỗi bước). */
@@ -198,6 +213,16 @@ export class Game {
     if (this.nearPedestrians) scene.add(this.nearPedestrians.root);
     this.seated = SeatedPeopleView.available() && budget.nearPedestrians > 0 ? new SeatedPeopleView(city.seats, Math.max(2, Math.round(budget.nearPedestrians * 0.6))) : null;
     if (this.seated) scene.add(this.seated.root);
+    this.pickups = new Pickups(city.pickups);
+    this.pickupView = new PickupView(this.pickups);
+    scene.add(this.pickupView.mesh);
+    // Vết máu chỉ đọng trên vỉa hè (cùng cao độ với chỗ người đi bộ đứng), rơi xuống lòng đường thì thôi.
+    const blocks = city.layout.blocks;
+    this.blood = new BloodSim(city.layout.seed + 23, (x, z) => {
+      for (const b of blocks) if (containsPoint(b.rect, x, z)) return true;
+      return false;
+    });
+    scene.add(this.bloodView.root);
 
     // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
     this.bindBackpack();
@@ -223,6 +248,18 @@ export class Game {
   private queuedAttack: 'light' | 'heavy' | null = null;
   /** Khựng hình khi đòn trúng (giây thật còn lại) — main nhân hệ số chậm vào dt. */
   hitStop = 0;
+  /** Đồ nhặt ngoài phố: ghế nhựa ở chồng ghế quán cóc, mũ bảo hiểm trên yên xe đậu. */
+  readonly pickups: Pickups;
+  private readonly pickupView: PickupView;
+  /** Máu nhẹ (tắt được trong Cài đặt). */
+  readonly blood: BloodSim;
+  private readonly bloodView = new BloodView();
+  private bloodOn = true;
+  /** Vũng máu chờ loang dưới người vừa gục (đợi động tác ngã xong): người, đời thứ mấy, còn bao lâu, cỡ vũng. */
+  private readonly poolWalker = new Int32Array(POOL_QUEUE).fill(-1);
+  private readonly poolGeneration = new Int32Array(POOL_QUEUE);
+  private readonly poolTimer = new Float32Array(POOL_QUEUE);
+  private readonly poolRadius = new Float32Array(POOL_QUEUE);
 
   /** Hệ số thời gian cho khung hình này (giây thật `realDt`): khựng hình khi trúng đòn, chậm khi mở vòng chọn đồ. */
   tickScale(realDt: number): number {
@@ -327,7 +364,14 @@ export class Game {
       for (const w of this.pedestrians.walkers) {
         if (w.dead || !inStrike(p.x, p.z, yaw, def.reach, def.arc, w.x, w.z)) continue;
         const r = this.pedestrians.hit(w.id, def.damage, p.x, p.z, def.knock);
-        if (r) hits++;
+        if (!r) continue;
+        hits++;
+        if (this.bloodOn) {
+          // Giọt bắn từ ngực / vai nạn nhân theo hướng đòn; gục (hoặc ngã vì lưỡi sắc) thì chờ ngã xong mới loang vũng.
+          const b = bloodFor(this.equipped, r);
+          this.blood.spray(w.x, PAD_HEIGHT + 1.2, w.z, w.x - p.x, w.z - p.z, b.drops, PAD_HEIGHT);
+          if (b.pool > 0) this.queuePool(w.id, w.generation, r === 'dead' ? 1.5 : 0.7, b.pool);
+        }
       }
       if (hits > 0) {
         this.hitStop = def.knock ? 0.11 : 0.06;
@@ -344,6 +388,47 @@ export class Game {
     }
   }
 
+  private queuePool(walker: number, generation: number, delay: number, radius: number): void {
+    let slot = 0;
+    for (let i = 0; i < POOL_QUEUE; i++) {
+      if (this.poolWalker[i] === -1) {
+        slot = i;
+        break;
+      }
+      if (this.poolTimer[i]! < this.poolTimer[slot]!) slot = i;
+    }
+    this.poolWalker[slot] = walker;
+    this.poolGeneration[slot] = generation;
+    this.poolTimer[slot] = delay;
+    this.poolRadius[slot] = radius;
+  }
+
+  /** Máu: giọt bay, vết mờ dần; tới giờ thì loang vũng dưới thân người nằm (hông nhân vật có xương, hoặc ước lượng). */
+  private updateBlood(dt: number): void {
+    this.blood.step(dt);
+    for (let i = 0; i < POOL_QUEUE; i++) {
+      const id = this.poolWalker[i]!;
+      if (id < 0) continue;
+      this.poolTimer[i]! -= dt;
+      if (this.poolTimer[i]! > 0) continue;
+      this.poolWalker[i] = -1;
+      const w = this.pedestrians.walkers[id];
+      // Người đã được đặt lại chỗ khác (đi xa rồi quay lại) ⇒ thôi.
+      if (!w || w.generation !== this.poolGeneration[i]) continue;
+      let x = w.x;
+      let z = w.z;
+      if (this.nearPedestrians?.pelvisOf(id, this.tmp)) {
+        x = this.tmp.x;
+        z = this.tmp.z;
+      } else if (w.dead || w.down > 0) {
+        // Hình ở xa nằm ngửa ra sau từ chỗ chân: thân ở sau lưng ~0,8 m.
+        x -= Math.sin(w.yaw) * 0.8;
+        z -= Math.cos(w.yaw) * 0.8;
+      }
+      this.blood.pool(x, PAD_HEIGHT, z, this.poolRadius[i]!);
+    }
+  }
+
   /** Mỗi lần đánh trúng hao 1 độ bền vũ khí; hết độ bền thì gãy (mất khỏi balo). */
   private wearWeapon(hits: number): void {
     if (!this.equipped) return;
@@ -352,7 +437,7 @@ export class Game {
       if (sl?.id !== this.equipped || sl.durability === undefined) continue;
       sl.durability -= hits;
       if (sl.durability <= 0) {
-        this.hud.showToast(`${ITEMS[sl.id].name} gãy rồi!`, 2);
+        this.hud.showToast(BREAK_TEXT[sl.id] ?? `${ITEMS[sl.id].name} gãy rồi!`, 2);
         this.inventory.remove(i, 1);
         this.hud.backpack.invalidate();
       }
@@ -496,6 +581,34 @@ export class Game {
   /** Âm lượng tổng từ cài đặt (0…1). */
   setVolume(volume: number): void {
     mixer.setVolume(volume);
+  }
+
+  /** Giờ game tính từ lúc vào game (đồ nhặt được có lại theo giờ game). */
+  private gameHours(): number {
+    return this.clock.day * 24 + this.clock.hour;
+  }
+
+  /** Nhặt đồ ở chỗ `spot`: cho vào balo rồi cầm lên tay luôn. */
+  private pickUp(spot: number): void {
+    const item = this.pickups.spots[spot]!.item;
+    if (this.inventory.add(item) > 0) {
+      this.hud.showToast('Balo đầy rồi — vứt bớt đồ (I) mới nhặt được', 2);
+      return;
+    }
+    this.pickups.take(spot, this.gameHours());
+    this.equipped = item;
+    this.hud.backpack.invalidate();
+    this.hud.showToast(`${PICKUP_DONE[item] ?? `Đã nhặt: ${ITEMS[item].name}`}`, 2);
+    playSfx('pickup');
+  }
+
+  /** Bật / tắt máu nhẹ (Cài đặt). Tắt thì xoá luôn vết đang có. */
+  setBlood(on: boolean): void {
+    this.bloodOn = on;
+    if (!on) {
+      this.blood.clear();
+      this.poolWalker.fill(-1);
+    }
   }
 
   /** Độ nhạy chuột / đảo trục dọc từ cài đặt. */
@@ -655,6 +768,7 @@ export class Game {
       this.queuedAttack = null;
       this.startAttack(heavy);
     }
+    this.updateBlood(dt);
     if (input.wheel) this.camera.addZoom(input.wheel);
     if (input.wasPressed('F1')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
@@ -728,6 +842,12 @@ export class Game {
       if (near && near.dist < MOUNT_RANGE) {
         prompt = '<kbd>F</kbd> Lên xe';
         if (input.wasPressed('KeyF')) this.mount(near.bike);
+      }
+      // Đồ nhặt được (ghế nhựa, mũ bảo hiểm): phím G (gợi ý lên xe được ưu tiên hiện).
+      const spot = this.pickups.nearest(this.character.curr.x, this.character.curr.z, this.gameHours());
+      if (spot >= 0) {
+        if (!prompt) prompt = PICKUP_PROMPT[this.pickups.spots[spot]!.item] ?? '<kbd>G</kbd> Nhặt';
+        if (input.wasPressed('KeyG')) this.pickUp(spot);
       }
     } else if (this.riding) {
       const speed = Math.abs(this.riding.phys.speed);
@@ -833,6 +953,8 @@ export class Game {
     this.hud.setVitals(this.health / 100, 0);
     this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
     if (this.nearPedestrians) this.nearPedestrians.update(this.pedestrians.walkers, alpha, dt, this.view.position.x, this.view.position.z);
+    this.pickupView.update(this.view.position.x, this.view.position.z, this.gameHours());
+    this.bloodView.update(this.blood);
     this.seated?.update(dt, this.clock.hour, this.view.position.x, this.view.position.z);
     this.pedestrianView.update(this.pedestrians.walkers, alpha, this.nearPedestrians?.lod);
     let speedKmh: number | null = null;

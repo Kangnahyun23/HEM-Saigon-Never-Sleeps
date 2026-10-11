@@ -24,6 +24,7 @@ npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → pha
 Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
 (chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do), `__HEM__.setHour(21)` (đổi giờ).
 Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ, `?bloom=0` tắt bloom ban đêm (so hiệu năng). `__HEM__.settings()` = cài đặt hiện tại.
+Cảnh báo 18+ hiện lần đầu vào game (game đứng yên tới khi xác nhận); Playwright bỏ qua, thêm `?canhbao=1` để ép hiện.
 Asset nhập ngoài: thêm dòng vào `SOURCES` (scripts/assets.mjs) rồi `npm run assets`; file nén trong `public/media/` có commit
 (ngân sách `MEDIA_BUDGET` 25 MB, test `assets.test.ts` kiểm tra), bản gốc chỉ ở `.cache/assets/`. Code lấy texture bằng
 `getTextures(id)` (src/assets/textures.ts) — luôn có đường lùi về vẽ thủ tục khi ảnh chưa tải được.
@@ -81,6 +82,8 @@ src/
     nightGlow.ts     uniform "mức đêm" dùng chung cho mọi vật liệu phát sáng (cửa sổ, bảng hiệu, đèn đường, đèn xe) + độ ướt đường
     weather.ts       thời tiết có seed (nắng/mây/mưa rào chiều tối, đường ướt) + applyWeather() — có unit test
     rain.ts          hạt mưa quanh camera tính trên GPU (1 draw call)
+    blood.ts         máu nhẹ: giọt bắn, vết / vũng loang rồi mờ (bể cố định — có unit test) + bloodView (2 InstancedMesh)
+    pickupView.ts    mũ bảo hiểm trên yên xe đậu (đồ nhặt được; mũ bị lấy thì ẩn)
     city/layout.ts   BỐ CỤC thuần dữ liệu (đường, block, hẻm, lô nhà, cột điện, cây…) — có unit test
     city/locate.ts   tên địa điểm tại (x, z) cho HUD
     city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng + nội thất giả, cửa cuốn theo giờ…), vỉa hè, bê tông hẻm, nhựa đường
@@ -109,9 +112,10 @@ src/
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, máu / giáp, sao truy nã, bảng phím F1, hàng thông báo — toastQueue
                      có unit test), minimap (+ minimapMath có unit test)
                      phone (điện thoại "Sầu Riêng S9" cầm tay, phím P: màn hình chính + 8 app — Kèo, Bản đồ, Tin nhắn, Ví,
-                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi)
+                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
-                     combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục — có unit test),
+                     combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục, lượng máu bắn — có unit test),
+                     pickups (đồ nhặt ngoài phố, phím G: chồng ghế nhựa quán cóc, mũ bảo hiểm trên yên xe — có unit test),
                      social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),
                      inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu — có unit test; giao diện ui/backpack, phím I),
                      wheel (vòng chọn đồ: danh sách ô + chọn theo hướng chuột — có unit test; ui/weaponWheel, giữ Tab),

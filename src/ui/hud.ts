@@ -97,6 +97,7 @@ export class Hud {
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>đi / lái</b> · <kbd>Shift</kbd> <b>chạy</b> · <kbd>Space</kbd> <b>nhảy / phanh tay</b></div>
         <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>M</kbd> <b>tắt tiếng</b></div>
         <div><kbd>P</kbd> <b>điện thoại</b> · <kbd>I</kbd> <b>balo</b> · giữ <kbd>Tab</kbd> <b>chọn đồ</b> · <kbd>1</kbd>–<kbd>4</kbd> <b>chọn nhanh</b></div>
+        <div><b>Chuột trái</b> đánh (bấm liên tiếp: combo) · <b>chuột phải</b> đòn mạnh · <kbd>G</kbd> <b>nhặt đồ</b> (ghế nhựa, mũ bảo hiểm)</div>
         <div>Bấm vào màn hình rồi <b>rê chuột</b> để xoay camera · <b>cuộn</b> để zoom · <kbd>F1</kbd> <b>ẩn/hiện bảng này</b></div>
       </div>
       <div class="hud-fps" data-fps></div>

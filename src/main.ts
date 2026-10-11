@@ -12,6 +12,7 @@ import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { nightUniform } from '@/world/nightGlow';
 import { Hud } from '@/ui/hud';
+import { showAgeGate } from '@/ui/ageGate';
 import { SaveSlot } from '@/systems/save';
 import { detectTier, probeHardware, SCENE_BUDGETS, shortGpuName, TIER_LABELS, type Tier } from '@/systems/hardware';
 import { qualityProfile, sceneTier, SettingsStore, type Settings } from '@/systems/settings';
@@ -163,14 +164,26 @@ async function main(): Promise<void> {
     fpsBox.hidden = !(s.showFps || fpsParam);
     game.setLookOptions(s.mouseSensitivity, s.invertY);
     game.setVolume(s.volume);
+    game.setBlood(s.blood);
   };
   applySettings(settings);
   hud.phone?.setHardware(`${shortGpuName(hardware.gpu)} · ${hardware.cores || '?'} luồng CPU`, autoTier, sceneTier(settings.quality, autoTier));
-  hud.phone?.setSettings(settings, (next) => {
+  const changeSettings = (next: Settings): void => {
     settings = next;
     settingsStore.save(next);
     applySettings(next);
-  });
+  };
+  hud.phone?.setSettings(settings, changeSettings);
+  // Cảnh báo 18+ lần đầu vào game (game đứng yên tới khi xác nhận). Chạy tự động thì bỏ qua, trừ khi thêm ?canhbao=1.
+  let gated = false;
+  if (!settings.adultConfirmed && (!navigator.webdriver || new URLSearchParams(location.search).get('canhbao') === '1')) {
+    gated = true;
+    void showAgeGate(document.body, settings.blood).then(({ blood }) => {
+      gated = false;
+      changeSettings({ ...settings, blood, adultConfirmed: true });
+      hud.phone?.setSettings(settings, changeSettings);
+    });
+  }
   if (settings.quality === 'auto' && autoTier !== 'high') {
     // Nói rõ cho người chơi biết game đã tự chọn đồ hoạ nhẹ và đổi ở đâu.
     hud.showToast(`Máy ${TIER_LABELS[autoTier]}: đã chọn đồ hoạ nhẹ cho mượt — đổi ở Điện thoại (P) → Cài đặt (5)`, 6);
@@ -183,7 +196,7 @@ async function main(): Promise<void> {
     const raw = timer.getDelta();
     const dt = Math.min(raw, 0.1);
     // Khựng hình khi trúng đòn / chậm khi mở vòng chọn đồ (giữ Tab): nhân hệ số thời gian của game vào dt.
-    if (!debug.paused) game.update(dt * game.tickScale(dt));
+    if (!debug.paused && !gated) game.update(dt * game.tickScale(dt));
     if (resolution?.sample(raw)) {
       if (renderer.getPixelRatio() !== resolution.pixelRatio) renderer.setPixelRatio(resolution.pixelRatio);
       env.setShadowInterval(resolution.shadowInterval);

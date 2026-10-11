@@ -20,7 +20,10 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] N5.1 cận chiến: đòn nhẹ 3 nhịp (chuột trái, có bộ đệm combo), đòn mạnh (chuột phải), dừng hình + rung camera,
   người đi đường trúng đòn / ngã / gục (nằm lại trên vỉa hè), người xung quanh bỏ chạy; vũ khí mòn dần rồi gãy.
   Vùng trúng đòn tính bằng quạt tầm + góc (thuần logic, rẻ hơn shape cast); né (Q) và đỡ đòn dời sang N5.3 (lúc có người đánh trả);
-- [ ] N5.2–N10.
+- [x] N5.2 vũ khí nhặt được (phím G: ghế nhựa ở chồng ghế quán cóc — 4 phát là vỡ; mũ bảo hiểm trên yên xe đậu, vài giờ game
+  mới có lại), mỗi món có tầm / tốc độ / sát thương / độ bền / mức chảy máu riêng; máu nhẹ (giọt bắn, vết nhỏ, vũng loang
+  dưới người gục, tự mờ sau 50 s), tắt được trong Cài đặt; màn hình cảnh báo 18+ lần đầu vào game (tắt máu ngay tại đó);
+- [ ] N5.3–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

@@ -174,6 +174,15 @@ function buildTrees(ctx: BuildContext): void {
   for (const b of [trunks, canopies, grates, limewash]) addMesh(ctx, b.build());
 }
 
+/** Tỉ lệ xe đậu có mũ bảo hiểm trên yên; vị trí mũ (mặt yên, hơi lùi về sau) trong hệ toạ độ xe. */
+const HELMET_SHARE = 0.25;
+const HELMET_SEAT = [0, 0.885, -0.42] as const;
+/** Số giả ngẫu nhiên 0..1 cố định theo toạ độ. */
+const hash01 = (x: number, z: number): number => {
+  const h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return h - Math.floor(h);
+};
+
 /** Xe máy đậu trên vỉa hè: mỗi bộ phận của mẫu xe là một InstancedMesh. */
 function buildParkedBikes(ctx: BuildContext): void {
   const { layout, statics, pad } = ctx;
@@ -210,9 +219,19 @@ function buildParkedBikes(ctx: BuildContext): void {
       batch.addMatrix(new THREE.Matrix4().multiplyMatrices(m, local), color);
     }
     statics.box(b.x, pad + 0.55, b.z, 0.5, 1.1, 1.85, b.yaw, GROUP.PROP);
+    // Khoảng 1/4 số xe để mũ bảo hiểm trên yên (theo băm vị trí — không đụng chuỗi ngẫu nhiên của phố).
+    if (hash01(b.x, b.z) < HELMET_SHARE) {
+      v.set(0, HELMET_SEAT[1], HELMET_SEAT[2]).applyMatrix4(m);
+      ctx.pickups.push({ x: v.x, y: v.y, z: v.z, yaw: b.yaw, item: 'muBaoHiem', restock: 6 });
+    }
   }
   for (const { batch } of parts.values()) addMesh(ctx, batch.build());
 }
+
+/** Ghế đẩu cao 0,28 m; chồng 5 cái, mỗi cái cao thêm 6,5 cm. */
+const STOOL_H = 0.28;
+const STACK = 5;
+const STACK_STEP = 0.065;
 
 /**
  * Đời sống vỉa hè: quán cóc (bàn nhựa thấp + ghế đẩu) và xe đẩy bán đồ ăn có dù trước một số nhà mặt đường.
@@ -259,6 +278,12 @@ function buildSidewalkLife(ctx: BuildContext): void {
           ctx.seats.push({ id: ctx.seats.length, x: sx, y: pad + 0.28, z: sz, yaw: Math.atan2(-Math.cos(a), -Math.sin(a)), kind: 'stool' });
         }
       }
+      // Chồng ghế đẩu dự phòng cạnh quán (5 cái lồng vào nhau: thân + vành từng ghế) — nhặt được làm vũ khí.
+      const [cx, cz] = at(((nT - 1) / 2) * 1.5 + 1.05, 2.55);
+      const top = STOOL_H + (STACK - 1) * STACK_STEP;
+      stools.add(cx, pad + top / 2, cz, 0.26, top, 0.26, yaw, sc);
+      for (let k = 0; k < STACK; k++) stools.add(cx, pad + STOOL_H + k * STACK_STEP - 0.018, cz, 0.32, 0.036, 0.32, yaw, sc);
+      ctx.pickups.push({ x: cx, y: pad + top, z: cz, yaw, item: 'gheNhua', restock: 0 });
     } else {
       // Xe đẩy bánh mì / hủ tiếu: tủ kính trên thùng gỗ sơn, hai bánh, dù che.
       const [x, z] = at(range(rng, -0.6, 0.6), range(rng, 2.0, 2.4));

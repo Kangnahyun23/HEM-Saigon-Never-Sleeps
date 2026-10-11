@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { Rng } from '@/core/random';
 import type { StaticWorld } from '@/physics/staticWorld';
+import type { PickupSpot } from '@/systems/pickups';
 import type { CityLayout, Dir } from '../layout';
 
 /** Hình học dùng chung (đơn vị): hộp 1×1×1 tâm ở gốc, trụ bán kính 1 cao 1 tâm ở gốc. */
@@ -30,6 +31,8 @@ export interface BuildContext {
   shopFronts: ShopFront[];
   /** Chỗ ngồi quán cóc / chỗ đứng bán hàng (streetProps điền) — để đặt người ngồi ăn, người bán gần camera. */
   seats: Seat[];
+  /** Đồ nhặt được (streetProps điền): chồng ghế nhựa quán cóc, mũ bảo hiểm trên yên xe đậu. */
+  pickups: PickupSpot[];
 }
 
 /** Chỗ có người: ghế đẩu quán cóc (ngồi) hoặc cạnh xe đẩy (người bán đứng). */
