@@ -29,7 +29,9 @@ test('balo: mở, ăn bánh mì hồi máu, vứt đồ', async ({ page }) => {
   await page.locator('[data-slot="0"]').click();
   await expect(page.locator('.bp-info b')).toHaveText('Bánh mì thịt');
   await press(page, 'KeyE');
-  expect(await page.evaluate(() => (window.__HEM__!.game as { health: number }).health)).toBe(70);
+  // Đồ ăn hồi máu từ từ (8 máu / giây).
+  await simulate(page, 3);
+  expect(await page.evaluate(() => (window.__HEM__!.game as { health: number }).health)).toBeCloseTo(70);
   await expect(page.locator('[data-slot="0"] b')).toHaveCount(0); // còn 1 ổ ⇒ không hiện "×n"
   await expect(page.locator('.hud-toast')).toContainText('Bánh mì thịt: +20 máu');
 

@@ -22,7 +22,7 @@ export interface ItemDef {
 export const ITEMS = {
   banhMi: { name: 'Bánh mì thịt', kind: 'food', stack: 5, heal: 20, desc: 'Bánh mì nóng giòn, pate, chả lụa. Hồi 20 máu.', color: '#d9a441' },
   comTam: { name: 'Cơm tấm sườn', kind: 'food', stack: 3, heal: 35, desc: 'Sườn nướng, bì, chả, mỡ hành. Hồi 35 máu.', color: '#c96b2c' },
-  traDa: { name: 'Trà đá', kind: 'food', stack: 5, heal: 8, desc: 'Ly trà đá vỉa hè 3 nghìn. Hồi 8 máu.', color: '#a8692c' },
+  traDa: { name: 'Trà đá', kind: 'food', stack: 5, heal: 8, desc: 'Ly trà đá vỉa hè, đá bào mát lạnh. Hồi 8 máu.', color: '#a8692c' },
   caPheSua: { name: 'Cà phê sữa đá', kind: 'food', stack: 5, heal: 12, desc: 'Đậm, ngọt, tỉnh cả đêm. Hồi 12 máu.', color: '#6b4226' },
   bangCaNhan: { name: 'Băng cá nhân', kind: 'medicine', stack: 10, heal: 15, desc: 'Dán đỡ vết trầy. Hồi 15 máu.', color: '#e8b4a0' },
   thuocDo: { name: 'Thuốc đỏ + bông băng', kind: 'medicine', stack: 5, heal: 40, desc: 'Sát trùng, băng bó tử tế. Hồi 40 máu.', color: '#c0392b' },

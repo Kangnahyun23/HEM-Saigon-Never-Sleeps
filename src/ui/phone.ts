@@ -52,7 +52,9 @@ const QUALITY_HINT: Record<Quality, string> = {
 
 /** Lãi app vay mỗi ngày (châm biếm — app vay "0,3 %/ngày" ≈ 110 %/năm). */
 const DAILY_INTEREST = 0.003;
+/** Số ảnh máy giữ được (máy thường / bản Pro mua ở tiệm điện thoại). */
 const MAX_PHOTOS = 6;
+const MAX_PHOTOS_PRO = 12;
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
 const icon = (id: PhoneTab): string => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
@@ -219,9 +221,18 @@ export class Phone {
   }
 
   /** Ảnh vừa chụp (data URL) — giữ 6 ảnh mới nhất trong máy. */
+  /** Máy Sầu Riêng S9 Pro (mua ở tiệm điện thoại): lưu nhiều ảnh hơn, hình nền khác. */
+  private pro = false;
+  setPro(on: boolean): void {
+    this.pro = on;
+    this.root.classList.toggle('pro', on);
+    this.dirty = true;
+  }
+
   addPhoto(url: string): void {
     this.photos.unshift(url);
-    if (this.photos.length > MAX_PHOTOS) this.photos.length = MAX_PHOTOS;
+    const max = this.pro ? MAX_PHOTOS_PRO : MAX_PHOTOS;
+    if (this.photos.length > max) this.photos.length = max;
     this.notify('Camera', 'Đã lưu ảnh vào máy');
     this.dirty = true;
   }
@@ -395,7 +406,7 @@ export class Phone {
       }
       case 'camera':
         return `<button type="button" class="shutter" data-shutter>Chụp ảnh</button>
-          <p class="muted small">Ảnh chụp cảnh trước mặt (giữ ${MAX_PHOTOS} ảnh mới nhất).</p>
+          <p class="muted small">Ảnh chụp cảnh trước mặt (giữ ${this.pro ? MAX_PHOTOS_PRO : MAX_PHOTOS} ảnh mới nhất).</p>
           <div class="gallery">${this.photos.map((u) => `<img src="${u}" alt="Ảnh đã chụp">`).join('') || '<p class="muted">Chưa có ảnh nào.</p>'}</div>`;
     }
   }

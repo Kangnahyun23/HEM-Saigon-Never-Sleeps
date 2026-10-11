@@ -24,7 +24,10 @@ import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
 import { attackFor, bloodFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
 import { Pickups } from '@/systems/pickups';
 import type { CityPlaces } from '@/world/city/places';
-import { insideShop, SHOP_TYPES } from '@/world/city/shops';
+import { insideShop, SHOP_TYPES, type Shop } from '@/world/city/shops';
+import { bargain, canBuy, CATALOG, finalPrice, GREETINGS, isService, offerName, sellPrice, SERVICES, type Service } from '@/systems/shopCatalog';
+import type { ShopRow } from '@/ui/shopPanel';
+import { createRng } from '@/core/random';
 import type { OutcomeKind } from '@/ui/outcome';
 import { Wanted } from '@/systems/wanted';
 import { BloodSim } from '@/world/blood';
@@ -66,6 +69,9 @@ import { GameClock, lightingAt } from '@/world/timeOfDay';
 import { applyWeather, WeatherSim, type Sky } from '@/world/weather';
 
 const STEP = 1 / 60;
+/** Gợi ý trong cửa hàng. */
+const SHOP_PROMPT = '<kbd>E</kbd> Mua hàng';
+const SHOP_PROMPT_PAWN = '<kbd>E</kbd> Mua / bán đồ';
 /** Gợi ý / thông báo khi nhặt đồ ngoài phố. */
 const PICKUP_PROMPT: Partial<Record<ItemId, string>> = { gheNhua: '<kbd>G</kbd> Lấy ghế nhựa', muBaoHiem: '<kbd>G</kbd> Lấy mũ bảo hiểm' };
 const PICKUP_DONE: Partial<Record<ItemId, string>> = {
@@ -241,6 +247,10 @@ export class Game {
     this.seated = SeatedPeopleView.available() && budget.nearPedestrians > 0 ? new SeatedPeopleView(city.seats, Math.max(2, Math.round(budget.nearPedestrians * 0.6))) : null;
     if (this.seated) scene.add(this.seated.root);
     this.places = city.places;
+    this.shopRng = createRng(city.layout.seed + 41);
+    this.hud.shop.onConfirm = (key, mode) => (mode === 'buy' ? this.buyOffer(key) : this.sellSlot(Number(key)));
+    this.hud.shop.onBargain = () => this.haggle();
+    this.hud.shop.onMode = () => this.refreshShop();
     this.hud.minimap?.setPlaces(this.places);
     this.pickups = new Pickups(city.pickups);
     this.pickupView = new PickupView(this.pickups);
@@ -279,6 +289,15 @@ export class Game {
   hitStop = 0;
   /** Đồn công an phường (bị bắt thì được thả ở đây) và trạm y tế phường (gục thì tỉnh dậy ở đây). */
   readonly places: CityPlaces;
+  /** Đang mua bán ở tiệm nào (null = không), mức bớt giá đã mặc cả được, kết quả mặc cả ('' = chưa mặc cả). */
+  shopping: Shop | null = null;
+  private shopDiscount = 0;
+  private shopBargain = '';
+  private readonly shopRng: () => number;
+  /** Nâng cấp đã mua (điện thoại Pro…) — lưu cùng bản lưu. */
+  readonly services = new Set<Service>();
+  /** Máu đồ ăn còn hồi dần (đồ ăn hồi từ từ, thuốc hồi ngay). */
+  private healPending = 0;
   /** Màn hình kết cục đang chạy (null = không), thời gian đã qua (s thật), đã đưa về đồn / trạm chưa. */
   outcome: OutcomeKind | null = null;
   private outcomeT = 0;
@@ -326,6 +345,9 @@ export class Game {
     if (data.inventory !== undefined) this.inventory = Inventory.fromJSON(data.inventory);
     if (typeof data.health === 'number' && Number.isFinite(data.health)) this.health = Math.max(1, Math.min(100, data.health));
     if (typeof data.equipped === 'string' && Object.hasOwn(ITEMS, data.equipped) && ITEMS[data.equipped as ItemId].kind === 'weapon') this.equipped = data.equipped as ItemId;
+    // Bản lưu hỏng / cũ: chỉ nhận chuỗi là tên nâng cấp hợp lệ.
+    if (Array.isArray(data.services)) for (const sv of data.services) if (typeof sv === 'string' && Object.hasOwn(SERVICES, sv)) this.services.add(sv as Service);
+    if (this.services.has('dienThoaiPro')) this.hud.phone?.setPro(true);
     this.bindBackpack();
     const { x, z, yaw } = data.player;
     this.character.teleport(x, PAD_HEIGHT + 0.3, z, yaw);
@@ -342,10 +364,7 @@ export class Game {
       this.inventory,
       (i) => {
         const def = this.inventory.use(i);
-        if (!def) return;
-        const before = this.health;
-        this.health = Math.min(100, this.health + (def.heal ?? 0));
-        this.hud.showToast(this.health > before ? `${def.name}: +${Math.round(this.health - before)} máu` : `${def.name}: đã đầy máu rồi`, 1.8);
+        if (def) this.consume(def);
       },
       (i) => {
         const s = this.inventory.slots[i];
@@ -592,9 +611,7 @@ export class Game {
     if (index < 0) return;
     const def = this.inventory.use(index);
     if (!def) return;
-    const before = this.health;
-    this.health = Math.min(100, this.health + (def.heal ?? 0));
-    this.hud.showToast(this.health > before ? `${def.name}: +${Math.round(this.health - before)} máu` : `${def.name}: đã đầy máu rồi`, 1.6);
+    this.consume(def);
     this.hud.backpack.invalidate();
   }
 
@@ -617,6 +634,7 @@ export class Game {
       inventory: this.inventory.toJSON(),
       health: this.health,
       equipped: this.equipped,
+      services: [...this.services],
     });
     if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
     return ok;
@@ -698,6 +716,152 @@ export class Game {
       this.lowHealthWarned = false;
       this.hud.showToast(`Tỉnh dậy ở ${place.name}. Viện phí ${formatVnd(fee)}`, 4);
     }
+  }
+
+  /** Cửa hàng Tín đang đứng bên trong (null nếu không). */
+  private shopAt(x: number, z: number): Shop | null {
+    for (const s of this.city.shops) if (insideShop(s, x, z)) return s;
+    return null;
+  }
+
+  /** Bảng mua bán: E mở khi đứng trong tiệm; đang mở thì ↑ ↓ chọn, E / Enter mua, B mặc cả, Tab mua ⇄ bán, Esc đóng. */
+  private updateShop(input: Input): void {
+    const here = this.shopAt(this.character.curr.x, this.character.curr.z);
+    if (this.shopping) {
+      if (here !== this.shopping || this.hud.phone?.open || input.wasPressed('Escape')) {
+        this.closeShop();
+        return;
+      }
+      const panel = this.hud.shop;
+      if (input.wasPressed('ArrowUp')) panel.move(-1);
+      if (input.wasPressed('ArrowDown')) panel.move(1);
+      if (input.wasPressed('KeyE', 'Enter')) panel.confirm();
+      if (input.wasPressed('KeyB')) this.haggle();
+      if (input.wasPressed('Tab')) panel.setMode(panel.mode === 'buy' ? 'sell' : 'buy');
+      return;
+    }
+    if (here && input.wasPressed('KeyE') && !this.hud.backpack.open && !this.hud.phone?.open) this.openShop(here);
+  }
+
+  private openShop(shop: Shop): void {
+    const t = SHOP_TYPES[shop.kind];
+    this.shopping = shop;
+    this.shopDiscount = 0;
+    this.shopBargain = '';
+    this.hud.shop.show(t.title, t.color, shop.kind === 'camDo');
+    this.hud.shop.setTalk(GREETINGS[shop.kind]);
+    this.refreshShop();
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  private closeShop(): void {
+    this.shopping = null;
+    this.hud.shop.hide();
+  }
+
+  /** Vẽ lại danh sách hàng (mua) / đồ tiệm mua lại (bán). Chỉ gọi khi có thay đổi, không mỗi khung hình. */
+  private refreshShop(): void {
+    const shop = this.shopping;
+    if (!shop) return;
+    const panel = this.hud.shop;
+    const rows: ShopRow[] = [];
+    if (panel.mode === 'buy') {
+      for (const o of CATALOG[shop.kind]) {
+        const price = finalPrice(o.price, this.shopDiscount);
+        const status = canBuy(o, price, Number.MAX_SAFE_INTEGER, this.inventory, this.services);
+        const have = isService(o.id) ? 0 : this.inventory.count(o.id);
+        rows.push({
+          key: o.id,
+          name: offerName(o.id),
+          desc: isService(o.id) ? SERVICES[o.id].desc : ITEMS[o.id].desc,
+          color: isService(o.id) ? SERVICES[o.id].color : ITEMS[o.id].color,
+          price,
+          listPrice: o.price,
+          note: status === 'owned' ? 'Đã có' : have > 0 ? `Có ${have}` : undefined,
+          disabled: status === 'owned',
+        });
+      }
+    } else {
+      this.inventory.slots.forEach((sl, i) => {
+        if (!sl) return;
+        const price = sellPrice(sl.id, sl.durability);
+        if (price <= 0) return;
+        const def: ItemDef = ITEMS[sl.id];
+        const wear = sl.durability !== undefined && def.durability ? ` · độ bền ${Math.round((sl.durability / def.durability) * 100)}%` : '';
+        rows.push({ key: String(i), name: def.name, desc: `Tiệm mua lại${wear}`, color: def.color, price, note: sl.id === this.equipped ? 'Đang cầm' : undefined });
+      });
+    }
+    panel.setRows(rows, this.wallet.cash, this.shopBargain);
+  }
+
+  private buyOffer(key: string): void {
+    const shop = this.shopping;
+    const offer = shop ? CATALOG[shop.kind].find((o) => o.id === key) : undefined;
+    if (!shop || !offer) return;
+    const cost = finalPrice(offer.price, this.shopDiscount);
+    const status = canBuy(offer, cost, this.wallet.cash, this.inventory, this.services);
+    if (status !== 'ok') {
+      this.hud.shop.setTalk(status === 'no-money' ? 'Thiếu tiền rồi con, chạy thêm vài kèo rồi quay lại.' : status === 'full' ? 'Balo đầy rồi, bỏ bớt đồ ra đi.' : 'Cái này có rồi mà.');
+      return;
+    }
+    this.wallet.spend(cost, `Mua ${offerName(offer.id)}`, this.clock.hour);
+    if (isService(offer.id)) this.applyService(offer.id);
+    else this.inventory.add(offer.id);
+    this.hud.shop.setTalk(shop.kind === 'camDo' ? 'Hàng xài kỹ nha, gãy không đổi trả.' : 'Cảm ơn con, lần sau ghé nữa nha!');
+    this.hud.backpack.invalidate();
+    playSfx('pickup');
+    this.refreshShop();
+  }
+
+  /** Nâng cấp / dịch vụ mua ở tiệm: balo lớn hơn, điện thoại Pro, thay đồ (công an khó nhận ra). */
+  private applyService(id: Service): void {
+    switch (id) {
+      case 'balo16':
+      case 'balo24':
+        this.inventory.upgrade(id === 'balo16' ? 16 : 24);
+        this.hud.showToast(`${SERVICES[id].name} — balo rộng hơn rồi`, 2.2);
+        break;
+      case 'dienThoaiPro':
+        this.services.add(id);
+        this.hud.phone?.setPro(true);
+        this.hud.showToast('Lên đời Sầu Riêng S9 Pro!', 2.2);
+        break;
+      case 'doiDo':
+        this.hud.showToast(this.wanted.disguise() ? 'Thay đồ xong — công an khó nhận ra hơn' : 'Thay đồ mới — bảnh!', 2.4);
+        break;
+    }
+  }
+
+  private sellSlot(index: number): void {
+    const sl = this.inventory.slots[index];
+    if (!sl || !this.shopping) return;
+    const price = sellPrice(sl.id, sl.durability);
+    if (price <= 0) return;
+    this.wallet.earn(price, `Bán ${ITEMS[sl.id].name}`, this.clock.hour);
+    this.inventory.remove(index, 1);
+    this.hud.shop.setTalk('Đồ cũ rồi, nhiêu đó thôi nha. Khỏi hỏi nguồn gốc.');
+    this.hud.backpack.invalidate();
+    playSfx('money');
+    this.refreshShop();
+  }
+
+  /** Mặc cả một lần mỗi lần ghé: hên thì được bớt 10–20 %. */
+  private haggle(): void {
+    if (!this.shopping || this.shopBargain || this.hud.shop.mode !== 'buy') return;
+    const r = bargain(this.shopRng);
+    this.shopDiscount = r.discount;
+    this.shopBargain = r.ok ? `Đã bớt ${Math.round(r.discount * 100)}%` : 'Không bớt';
+    this.hud.shop.setTalk(r.ok ? 'Thôi được, khách quen bớt cho chút đỉnh.' : 'Giá này là giá chót rồi con ơi!');
+    this.refreshShop();
+  }
+
+  /** Ăn / dùng thuốc: đồ ăn hồi máu từ từ (vài giây), thuốc hồi ngay. */
+  private consume(def: ItemDef): void {
+    const room = Math.max(0, 100 - this.health - this.healPending);
+    const gain = Math.min(room, def.heal ?? 0);
+    if (def.kind === 'food') this.healPending += gain;
+    else this.health = Math.min(100, this.health + gain);
+    this.hud.showToast(gain > 0 ? `${def.name}: +${Math.round(gain)} máu${def.kind === 'food' ? ' (từ từ)' : ''}` : `${def.name}: đã đầy máu rồi`, 1.8);
   }
 
   /** Tín đang ở trong một cửa hàng hoặc trên vỉa hè ngay trước cửa (2,5 m). */
@@ -944,7 +1108,7 @@ export class Game {
     // Màn hình BỊ BẮT / GỤC: khoá điều khiển tới khi được đưa về đồn / trạm y tế.
     const locked = this.updateOutcome(dt);
     // Vòng chọn đồ: giữ Tab ⇒ mở vòng, game chậm lại, chuột chọn ô (không xoay camera); nhả Tab ⇒ dùng ô đang chọn.
-    const wheelWanted = !locked && input.isDown('Tab') && !this.hud.phone?.open && !this.hud.backpack.open;
+    const wheelWanted = !locked && !this.shopping && input.isDown('Tab') && !this.hud.phone?.open && !this.hud.backpack.open;
     if (wheelWanted) this.updateWheel(input.mouseDX, input.mouseDY);
     else if (this.hud.wheel.open) this.closeWheel();
     if (!wheelWanted && (input.mouseDX || input.mouseDY)) this.camera.look(input.mouseDX, input.mouseDY);
@@ -961,7 +1125,7 @@ export class Game {
     }
     this.syncWeapon();
     // Cận chiến (đi bộ, không mở điện thoại / balo / vòng chọn đồ): chuột trái đòn nhẹ (combo 3 nhịp), chuột phải đòn mạnh.
-    const busyUi = locked || this.hud.phone?.open || this.hud.backpack.open || wheelWanted;
+    const busyUi = locked || this.shopping !== null || this.hud.phone?.open || this.hud.backpack.open || wheelWanted;
     if (this.mode === 'foot' && !busyUi && input.wasPressed('Mouse0', 'Mouse2')) {
       const heavy = input.wasPressed('Mouse2');
       if (!this.attack) this.startAttack(heavy);
@@ -1051,6 +1215,11 @@ export class Game {
         prompt = '<kbd>F</kbd> Lên xe';
         if (input.wasPressed('KeyF')) this.mount(near.bike);
       }
+      // Cửa hàng: đứng trong tiệm thì E mở bảng mua bán.
+      this.updateShop(input);
+      const inShop = this.shopping ? null : this.shopAt(this.character.curr.x, this.character.curr.z);
+      if (this.shopping) prompt = '';
+      else if (inShop) prompt = inShop.kind === 'camDo' ? SHOP_PROMPT_PAWN : SHOP_PROMPT;
       // Đồ nhặt được (ghế nhựa, mũ bảo hiểm): phím G (gợi ý lên xe được ưu tiên hiện).
       const spot = this.pickups.nearest(this.character.curr.x, this.character.curr.z, this.gameHours());
       if (spot >= 0) {
@@ -1078,8 +1247,9 @@ export class Game {
     const cam = this.camera.forward();
     // Balo đang mở thì mũi tên dùng để chọn ô ⇒ chỉ đi / lái bằng WASD.
     const keys = this.hud.backpack.open ? MOVE_WASD : MOVE_ALL;
-    const fwd = locked ? 0 : input.axis(keys.back, keys.fwd);
-    const strafe = locked ? 0 : input.axis(keys.left, keys.right);
+    const frozen = locked || this.shopping !== null;
+    const fwd = frozen ? 0 : input.axis(keys.back, keys.fwd);
+    const strafe = frozen ? 0 : input.axis(keys.left, keys.right);
     for (let i = 0; i < steps; i++) {
       const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
       this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
@@ -1171,6 +1341,12 @@ export class Game {
     }
     this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
     this.hud.setWanted(this.wanted.level, this.wanted.escapeProgress, this.wanted.seen);
+    // Đồ ăn hồi máu từ từ (8 máu / giây).
+    if (this.healPending > 0) {
+      const h = Math.min(this.healPending, 8 * dt);
+      this.healPending -= h;
+      this.health = Math.min(100, this.health + h);
+    }
     // Máu / giáp (giáp có ở N5).
     this.hud.setVitals(this.health / 100, 0);
     this.updateMapAndSiren();

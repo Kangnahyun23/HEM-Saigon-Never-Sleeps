@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CIVILIAN_CAP, ESCAPE_TIME, HEM_RATE, INSIDE_ZONE_RATE, MAX_STARS, SEARCH_RADIUS, Wanted } from '@/systems/wanted';
+import { CIVILIAN_CAP, DISGUISE_SHARE, ESCAPE_TIME, HEM_RATE, INSIDE_ZONE_RATE, MAX_STARS, SEARCH_RADIUS, Wanted } from '@/systems/wanted';
 
 const run = (w: Wanted, seconds: number, seen: boolean, x: number, z: number, inHem = false): string => {
   let ev = 'none';
@@ -60,5 +60,14 @@ describe('truy nã', () => {
     const hem = new Wanted();
     hem.report(2, 0, 0);
     expect(run(hem, ESCAPE_TIME[2] / HEM_RATE + 0.2, false, 999, 0, true)).toBe('escaped');
+  });
+
+  it('thay đồ mới: công an mất dấu một lúc (tiến độ thoát lên 60 %); không bị truy nã thì thôi', () => {
+    const w = new Wanted();
+    expect(w.disguise()).toBe(false);
+    w.report(1, 0, 0);
+    expect(w.disguise()).toBe(true);
+    expect(w.escapeProgress).toBeCloseTo(DISGUISE_SHARE);
+    expect(run(w, ESCAPE_TIME[1] * (1 - DISGUISE_SHARE) + 0.2, false, 500, 0)).toBe('escaped');
   });
 });

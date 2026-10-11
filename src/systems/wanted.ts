@@ -18,6 +18,9 @@ export const INSIDE_ZONE_RATE = 0.35;
 /** Trốn trong hẻm thì đồng hồ khuất mặt chạy nhanh hơn (×). */
 export const HEM_RATE = 1.6;
 
+/** Thay đồ mới coi như đã khuất mặt được ngần này phần thời gian cần để thoát. */
+export const DISGUISE_SHARE = 0.6;
+
 export type WantedEvent = 'none' | 'escaped';
 
 export class Wanted {
@@ -78,6 +81,17 @@ export class Wanted {
       return 'escaped';
     }
     return 'none';
+  }
+
+  /**
+   * Thay bộ đồ khác (shop quần áo): công an mất dấu một lúc, coi như đã khuất mặt được 60 % thời gian cần để thoát.
+   * Trả false nếu không bị truy nã.
+   */
+  disguise(): boolean {
+    if (this.level <= 0) return false;
+    this.unseen = Math.max(this.unseen, (ESCAPE_TIME[this.level] ?? 0) * DISGUISE_SHARE);
+    this.seen = false;
+    return true;
   }
 
   /** Tiến độ cắt đuôi (0..1) — HUD cho sao nhấp nháy khi khuất mặt. */

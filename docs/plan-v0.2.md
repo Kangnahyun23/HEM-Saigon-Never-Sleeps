@@ -40,7 +40,12 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   quầy + chủ tiệm trực cả đêm, kệ / đồ đạc theo nghề), có va chạm; khối nhà tách thành tầng trên + khối sau (shader mặt
   tiền thêm aBase để cửa sổ các tầng vẫn khớp); bảng hiệu riêng; HUD ghi tên tiệm; camera vào trong thì gần + thấp,
   chui dưới mái hiên. Karaoke / văn phòng Phát (chuyển cảnh mờ) để N9;
-- [ ] N6.2–N10.
+- [x] N6.2 + N6.3 mua bán: E trong tiệm mở bảng hàng (↑↓ chọn, E mua, B mặc cả một lần mỗi lần ghé — 55 % được bớt
+  10–20 %, Tab ở tiệm cầm đồ để bán vũ khí 40 % giá theo độ bền); hàng theo tiệm (đồ ăn, thuốc, vũ khí, mũ bảo hiểm);
+  nâng cấp balo 16 / 24 ô, điện thoại Sầu Riêng S9 Pro (12 ảnh, hình nền mới — lưu cùng bản lưu), bộ đồ mới (đang bị
+  truy nã thì coi như đã khuất mặt 60 %); đồ ăn hồi máu từ từ (8 máu/giây), thuốc hồi ngay. Còn lại: nhà Tín (lưu game,
+  tủ đồ) → N9; cân bằng kinh tế → N6.4;
+- [ ] N6.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

@@ -121,6 +121,7 @@ src/
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
                      combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục, lượng máu bắn — có unit test),
                      pickups (đồ nhặt ngoài phố, phím G: chồng ghế nhựa quán cóc, mũ bảo hiểm trên yên xe — có unit test),
+                     shopCatalog (hàng + giá từng tiệm, mặc cả, cầm đồ mua lại, nâng cấp — có unit test; giao diện ui/shopPanel, phím E),
                      wanted (sao truy nã công an 0–5: dân gọi báo ⇒ lên sao; vùng tìm kiếm theo sao, khuất mặt đủ lâu — nhanh
                      hơn khi ra khỏi vùng / trốn trong hẻm — thì thoát; có unit test),
                      social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),

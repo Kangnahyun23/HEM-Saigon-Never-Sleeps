@@ -6,6 +6,7 @@ import { Minimap } from './minimap';
 import { Backpack } from './backpack';
 import { Phone } from './phone';
 import { OutcomeScreen } from './outcome';
+import { ShopPanel } from './shopPanel';
 import { WeaponWheel } from './weaponWheel';
 import { ToastQueue } from './toastQueue';
 
@@ -49,6 +50,8 @@ export class Hud {
   readonly wheel: WeaponWheel;
   /** Màn hình kết cục BỊ BẮT / GỤC. */
   readonly outcome: OutcomeScreen;
+  /** Bảng mua bán trong cửa hàng. */
+  readonly shop: ShopPanel;
   private readonly weapon: HTMLElement;
   private lastWeapon = '';
   private readonly cash: HTMLElement;
@@ -146,6 +149,7 @@ export class Hud {
     this.backpack = new Backpack(root);
     this.wheel = new WeaponWheel(root);
     this.outcome = new OutcomeScreen(root);
+    this.shop = new ShopPanel(root);
     this.weapon = q('[data-weapon]');
   }
 
