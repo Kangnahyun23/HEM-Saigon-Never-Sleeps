@@ -5,6 +5,9 @@ import { mergeStaticMeshes } from '@/render/merge';
 import type { PhysicsWorld } from '@/physics/physics';
 import { StaticWorld } from '@/physics/staticWorld';
 import type { PickupSpot } from '@/systems/pickups';
+import { cityPlaces, type CityPlaces } from './places';
+import { selectShops, type Shop } from './shops';
+import { buildShopInteriors } from './build/shopInteriors';
 import { buildBuildings } from './build/buildings';
 import type { BuildContext, Seat } from './build/context';
 import { buildGround } from './build/ground';
@@ -24,6 +27,10 @@ export interface City {
   seats: readonly Seat[];
   /** Đồ nhặt được ngoài phố (ghế nhựa, mũ bảo hiểm). */
   pickups: readonly PickupSpot[];
+  /** Đồn công an phường, trạm y tế phường. */
+  places: CityPlaces;
+  /** Cửa hàng vào được. */
+  shops: readonly Shop[];
   stats: { meshes: number; instances: number; colliders: number };
   /** Ẩn / hiện các mảnh chi tiết nhỏ theo khoảng cách tới camera — gọi mỗi khung hình trước khi render. */
   updateDetail(eye: THREE.Vector3): void;
@@ -40,6 +47,8 @@ const DETAIL_REFRESH = 6;
  */
 const DETAIL_DISTANCE: Record<string, number> = {
   'balcony-plants': 120,
+  // Nội thất cửa hàng vào được: chỉ vẽ khi lại gần.
+  'shop-': 130,
   stools: 90,
   'ac-units': 120,
   'roof-stuff': 120,
@@ -80,10 +89,14 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   const group = new THREE.Group();
   group.name = 'city';
   const statics = new StaticWorld(physics);
-  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [], seats: [], pickups: [] };
+  // Đồn công an / trạm y tế và các cửa hàng vào được chọn trước (khác lô nhau) — dựng nhà cần biết lô nào là tiệm.
+  const places = cityPlaces(layout);
+  const shops = selectShops(layout, new Set([places.police.lotId, places.clinic.lotId]));
+  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [], seats: [], pickups: [], shops };
 
   buildGround(ctx);
   buildBuildings(ctx);
+  buildShopInteriors(ctx);
   buildStreetProps(ctx);
   buildHemLife(ctx);
   buildLandmarks(ctx);
@@ -124,6 +137,8 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
     lamps: ctx.lamps,
     seats: ctx.seats,
     pickups: ctx.pickups,
+    places,
+    shops,
     stats: { meshes, instances, colliders: statics.colliders },
     updateDetail(eye) {
       if ((eye.x - lastX) ** 2 + (eye.z - lastZ) ** 2 < DETAIL_REFRESH ** 2) return;

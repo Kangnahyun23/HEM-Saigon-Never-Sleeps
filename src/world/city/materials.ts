@@ -64,6 +64,8 @@ function groundTexture(id: TextureId, base: THREE.Color, strength: number) {
  * - aColor (vec3): màu sơn tường
  * - aInfo  (vec4): x = hướng mặt tiền (0:+x 1:-x 2:+z 3:-z), y = seed 0..1, z = loại (0 nhà, 1 nhà phố, 2 cao ốc),
  *                  w = vị trí (0 mặt tiền đường, 1 trong hẻm, 2 phông nền xa)
+ * - aBase  (float): khối bắt đầu ở độ cao này của căn nhà (m) — nhà có cửa hàng vào được tách thành khối tầng trên
+ *                  (aBase = 1 tầng) + khối tầng trệt phía sau; các tầng / cửa sổ vẫn khớp như một căn liền.
  * Mặt tiền: cửa sổ/cửa ban công từng tầng, tầng trệt là cửa hàng (mở cửa hoặc kéo cửa cuốn).
  * Mặt sau: cửa sổ nhỏ. Hai bên hông: tường trống loang ố. Mái: bê tông.
  */
@@ -73,6 +75,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const size = attribute<'vec3'>('aSize', 'vec3');
   const wall = attribute<'vec3'>('aColor', 'vec3');
   const info = attribute<'vec4'>('aInfo', 'vec4');
+  const baseY = attribute<'float'>('aBase', 'float');
   const p = attribute<'vec3'>('position', 'vec3');
   const n = attribute<'vec3'>('normal', 'vec3');
 
@@ -81,7 +84,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
   const roof = n.y.greaterThan(0.5);
   const u = select(zFace, local.x, local.z);
   const faceW = select(zFace, size.x, size.z);
-  const y = local.y;
+  const y = local.y.add(baseY);
 
   const faceCode = select(n.x.greaterThan(0.5), float(0), select(n.x.lessThan(-0.5), float(1), select(n.z.greaterThan(0.5), float(2), float(3))));
   const frontCode = info.x;
@@ -94,7 +97,7 @@ export function createFacadeMaterial(): THREE.MeshStandardNodeMaterial {
 
   const floorIdx = floor(y.div(FLOOR_HEIGHT));
   const fv = fract(y.div(FLOOR_HEIGHT));
-  const belowParapet = y.lessThan(size.y.sub(0.75));
+  const belowParapet = y.lessThan(size.y.add(baseY).sub(0.75));
   const upper = floorIdx.greaterThan(0.5);
 
   // --- Cửa sổ ---------------------------------------------------------------------------------------------

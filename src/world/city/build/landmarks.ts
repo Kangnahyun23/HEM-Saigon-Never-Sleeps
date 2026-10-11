@@ -295,7 +295,7 @@ function buildRiver(ctx: BuildContext): void {
   const skyline = new InstanceBatch(GEO.box, createFacadeMaterial(), {
     castShadow: false,
     name: 'skyline',
-    attributes: { aSize: 3, aColor: 3, aInfo: 4 },
+    attributes: { aSize: 3, aColor: 3, aInfo: 4, aBase: 1 },
   });
   const tint = new THREE.Color();
   for (let x = -900; x < 900; x += range(rng, 14, 40)) {

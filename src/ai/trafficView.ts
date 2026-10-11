@@ -17,8 +17,16 @@ export interface BikePose {
   generation: number;
 }
 
-/** 'civilian': dân thường đủ màu; 'gang': đàn em của Phát — xe đen, áo đen, mũ đỏ. */
-export type RiderStyle = 'civilian' | 'gang';
+/**
+ * 'civilian': dân thường đủ màu; 'gang': đàn em của Phát — xe đen, áo đen, mũ đỏ;
+ * 'police': công an — xe trắng, quân phục xanh ô-liu, mũ bảo hiểm xanh đậm (đèn chớp gắn riêng ở ChaseSystem).
+ */
+export type RiderStyle = 'civilian' | 'gang' | 'police';
+
+const STYLE_COLORS: Record<Exclude<RiderStyle, 'civilian'>, { body: string; shirt: string; pants: string; helmet: string }> = {
+  gang: { body: '#151515', shirt: '#1d1d1f', pants: '#2a2a30', helmet: '#c4161c' },
+  police: { body: '#e8ebe6', shirt: '#5b6b35', pants: '#46532a', helmet: '#2e4a2c' },
+};
 
 /**
  * Hình dòng xe NPC: mọi xe + người lái gom vào vài InstancedMesh (hộp, trụ, đèn, vệt đèn pha) ⇒ 4 draw call cho cả đàn xe.
@@ -169,16 +177,16 @@ export class TrafficView {
     let look = this.looks[agent.id];
     if (look && look.generation === agent.generation) return look;
     const rng = createRng(agent.id * 7919 + agent.generation * 104729);
-    const gang = this.style === 'gang';
+    const fixed = this.style === 'civilian' ? null : STYLE_COLORS[this.style];
     look = {
       generation: agent.generation,
-      cargo: !gang && rng() < CARGO_CHANCE,
+      cargo: !fixed && rng() < CARGO_CHANCE,
       colors: {
-        body: gang ? '#151515' : pick(rng, BIKE_BODY_COLORS),
-        shirt: gang ? '#1d1d1f' : pick(rng, SHIRTS),
-        pants: gang ? '#2a2a30' : pick(rng, PANTS),
+        body: fixed ? fixed.body : pick(rng, BIKE_BODY_COLORS),
+        shirt: fixed ? fixed.shirt : pick(rng, SHIRTS),
+        pants: fixed ? fixed.pants : pick(rng, PANTS),
         skin: pick(rng, SKINS),
-        helmet: gang ? '#c4161c' : pick(rng, HELMETS),
+        helmet: fixed ? fixed.helmet : pick(rng, HELMETS),
         shoe: '#24211e',
         visor: '#1b2229',
         cargo: pick(rng, CARGO),
@@ -204,8 +212,9 @@ export class TrafficView {
   }
 
   /** Ghi ma trận cho mọi xe; `alpha` nội suy giữa bước mô phỏng trước và sau. */
-  update(agents: readonly BikePose[], alpha: number): void {
-    const n = Math.min(agents.length, this.capacity);
+  /** `count`: chỉ vẽ `count` xe đầu của `agents` (mảng dùng lại có thể dài hơn số xe thật). */
+  update(agents: readonly BikePose[], alpha: number, count = agents.length): void {
+    const n = Math.min(count, agents.length, this.capacity);
     for (let i = 0; i < n; i++) {
       const a = agents[i] as BikePose;
       const look = this.lookFor(a);
