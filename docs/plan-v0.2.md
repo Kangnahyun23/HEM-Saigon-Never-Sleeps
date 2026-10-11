@@ -23,7 +23,11 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] N5.2 vũ khí nhặt được (phím G: ghế nhựa ở chồng ghế quán cóc — 4 phát là vỡ; mũ bảo hiểm trên yên xe đậu, vài giờ game
   mới có lại), mỗi món có tầm / tốc độ / sát thương / độ bền / mức chảy máu riêng; máu nhẹ (giọt bắn, vết nhỏ, vũng loang
   dưới người gục, tự mờ sau 50 s), tắt được trong Cài đặt; màn hình cảnh báo 18+ lần đầu vào game (tắt máu ngay tại đó);
-- [ ] N5.3–N10.
+- [x] N5.3 người đi đường phản ứng khi thấy đánh nhau (có seed): bỏ chạy, la lên, đứng xa quay video, gọi báo công an
+  (5 s, biểu tượng điện thoại trên đầu; Tín áp sát kịp thì cúp máy bỏ chạy), thanh niên xông vào đánh trả (Tín mất máu,
+  gục hẳn để N5.5 — giờ còn 1 máu). Gọi báo xong ⇒ sao truy nã (đánh người 1 sao, có án mạng 2 sao, dân báo tối đa 3,
+  không bị báo thêm 40 s thì hạ một sao) — công an đi tìm ở N5.4;
+- [ ] N5.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

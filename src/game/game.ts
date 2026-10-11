@@ -20,6 +20,7 @@ import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@
 import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
 import { attackFor, bloodFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
 import { Pickups } from '@/systems/pickups';
+import { Wanted } from '@/systems/wanted';
 import { BloodSim } from '@/world/blood';
 import { BloodView } from '@/world/bloodView';
 import { PickupView } from '@/world/pickupView';
@@ -113,6 +114,11 @@ export class Game {
   readonly inbox = new Inbox();
   readonly missions: MissionDirector;
   readonly heat = new Heat();
+  /** Sao truy nã (công an) — dân gọi báo khi thấy Tín đánh người. */
+  readonly wanted = new Wanted();
+  /** Còn bao lâu (s) thì vụ có người chết còn "nóng" (báo lúc này là 2 sao). */
+  private murderT = 0;
+  private lowHealthWarned = false;
   readonly story: StoryRunner;
   readonly chase: ChaseSystem;
   private caughtThisStep = false;
@@ -361,11 +367,13 @@ export class Game {
       const p = this.character.feet();
       const yaw = this.character.yaw;
       let hits = 0;
+      let kills = 0;
       for (const w of this.pedestrians.walkers) {
         if (w.dead || !inStrike(p.x, p.z, yaw, def.reach, def.arc, w.x, w.z)) continue;
         const r = this.pedestrians.hit(w.id, def.damage, p.x, p.z, def.knock);
         if (!r) continue;
         hits++;
+        if (r === 'dead') kills++;
         if (this.bloodOn) {
           // Giọt bắn từ ngực / vai nạn nhân theo hướng đòn; gục (hoặc ngã vì lưỡi sắc) thì chờ ngã xong mới loang vũng.
           const b = bloodFor(this.equipped, r);
@@ -377,8 +385,10 @@ export class Game {
         this.hitStop = def.knock ? 0.11 : 0.06;
         this.camera.shake(def.knock ? 0.07 : 0.035);
         playSfx(def.knock ? 'hitHeavy' : 'hit');
-        // Người xung quanh thấy đánh nhau thì bỏ chạy.
-        this.pedestrians.scare(p.x, p.z, 16);
+        // Người xung quanh thấy đánh nhau: bỏ chạy, la lên, quay video, gọi công an, có người xông vào. Có người chết
+        // thì nhiều người thấy hơn và báo nặng hơn.
+        this.pedestrians.witness(p.x, p.z, kills > 0 ? 22 : 16);
+        if (kills > 0) this.murderT = 90;
         this.wearWeapon(hits);
       } else playSfx('swing');
     }
@@ -386,6 +396,46 @@ export class Game {
       this.attack = null;
       this.sinceAttack = 0;
     }
+  }
+
+  /** Sự kiện từ đám đông mỗi bước: bị đấm (người đánh trả), có người gọi báo xong / bị ngăn; sao truy nã hạ dần. */
+  private handleCrowd(dt: number): void {
+    const sim = this.pedestrians;
+    if (sim.damageToPlayer > 0) {
+      this.hurtPlayer(sim.damageToPlayer);
+      sim.damageToPlayer = 0;
+    }
+    if (sim.reports > 0) {
+      for (; sim.reports > 0; sim.reports--) this.wanted.report(this.murderT > 0 ? 2 : 1);
+      this.hud.showToast(this.murderT > 0 ? 'Có người báo công an: có án mạng!' : 'Có người gọi công an báo vụ ẩu đả!', 2.6);
+      playSfx('alert');
+    }
+    if (sim.shouts > 0) {
+      sim.shouts = 0;
+      playSfx('scream');
+    }
+    if (sim.callsStopped > 0) {
+      sim.callsStopped = 0;
+      this.hud.showToast('Người kia hoảng quá, cúp máy bỏ chạy', 1.8);
+    }
+    this.wanted.update(dt);
+    this.murderT = Math.max(0, this.murderT - dt);
+  }
+
+  /** Tín trúng đòn (người đi đường đánh trả): mất máu, khựng nhẹ, rung camera. Gục hẳn ở N5.5 — giờ còn 1 máu. */
+  private hurtPlayer(damage: number): void {
+    this.health = Math.max(1, this.health - damage);
+    this.camera.shake(0.045);
+    playSfx('hit');
+    if (this.mode === 'foot' && !this.attack) this.model.attack?.('hitChest', 0.42);
+    if (this.bloodOn) {
+      const f = this.character.curr;
+      this.blood.spray(f.x, f.y + 1.35, f.z, -Math.sin(this.character.yaw), -Math.cos(this.character.yaw), 2, f.y);
+    }
+    if (this.health < 25 && !this.lowHealthWarned) {
+      this.lowHealthWarned = true;
+      this.hud.showToast('Máu thấp! Ăn gì đó (I) hoặc chạy đi', 2.4);
+    } else if (this.health >= 40) this.lowHealthWarned = false;
   }
 
   private queuePool(walker: number, generation: number, delay: number, radius: number): void {
@@ -882,6 +932,7 @@ export class Game {
         threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
       }
       this.pedestrians.step(STEP, me, threats);
+      this.handleCrowd(STEP);
 
       // Truy đuổi: xe đàn em bám theo khi có Độ Nóng; khuất tầm nhìn đủ lâu thì cắt đuôi.
       const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
@@ -949,6 +1000,7 @@ export class Game {
       this.caught();
     }
     this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
+    this.hud.setWanted(this.wanted.level, this.wanted.cooling);
     // Máu / giáp (giáp có ở N5).
     this.hud.setVitals(this.health / 100, 0);
     this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));

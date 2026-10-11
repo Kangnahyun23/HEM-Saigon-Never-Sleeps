@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { createCharacter, getClip, hasCharacter } from '@/assets/characters';
+import { attachToBone, createCharacter, getClip, hasCharacter } from '@/assets/characters';
 import type { AnimationName, CharacterId } from '@/assets/manifest';
 import type { ItemId } from '@/systems/inventory';
 import { CharacterModel, TIN_COLORS, type AnimState } from './characterModel';
@@ -70,20 +70,6 @@ const RIDE_HIP_HEIGHT = 0.95;
 
 const damp = (current: number, target: number, rate: number, dt: number): number => current + (target - current) * (1 - Math.exp(-rate * dt));
 
-/**
- * Gắn một vật vào xương sao cho trong tư thế gốc nó nằm đúng chỗ `offset` (m, hệ toạ độ nhân vật: +Y lên, +Z trước mặt),
- * thẳng đứng và đúng cỡ — bù hướng + tỉ lệ của xương.
- */
-function attachToBone(model: THREE.Object3D, bone: THREE.Object3D, object: THREE.Object3D, offset: THREE.Vector3): void {
-  model.updateMatrixWorld(true);
-  const boneWorld = bone.matrixWorld.clone();
-  const modelWorld = model.parent ? model.parent.matrixWorld.clone() : new THREE.Matrix4();
-  const anchor = new THREE.Vector3().setFromMatrixPosition(boneWorld).applyMatrix4(modelWorld.clone().invert()).add(offset);
-  const desired = modelWorld.clone().multiply(new THREE.Matrix4().makeTranslation(anchor.x, anchor.y, anchor.z));
-  const local = boneWorld.invert().multiply(desired);
-  local.decompose(object.position, object.quaternion, object.scale);
-  bone.add(object);
-}
 
 /**
  * Nhân vật có xương: trộn động tác đứng / đi / chạy theo tốc độ thật (chỉnh nhịp clip để chân ít trượt),

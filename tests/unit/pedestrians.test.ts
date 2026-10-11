@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { containsPoint } from '@/core/rect';
-import { FLEE_SPEED, PedestrianSim } from '@/ai/pedestrians';
+import { CALL_TIME, FLEE_SPEED, PedestrianSim, PUNCH_DAMAGE, PUNCH_RANGE } from '@/ai/pedestrians';
 import { generateCity } from '@/world/city/layout';
 
 const city = generateCity();
@@ -109,12 +109,71 @@ describe('PedestrianSim', () => {
     expect(sim.hit(0, 10, from.x, from.z, false)).toBeNull();
   });
 
-  it('thấy đánh nhau thì người xung quanh bỏ chạy', () => {
+  it('thấy đánh nhau thì người xung quanh phản ứng, người ở xa không biết gì', () => {
     const sim = new PedestrianSim(city, focus, { count: 30 });
     const w = sim.walkers[3]!;
-    sim.scare(w.x + 2, w.z, 12);
-    expect(w.flee).toBeGreaterThan(0);
+    sim.witness(w.x + 2, w.z, 12);
+    expect(w.flee > 0 || w.react !== 'none').toBe(true);
     const far = sim.walkers.filter((o) => Math.hypot(o.x - w.x - 2, o.z - w.z) > 12);
-    for (const o of far) expect(o.flee).toBe(0);
+    for (const o of far) {
+      expect(o.flee).toBe(0);
+      expect(o.react).toBe('none');
+    }
+  });
+
+  it('phản ứng đa dạng: bỏ chạy, la lên, quay video, gọi báo; tối đa 2 người gọi cùng lúc', () => {
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) {
+      const sim = new PedestrianSim(city, focus, { count: 80, seed });
+      for (const w of sim.walkers.slice(0, 6)) sim.witness(w.x + 1, w.z, 40);
+      for (const o of sim.walkers) seen.add(o.react !== 'none' ? o.react : o.flee > 0 ? 'flee' : 'none');
+      expect(sim.walkers.filter((o) => o.react === 'call').length).toBeLessThanOrEqual(2);
+      expect(sim.walkers.filter((o) => o.react === 'fight').length).toBeLessThanOrEqual(2);
+    }
+    for (const kind of ['flee', 'shout', 'film', 'call']) expect(seen.has(kind)).toBe(true);
+  });
+
+  it('gọi báo công an: đứng quay lưng 5 giây thì báo xong; người chơi áp sát kịp thì cúp máy bỏ chạy', () => {
+    const sim = new PedestrianSim(city, focus, { count: 10 });
+    const w = sim.walkers[0]!;
+    const far = { x: w.x + 8, z: w.z };
+    sim.startReaction(w, 'call', 0);
+    for (let t = 0; t < CALL_TIME - 0.2; t += STEP) sim.step(STEP, far);
+    expect(sim.reports).toBe(0);
+    expect(w.react).toBe('call');
+    expect(w.x).toBe(w.prevX); // đứng yên
+    for (let t = 0; t < 0.4; t += STEP) sim.step(STEP, far);
+    expect(sim.reports).toBe(1);
+    expect(w.react).toBe('none');
+    expect(w.flee).toBeGreaterThan(0);
+
+    const v = sim.walkers[1]!;
+    sim.startReaction(v, 'call', 0);
+    sim.step(STEP, { x: v.x + 1.2, z: v.z });
+    expect(sim.callsStopped).toBe(1);
+    expect(v.react).toBe('none');
+    expect(v.flee).toBeGreaterThan(0);
+    for (let t = 0; t < CALL_TIME + 1; t += STEP) sim.step(STEP, far);
+    expect(sim.reports).toBe(1);
+  });
+
+  it('đánh trả: xông tới người chơi dọc vỉa hè, đấm trúng làm mất máu; bị đánh yếu thì bỏ chạy', () => {
+    const sim = new PedestrianSim(city, focus, { count: 10 });
+    const w = sim.walkers[0]!;
+    // Người chơi đứng phía trước người này 3 m trên cùng vỉa hè.
+    const p = sim.position(city.blocks[w.block]!, w.side, w.t, w.d);
+    const player = { x: w.x + p.fx * w.dir * 3, z: w.z + p.fz * w.dir * 3 };
+    sim.startReaction(w, 'fight', 25);
+    const start = Math.hypot(w.x - player.x, w.z - player.z);
+    for (let t = 0; t < 3; t += STEP) sim.step(STEP, player);
+    expect(Math.hypot(w.x - player.x, w.z - player.z)).toBeLessThan(Math.min(start, PUNCH_RANGE));
+    expect(sim.damageToPlayer).toBeGreaterThanOrEqual(PUNCH_DAMAGE);
+    expect(w.react).toBe('fight');
+    // Ăn một đòn nhẹ vẫn đánh tiếp; mất quá nửa máu thì chạy.
+    sim.hit(w.id, 20, player.x, player.z, false);
+    expect(w.react).toBe('fight');
+    sim.hit(w.id, 40, player.x, player.z, false);
+    expect(w.react).toBe('none');
+    expect(w.flee).toBeGreaterThan(0);
   });
 });

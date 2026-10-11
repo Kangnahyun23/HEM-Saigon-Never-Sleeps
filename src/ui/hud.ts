@@ -53,6 +53,10 @@ export class Hud {
   private subtitleTimer = 0;
   private readonly heat: HTMLElement;
   private lastHeat = '';
+  private readonly wanted: HTMLElement;
+  private readonly wantedStars: HTMLElement[];
+  private lastWanted = -1;
+  private lastWantedPhase = -1;
   private readonly objective: HTMLElement;
   private readonly objectiveText: HTMLElement;
   private readonly objectiveTimer: HTMLElement;
@@ -102,8 +106,11 @@ export class Hud {
       </div>
       <div class="hud-fps" data-fps></div>
       <div class="hud-cash" data-cash></div>
-      <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
-      <div class="hud-weapon panel" data-weapon hidden><span></span><i><u></u></i></div>
+      <div class="hud-right">
+        <div class="hud-wanted" data-wanted hidden><span></span><span></span><span></span><span></span><span></span><small>Công an truy nã</small></div>
+        <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
+        <div class="hud-weapon panel" data-weapon hidden><span></span><i><u></u></i></div>
+      </div>
       <div class="hud-objective panel" data-objective hidden><span data-objective-text></span><b data-objective-timer></b></div>
       <div class="hud-phone-hint panel" data-phone-hint><kbd>P</kbd> Điện thoại</div>`;
     const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as T;
@@ -124,6 +131,8 @@ export class Hud {
     this.cash = q('[data-cash]');
     this.phoneHint = q('[data-phone-hint]');
     this.heat = q('[data-heat]');
+    this.wanted = q('[data-wanted]');
+    this.wantedStars = Array.from(this.wanted.querySelectorAll('span'));
     this.subtitle = q('[data-subtitle]');
     this.objective = q('[data-objective]');
     this.objectiveText = q('[data-objective-text]');
@@ -162,6 +171,26 @@ export class Hud {
     this.heat.querySelectorAll('span').forEach((s, i) => s.classList.toggle('on', i < level));
     this.heat.classList.toggle('hiding', !seen);
     (this.heat.querySelector('small') as HTMLElement).textContent = seen ? 'Đang bị bám đuôi' : `Đang cắt đuôi… ${Math.round(escape * 100)}%`;
+  }
+
+  /**
+   * Sao truy nã (công an): trắng như GTA; vừa bị báo thì nhấp nháy đỏ – xanh như đèn xe công an, sắp hạ sao thì mờ dần.
+   * `cooling` 0..1 = tiến độ hạ sao kế tiếp.
+   */
+  setWanted(level: number, cooling: number): void {
+    const phase = level === 0 ? 0 : cooling < 0.25 ? 1 : cooling > 0.8 ? 2 : 0;
+    if (level === this.lastWanted && phase === this.lastWantedPhase) return;
+    if (level > this.lastWanted && this.lastWanted >= 0) {
+      this.wanted.classList.remove('bump');
+      void this.wanted.offsetWidth;
+      this.wanted.classList.add('bump');
+    }
+    this.lastWanted = level;
+    this.lastWantedPhase = phase;
+    this.wanted.hidden = level === 0;
+    for (let i = 0; i < this.wantedStars.length; i++) this.wantedStars[i]!.classList.toggle('on', i < level);
+    this.wanted.classList.toggle('alarm', phase === 1);
+    this.wanted.classList.toggle('fading', phase === 2);
   }
 
   /** Mục tiêu nhiệm vụ đang làm (giữa trên) + đồng hồ đếm ngược (giây). null = ẩn. */

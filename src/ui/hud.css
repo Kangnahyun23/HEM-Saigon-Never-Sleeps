@@ -197,7 +197,19 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 @media (max-width: 900px) { .hud-objective { top: auto; bottom: 150px; max-width: calc(100% - 24px); } }
 
 /* Độ Nóng (dưới tiền mặt) */
-.hud-heat { position: absolute; top: 68px; right: 18px; display: flex; align-items: center; gap: 4px; }
+/* Cột góc trên phải dưới tiền mặt: sao truy nã (công an), sao Độ Nóng (đàn em Phát), vũ khí đang cầm */
+.hud-right { position: absolute; top: 68px; right: 18px; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.hud-wanted, .hud-heat { padding: 4px 8px; border-radius: 9px; background: rgba(14, 12, 20, .42); }
+.hud-wanted { display: flex; align-items: center; gap: 4px; }
+.hud-wanted[hidden] { display: none; }
+.hud-wanted span { width: 22px; height: 22px; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: rgba(255,255,255,.2); }
+.hud-wanted span.on { background: #f4f1ea; filter: drop-shadow(0 0 5px rgba(255,255,255,.7)); }
+.hud-wanted.alarm span.on { animation: police .5s steps(2) infinite; }
+.hud-wanted.fading span.on { animation: blink .9s steps(2) infinite; }
+.hud-wanted.bump { animation: pop .4s ease-out; }
+.hud-wanted small { order: -1; margin-right: 8px; font-size: 12px; font-weight: 700; color: #cfe0ff; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+@keyframes police { 0% { background: #ff3b3b; } 100% { background: #3b7bff; } }
+.hud-heat { display: flex; align-items: center; gap: 4px; }
 .hud-heat[hidden] { display: none; }
 .hud-heat span { width: 20px; height: 20px; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: rgba(255,255,255,.22); }
 .hud-heat span.on { background: #ff4b3e; filter: drop-shadow(0 0 6px rgba(255,75,62,.8)); }
@@ -276,7 +288,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .wheel-center small { font-size: 12px; color: var(--hud-quiet); }
 
 /* Vũ khí đang cầm (dưới sao, góc trên phải) */
-.hud-weapon { position: absolute; top: 96px; right: 18px; display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 13px; font-weight: 700; }
+.hud-weapon { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 13px; font-weight: 700; }
 .hud-weapon[hidden] { display: none; }
 .hud-weapon i { width: 56px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.15); overflow: hidden; }
 .hud-weapon i u { display: block; height: 100%; background: #5fcf7a; transform-origin: 0 50%; }
