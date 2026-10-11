@@ -2,6 +2,7 @@
 
 Game hành động thế giới mở góc nhìn thứ 3 (cảm hứng GTA V) bối cảnh một Sài Gòn hư cấu, chạy trên trình duyệt.
 Thiết kế đầy đủ: `docs/gdd.md`. Đọc file đó trước khi làm tính năng mới.
+**Bắt đầu phiên mới: đọc `docs/handover.md` trước** (tình trạng, PR đang mở, việc tiếp theo, bẫy đã gặp).
 
 ## Stack
 - TypeScript strict · Vite 8 · Three.js r186 (`three/webgpu`, `WebGPURenderer` tự lùi về WebGL2) · Rapier (`@dimforge/rapier3d-compat`)
