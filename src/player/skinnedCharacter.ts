@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { createCharacter, getClip, hasCharacter } from '@/assets/characters';
 import type { AnimationName, CharacterId } from '@/assets/manifest';
+import type { ItemId } from '@/systems/inventory';
 import { CharacterModel, TIN_COLORS, type AnimState } from './characterModel';
 import { clipTimeScale, locomotionWeights } from './locomotion';
 
@@ -9,10 +10,46 @@ export interface CharacterView {
   readonly root: THREE.Object3D;
   update(dt: number, s: AnimState): void;
   setHelmet(on: boolean): void;
+  /** Vũ khí cầm tay phải (null = tay không). Mẫu khối hộp dự phòng bỏ qua. */
+  setWeapon?(id: ItemId | null): void;
+}
+
+/** Hình vũ khí dựng từ khối (lưỡi + cán), trục dài theo +Z cục bộ, cán ở gốc. */
+function weaponMesh(id: ItemId): THREE.Group {
+  const g = new THREE.Group();
+  const steel = new THREE.MeshStandardNodeMaterial({ color: '#c9ced3', roughness: 0.3, metalness: 0.6 });
+  const wood = new THREE.MeshStandardNodeMaterial({ color: '#5a3a22', roughness: 0.8 });
+  const dark = new THREE.MeshStandardNodeMaterial({ color: '#2b2b2f', roughness: 0.6, metalness: 0.3 });
+  const part = (geo: THREE.BufferGeometry, mat: THREE.Material, z: number, y = 0): void => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(0, y, z);
+    m.castShadow = true;
+    g.add(m);
+  };
+  switch (id) {
+    case 'maTau':
+      part(new THREE.BoxGeometry(0.035, 0.035, 0.15), wood, 0.02);
+      part(new THREE.BoxGeometry(0.012, 0.07, 0.56), steel, 0.38, 0.012);
+      break;
+    case 'gaySat':
+      part(new THREE.CylinderGeometry(0.018, 0.018, 0.8, 8).rotateX(Math.PI / 2), dark, 0.3);
+      break;
+    case 'daoBam':
+      part(new THREE.BoxGeometry(0.03, 0.025, 0.11), dark, 0.02);
+      part(new THREE.BoxGeometry(0.008, 0.022, 0.1), steel, 0.12);
+      break;
+    case 'conNhiKhuc':
+      part(new THREE.CylinderGeometry(0.016, 0.016, 0.3, 8).rotateX(Math.PI / 2), wood, 0.1);
+      part(new THREE.CylinderGeometry(0.016, 0.016, 0.3, 8).rotateX(Math.PI / 2), wood, 0.36, -0.12);
+      break;
+    default:
+      break;
+  }
+  return g;
 }
 
 /** Thứ tự cố định: 0..3 khớp locomotionWeights (đứng, đi, chạy nhẹ, chạy nhanh). */
-const ACTIONS: readonly AnimationName[] = ['idle', 'walk', 'jog', 'sprint', 'jumpAir', 'drive', 'phone'];
+const ACTIONS: readonly AnimationName[] = ['idle', 'walk', 'jog', 'sprint', 'jumpAir', 'drive', 'phone', 'swordIdle'];
 /** Hông nhân vật khối hộp cũ cao 0,95 m so với gốc khi ngồi xe — yên xe được canh theo mốc đó. */
 const RIDE_HIP_HEIGHT = 0.95;
 
@@ -48,6 +85,10 @@ export class SkinnedCharacter implements CharacterView {
   private readonly helmet = new THREE.Group();
   /** Điện thoại cầm tay phải (hiện khi mở điện thoại lúc đi bộ). */
   private readonly handset = new THREE.Group();
+  /** Chỗ cầm vũ khí ở tay phải + hình từng loại đã dựng. */
+  private readonly grip = new THREE.Group();
+  private readonly weapons = new Map<ItemId, THREE.Group>();
+  private weapon: ItemId | null = null;
   /** Độ cao đặt mẫu khi ngồi xe để hông ở đúng mốc yên xe. */
   private readonly rideOffset: number;
 
@@ -105,6 +146,8 @@ export class SkinnedCharacter implements CharacterView {
       this.handset.visible = false;
       // Trong lòng bàn tay phải (tư thế gốc chữ T: tay phải duỗi về phía −X).
       attachToBone(this.root, hand, this.handset, new THREE.Vector3(-0.08, -0.02, 0.03));
+      // Chỗ nắm cán vũ khí (lòng bàn tay phải); lưỡi chĩa về phía trước theo tư thế gốc.
+      attachToBone(this.root, hand, this.grip, new THREE.Vector3(-0.09, -0.02, 0.0));
     }
     const back = body.getObjectByName('spine_03');
     if (back) {
@@ -117,6 +160,20 @@ export class SkinnedCharacter implements CharacterView {
 
   setHelmet(on: boolean): void {
     this.helmet.visible = on;
+  }
+
+  setWeapon(id: ItemId | null): void {
+    if (id === this.weapon) return;
+    this.weapon = id;
+    for (const g of this.weapons.values()) g.visible = false;
+    if (!id) return;
+    let g = this.weapons.get(id);
+    if (!g) {
+      g = weaponMesh(id);
+      this.grip.add(g);
+      this.weapons.set(id, g);
+    }
+    g.visible = true;
   }
 
   update(dt: number, s: AnimState): void {
@@ -135,9 +192,12 @@ export class SkinnedCharacter implements CharacterView {
       } else {
         locomotionWeights(s.speed, this.loco);
         for (let k = 0; k < 4; k++) t[k] = this.loco[k]!;
-        // Mở điện thoại lúc đứng: áp máy lên tai (thay cho động tác đứng).
+        // Mở điện thoại lúc đứng: áp máy lên tai; cầm vũ khí lúc đứng: tư thế thủ (thay cho động tác đứng).
         if (s.phone && s.speed < 0.4) {
           t[ACTIONS.indexOf('phone')] = t[0]!;
+          t[0] = 0;
+        } else if (this.weapon) {
+          t[ACTIONS.indexOf('swordIdle')] = t[0]!;
           t[0] = 0;
         }
         // Nhịp bước theo tốc độ thật (đỡ trượt chân).
@@ -145,6 +205,8 @@ export class SkinnedCharacter implements CharacterView {
       }
     }
     this.handset.visible = s.mode === 'foot' && s.phone === true;
+    // Lên xe thì cất vũ khí (giắt sau lưng — không hiện).
+    this.grip.visible = s.mode === 'foot' && !s.phone;
     for (let i = 0; i < this.actions.length; i++) {
       const w = damp(this.weights[i]!, t[i]!, rate, dt);
       this.weights[i] = w < 0.002 ? 0 : w;

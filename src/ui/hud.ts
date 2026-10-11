@@ -3,7 +3,9 @@ import type { CityLayout } from '@/world/city/layout';
 import type { Inbox } from '@/systems/inbox';
 import { formatVnd, type Wallet } from '@/systems/wallet';
 import { Minimap } from './minimap';
+import { Backpack } from './backpack';
 import { Phone } from './phone';
+import { WeaponWheel } from './weaponWheel';
 import { ToastQueue } from './toastQueue';
 
 const SPEEDO_MAX = 80; // km/h
@@ -40,6 +42,12 @@ export class Hud {
   /** Bản đồ nhỏ (tạo sau khi có bố cục khu phố). */
   minimap: Minimap | null = null;
   phone: Phone | null = null;
+  /** Balo (phím I). */
+  readonly backpack: Backpack;
+  /** Vòng chọn đồ (giữ Tab). */
+  readonly wheel: WeaponWheel;
+  private readonly weapon: HTMLElement;
+  private lastWeapon = '';
   private readonly cash: HTMLElement;
   private readonly subtitle: HTMLElement;
   private subtitleTimer = 0;
@@ -87,12 +95,14 @@ export class Hud {
       <div class="hud-help panel hidden" data-help>
         <div class="title">Điều khiển</div>
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>đi / lái</b> · <kbd>Shift</kbd> <b>chạy</b> · <kbd>Space</kbd> <b>nhảy / phanh tay</b></div>
-        <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>P</kbd> <b>điện thoại</b> · <kbd>M</kbd> <b>tắt tiếng</b></div>
+        <div><kbd>F</kbd> <b>lên / xuống xe</b> · <kbd>H</kbd> <b>bóp còi</b> · <kbd>L</kbd> <b>đèn pha</b> · <kbd>R</kbd> <b>dựng xe</b> · <kbd>M</kbd> <b>tắt tiếng</b></div>
+        <div><kbd>P</kbd> <b>điện thoại</b> · <kbd>I</kbd> <b>balo</b> · giữ <kbd>Tab</kbd> <b>chọn đồ</b> · <kbd>1</kbd>–<kbd>4</kbd> <b>chọn nhanh</b></div>
         <div>Bấm vào màn hình rồi <b>rê chuột</b> để xoay camera · <b>cuộn</b> để zoom · <kbd>F1</kbd> <b>ẩn/hiện bảng này</b></div>
       </div>
       <div class="hud-fps" data-fps></div>
       <div class="hud-cash" data-cash></div>
       <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
+      <div class="hud-weapon panel" data-weapon hidden><span></span><i><u></u></i></div>
       <div class="hud-objective panel" data-objective hidden><span data-objective-text></span><b data-objective-timer></b></div>
       <div class="hud-phone-hint panel" data-phone-hint><kbd>P</kbd> Điện thoại</div>`;
     const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as T;
@@ -117,6 +127,20 @@ export class Hud {
     this.objective = q('[data-objective]');
     this.objectiveText = q('[data-objective-text]');
     this.objectiveTimer = q('[data-objective-timer]');
+    this.backpack = new Backpack(root);
+    this.wheel = new WeaponWheel(root);
+    this.weapon = q('[data-weapon]');
+  }
+
+  /** Vũ khí đang cầm + độ bền 0..1 (null = tay không, ẩn ô). */
+  setWeapon(label: string | null, durability: number): void {
+    const key = label ? `${label}|${Math.round(durability * 50)}` : '';
+    if (key === this.lastWeapon) return;
+    this.lastWeapon = key;
+    this.weapon.hidden = !label;
+    if (!label) return;
+    (this.weapon.querySelector('span') as HTMLElement).textContent = label;
+    (this.weapon.querySelector('u') as HTMLElement).style.transform = `scaleX(${Math.max(0, Math.min(1, durability))})`;
   }
 
   /** Phụ đề lời thoại (giữa dưới), tự ẩn sau vài giây. */

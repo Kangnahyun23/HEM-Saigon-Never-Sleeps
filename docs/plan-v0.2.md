@@ -15,7 +15,9 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   người bán xe đẩy (đông vắng theo giờ). Mẫu xa nướng động tác vào texture (VAT) để sau nếu cần;
 - [x] N4.1 HUD: hàng thông báo góc dưới trái (tối đa 3, không đè), bảng phím thu gọn (F1), thanh máu / giáp, 5 ô sao;
 - [x] N4.2 điện thoại cầm tay "Sầu Riêng S9": màn hình chính 8 app (thêm Ngân hàng, Phây, Camera chụp ảnh), thông báo trượt xuống;
-- [ ] N4.3–N4.4, N5–N10.
+- [x] N4.3 balo (phím I): 12 ô xếp chồng, nâng cấp 16 / 24 ô, dùng đồ ăn / thuốc hồi máu, vứt đồ; lưu cùng bản lưu;
+- [x] N4.4 vòng chọn đồ (giữ Tab: game chậm 30 %, rê chuột chọn; phím 1–4), Tín cầm vũ khí (tư thế thủ), ô vũ khí trên HUD;
+- [ ] N5–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

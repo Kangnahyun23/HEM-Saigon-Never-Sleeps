@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Inbox } from '@/systems/inbox';
+import { Inventory, starterInventory } from '@/systems/inventory';
 import { parseSave, SaveSlot, type KeyValueStore } from '@/systems/save';
 import { Wallet } from '@/systems/wallet';
 
@@ -68,5 +69,19 @@ describe('SaveSlot', () => {
     expect(slot.lastOk).toBe(false);
     expect(() => slot.clear()).not.toThrow();
     expect(new SaveSlot(null).save(sample())).toBe(false);
+  });
+
+  it('lưu cả balo + máu; bản lưu cũ (chưa có balo) vẫn đọc được', () => {
+    const slot = new SaveSlot(new MemoryStore());
+    const inv = starterInventory();
+    inv.add('maTau', 1);
+    slot.save({ ...sample(), inventory: inv.toJSON(), health: 64 });
+    const back = slot.load()!;
+    expect(back.health).toBe(64);
+    expect(Inventory.fromJSON(back.inventory).toJSON()).toEqual(inv.toJSON());
+    slot.save(sample());
+    const old = slot.load()!;
+    expect(old.inventory).toBeUndefined();
+    expect(old.health).toBeUndefined();
   });
 });

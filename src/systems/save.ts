@@ -19,6 +19,12 @@ export interface SaveData {
   story: { next: number };
   jobsDone: number;
   player: { x: number; z: number; yaw: number };
+  /** Balo (Inventory.toJSON) — tuỳ chọn: bản lưu cũ không có thì dùng balo khởi đầu. */
+  inventory?: unknown;
+  /** Máu 0..100 — tuỳ chọn. */
+  health?: number;
+  /** Vũ khí đang cầm (mã món) — tuỳ chọn. */
+  equipped?: string | null;
 }
 
 /** Giao diện tối thiểu của localStorage (để test bằng bộ nhớ giả). */

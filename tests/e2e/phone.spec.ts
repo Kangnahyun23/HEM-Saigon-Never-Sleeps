@@ -25,8 +25,15 @@ test('điện thoại: tin nhắn, ví, bản đồ', async ({ page }) => {
   await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
   await page.evaluate(() => (window.__HEM__!.paused = true));
 
-  // Sau ~22 giây chơi: 4 tin nhắn mở màn (Ngân ×2, app vay, chú Sáu).
-  await simulate(page, 22);
+  // Tin nhắn mở màn tới theo thời gian chơi (4, 7, 12, 20 s): Ngân ×2, app vay, chú Sáu. Chạy từng giây tới khi đủ 4 tin
+  // (tối đa 40 s) — khỏi phụ thuộc đúng mốc giờ; hỏng thì in thời gian chơi + các cuộc trò chuyện để dễ tra.
+  const intro = await page.evaluate(() => {
+    const h = window.__HEM__!;
+    const g = h.game as { playTime: number; inbox: { unread: number; threads: Array<{ contact: string; unread: number }> } };
+    for (let i = 0; i < 40 && g.inbox.unread < 4; i++) (h.simulate as (n: number) => void)(1);
+    return { unread: g.inbox.unread, playTime: Math.round(g.playTime * 10) / 10, threads: g.inbox.threads.map((t) => `${t.contact}:${t.unread}`) };
+  });
+  expect(intro.unread, JSON.stringify(intro)).toBe(4);
   await expect(page.locator('[data-phone-hint] i')).toHaveText('4');
   await expect(page.locator('[data-cash]')).toHaveText('150.000 đ');
 
