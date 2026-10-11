@@ -31,7 +31,11 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   đường lớn — số xe theo sao (1/2/3/4/6), không vào hẻm; vùng tìm kiếm 60–400 m, công an thấy thì tâm vùng theo Tín,
   khuất mặt 10–60 s thì thoát (trong vùng chậm, trong hẻm nhanh); bản đồ nhỏ có chấm + nón tầm nhìn + vòng tìm kiếm;
   đứng yên / chạy chậm để công an áp sát 2 s thì bị bắt (nộp phạt, tịch thu vũ khí). Ô tô chặn đường để N7 (chưa có ô tô);
-- [ ] N5.5–N10.
+- [x] N5.5 bị bắt / bị gục kiểu GTA: game chậm lại, khung hình mất màu, chữ lớn "BỊ BẮT" / "GỤC", mờ đen rồi về
+  đồn công an phường (nộp phạt ≥ 150.000 đ, tịch thu vũ khí) / trạm y tế phường (viện phí ≥ 100.000 đ, đầy máu);
+  hết truy nã + Độ Nóng, nhiệm vụ / kèo đang làm thất bại; xe của Tín được đưa tới đậu cạnh; đồn và trạm có biểu tượng
+  trên bản đồ. (Cảnh báo 18+ đã có từ N5.2.)
+- [ ] N6–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

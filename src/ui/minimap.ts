@@ -1,4 +1,5 @@
 import type { CityLayout } from '@/world/city/layout';
+import type { CityPlaces } from '@/world/city/places';
 import { arrowAngle, mapImageTransform, markerOnMap, worldToMap, type MapView } from './minimapMath';
 
 /** Màu bản đồ (tông đêm Sài Gòn: nền tối, đường sáng, mốc có màu). */
@@ -119,6 +120,46 @@ export class Minimap {
       const rr = road.rect;
       rect(rr.x0, rr.z0, rr.x1, Math.min(rr.z1, shore), road.kind === 'avenue' ? MAP.avenue : MAP.road);
     }
+  }
+
+  /**
+   * Vẽ (một lần) biểu tượng nơi đặc biệt lên ảnh nền: đồn công an (khiên xanh, sao vàng) và trạm y tế (chữ thập đỏ).
+   * Ảnh nền xoay theo camera nên biểu tượng cũng xoay — đủ nhận ra.
+   */
+  setPlaces(places: CityPlaces): void {
+    const g = this.image.getContext('2d') as CanvasRenderingContext2D;
+    const k = PX_PER_M;
+    const at = (x: number, z: number): [number, number] => [(x - this.x0) * k, (z - this.z0) * k];
+    const [px, py] = at(places.police.x, places.police.z);
+    g.fillStyle = '#2f5fd0';
+    g.strokeStyle = '#fff';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(px - 8, py - 8);
+    g.lineTo(px + 8, py - 8);
+    g.lineTo(px + 8, py + 1);
+    g.quadraticCurveTo(px + 7, py + 8, px, py + 11);
+    g.quadraticCurveTo(px - 7, py + 8, px - 8, py + 1);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#ffd23f';
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 5 : 2.2;
+      g.lineTo(px + Math.cos(a) * r, py + 0.5 + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fill();
+    const [cx, cy] = at(places.clinic.x, places.clinic.z);
+    g.fillStyle = '#fff';
+    g.beginPath();
+    g.arc(cx, cy, 9, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#e2412f';
+    g.fillRect(cx - 2.5, cy - 6.5, 5, 13);
+    g.fillRect(cx - 6.5, cy - 2.5, 13, 5);
   }
 
   /** Bản đồ toàn khu (hướng Bắc lên trên) cho tab Bản đồ của điện thoại: vị trí người chơi + điểm đánh dấu. */

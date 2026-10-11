@@ -23,6 +23,8 @@ import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@
 import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
 import { attackFor, bloodFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
 import { Pickups } from '@/systems/pickups';
+import { cityPlaces, type CityPlaces } from '@/world/city/places';
+import type { OutcomeKind } from '@/ui/outcome';
 import { Wanted } from '@/systems/wanted';
 import { BloodSim } from '@/world/blood';
 import { BloodView } from '@/world/bloodView';
@@ -71,6 +73,11 @@ const PICKUP_DONE: Partial<Record<ItemId, string>> = {
 };
 /** Câu báo khi vũ khí hỏng (mặc định "… gãy rồi!"). */
 const BREAK_TEXT: Partial<Record<ItemId, string>> = { gheNhua: 'Ghế nhựa vỡ tan!', muBaoHiem: 'Mũ bảo hiểm bể làm đôi!' };
+/** Nhịp màn hình kết cục (giây): bắt đầu mờ đen, đưa về đồn / trạm, sáng lại, hết khoá điều khiển. */
+const OUTCOME = { black: 2.6, respawn: 3.2, reveal: 3.5, end: 4.1 } as const;
+/** Tiền phạt khi bị bắt / viện phí khi gục: ít nhất ngần này, hoặc 20 % / 10 % tiền mặt (không đủ thì lấy hết). */
+const BUSTED_FINE = 150_000;
+const HOSPITAL_FEE = 100_000;
 /** Số vũng máu chờ loang cùng lúc tối đa. */
 const POOL_QUEUE = 8;
 const MOUNT_RANGE = 2.4;
@@ -230,6 +237,8 @@ export class Game {
     if (this.nearPedestrians) scene.add(this.nearPedestrians.root);
     this.seated = SeatedPeopleView.available() && budget.nearPedestrians > 0 ? new SeatedPeopleView(city.seats, Math.max(2, Math.round(budget.nearPedestrians * 0.6))) : null;
     if (this.seated) scene.add(this.seated.root);
+    this.places = cityPlaces(city.layout);
+    this.hud.minimap?.setPlaces(this.places);
     this.pickups = new Pickups(city.pickups);
     this.pickupView = new PickupView(this.pickups);
     scene.add(this.pickupView.mesh);
@@ -265,6 +274,12 @@ export class Game {
   private queuedAttack: 'light' | 'heavy' | null = null;
   /** Khựng hình khi đòn trúng (giây thật còn lại) — main nhân hệ số chậm vào dt. */
   hitStop = 0;
+  /** Đồn công an phường (bị bắt thì được thả ở đây) và trạm y tế phường (gục thì tỉnh dậy ở đây). */
+  readonly places: CityPlaces;
+  /** Màn hình kết cục đang chạy (null = không), thời gian đã qua (s thật), đã đưa về đồn / trạm chưa. */
+  outcome: OutcomeKind | null = null;
+  private outcomeT = 0;
+  private outcomeDone = false;
   /** Đồ nhặt ngoài phố: ghế nhựa ở chồng ghế quán cóc, mũ bảo hiểm trên yên xe đậu. */
   readonly pickups: Pickups;
   private readonly pickupView: PickupView;
@@ -432,9 +447,14 @@ export class Game {
     this.murderT = Math.max(0, this.murderT - dt);
   }
 
-  /** Tín trúng đòn (người đi đường đánh trả): mất máu, khựng nhẹ, rung camera. Gục hẳn ở N5.5 — giờ còn 1 máu. */
+  /** Tín trúng đòn (người đi đường đánh trả): mất máu, khựng nhẹ, rung camera; hết máu thì GỤC. */
   private hurtPlayer(damage: number): void {
-    this.health = Math.max(1, this.health - damage);
+    if (this.outcome) return;
+    this.health = Math.max(0, this.health - damage);
+    if (this.health <= 0) {
+      this.startOutcome('wasted');
+      return;
+    }
     this.camera.shake(0.045);
     playSfx('hit');
     if (this.mode === 'foot' && !this.attack) this.model.attack?.('hitChest', 0.42);
@@ -599,26 +619,82 @@ export class Game {
     return ok;
   }
 
-  /**
-   * Bị công an bắt (áp sát khi Tín đứng yên / chạy chậm): nộp phạt, bị tịch thu hết vũ khí, hết truy nã.
-   * (N5.5: màn hình bị bắt, đưa về đồn, nhiệm vụ thất bại.)
-   */
+  /** Bị công an bắt (áp sát khi Tín đứng yên / chạy chậm) ⇒ màn hình BỊ BẮT rồi về đồn. */
   private busted(): void {
-    const fine = this.wallet.spend(Math.max(200_000, this.wallet.cash * 0.2), 'Nộp phạt (bị công an bắt)', this.clock.hour);
-    let seized = 0;
-    for (let i = 0; i < this.inventory.slots.length; i++) {
-      const sl = this.inventory.slots[i];
-      if (sl && ITEMS[sl.id].kind === 'weapon') {
-        seized += sl.count;
-        this.inventory.slots[i] = null;
-      }
+    this.startOutcome('busted');
+  }
+
+  /**
+   * Bắt đầu màn hình kết cục: game chậm lại, khung hình mất màu, chữ lớn; khoá điều khiển. Sau ~3 s mờ đen rồi đưa về
+   * đồn công an (bị bắt) / trạm y tế (gục).
+   */
+  private startOutcome(kind: OutcomeKind): void {
+    if (this.outcome) return;
+    this.outcome = kind;
+    this.outcomeT = 0;
+    this.outcomeDone = false;
+    this.attack = null;
+    this.queuedAttack = null;
+    this.hud.phone?.setOpen(false);
+    this.hud.backpack.setOpen(false);
+    if (this.hud.wheel.open) this.hud.wheel.hide();
+    this.timeScale = 0.35;
+    this.hud.outcome.show(kind);
+    // Gục thì ngã xuống; bị bắt thì giơ tay chống đỡ (giữ tư thế tới lúc màn hình đen).
+    this.model.attack?.(kind === 'wasted' ? 'deathB' : 'defend', 1.6);
+    playSfx('fail');
+  }
+
+  /** Nhịp màn hình kết cục (theo giây thật xấp xỉ: dt game chia hệ số chậm). Trả true khi còn khoá điều khiển. */
+  private updateOutcome(dt: number): boolean {
+    const kind = this.outcome;
+    if (!kind) return false;
+    this.outcomeT += dt / Math.max(0.05, this.timeScale);
+    if (this.outcomeT >= OUTCOME.black) this.hud.outcome.setBlack(true);
+    if (this.outcomeT >= OUTCOME.respawn && !this.outcomeDone) {
+      this.outcomeDone = true;
+      this.timeScale = 1;
+      this.hud.outcome.hide();
+      this.respawnAfter(kind);
     }
-    this.equipped = null;
-    this.hud.backpack.invalidate();
+    if (this.outcomeT >= OUTCOME.reveal) this.hud.outcome.setBlack(false);
+    if (this.outcomeT >= OUTCOME.end) this.outcome = null;
+    return true;
+  }
+
+  /** Sau màn hình đen: về đồn / trạm y tế, trả giá, hết truy nã, nhiệm vụ đang làm thất bại. */
+  private respawnAfter(kind: OutcomeKind): void {
+    if (this.riding) this.dismount();
+    const place = kind === 'busted' ? this.places.police : this.places.clinic;
+    this.character.teleport(place.x, PAD_HEIGHT + 0.3, place.z, place.yaw);
+    this.camera.yaw = place.yaw + Math.PI;
+    // Xe của Tín được đưa tới đậu bên trái (trái của hướng (sin, cos) là (cos, −sin)).
+    this.bikes[0]?.phys.reset(place.x + Math.cos(place.yaw) * 1.6, PAD_HEIGHT, place.z - Math.sin(place.yaw) * 1.6, place.yaw);
     this.wanted.clear();
     this.police.sim.disperse();
-    playSfx('fail');
-    this.hud.showToast(`Bị công an bắt! Nộp phạt ${formatVnd(fine)}${seized > 0 ? ', bị tịch thu vũ khí' : ''}`, 3.2);
+    this.heat.set(0);
+    this.chase.sim.disperse();
+    this.missions.fail(kind === 'busted' ? 'Tín bị công an bắt' : 'Tín bị gục');
+    if (kind === 'busted') {
+      const fine = this.wallet.spend(Math.max(BUSTED_FINE, this.wallet.cash * 0.2), 'Nộp phạt (bị công an bắt)', this.clock.hour);
+      let seized = 0;
+      for (let i = 0; i < this.inventory.slots.length; i++) {
+        const sl = this.inventory.slots[i];
+        if (sl && ITEMS[sl.id].kind === 'weapon') {
+          seized += sl.count;
+          this.inventory.slots[i] = null;
+        }
+      }
+      this.equipped = null;
+      this.hud.backpack.invalidate();
+      this.hud.showToast(`Ra khỏi ${place.name}: nộp phạt ${formatVnd(fine)}${seized > 0 ? ', bị tịch thu vũ khí' : ''}`, 4);
+      this.schedule(3, () => this.inbox.receive('Ngân', 'Anh lại lên phường hả?? Hàng xóm đăng lên Phây rồi kìa 😭', this.clock.hour));
+    } else {
+      const fee = this.wallet.spend(Math.max(HOSPITAL_FEE, this.wallet.cash * 0.1), 'Viện phí', this.clock.hour);
+      this.health = 100;
+      this.lowHealthWarned = false;
+      this.hud.showToast(`Tỉnh dậy ở ${place.name}. Viện phí ${formatVnd(fee)}`, 4);
+    }
   }
 
   /** Điểm (x, z) có nằm trong hẻm không (trốn trong hẻm thì mau thoát truy nã). */
@@ -850,13 +926,15 @@ export class Game {
   /** Cập nhật mỗi khung hình (dt thực, giây). */
   update(dt: number): void {
     const input = this.input;
+    // Màn hình BỊ BẮT / GỤC: khoá điều khiển tới khi được đưa về đồn / trạm y tế.
+    const locked = this.updateOutcome(dt);
     // Vòng chọn đồ: giữ Tab ⇒ mở vòng, game chậm lại, chuột chọn ô (không xoay camera); nhả Tab ⇒ dùng ô đang chọn.
-    const wheelWanted = input.isDown('Tab') && !this.hud.phone?.open && !this.hud.backpack.open;
+    const wheelWanted = !locked && input.isDown('Tab') && !this.hud.phone?.open && !this.hud.backpack.open;
     if (wheelWanted) this.updateWheel(input.mouseDX, input.mouseDY);
     else if (this.hud.wheel.open) this.closeWheel();
     if (!wheelWanted && (input.mouseDX || input.mouseDY)) this.camera.look(input.mouseDX, input.mouseDY);
     // Phím nhanh (điện thoại đóng): 1 tay không, 2–3 vũ khí, 4 ăn món hồi nhiều nhất.
-    if (!this.hud.phone?.open && !wheelWanted && input.wasPressed('Digit1', 'Digit2', 'Digit3', 'Digit4')) {
+    if (!locked && !this.hud.phone?.open && !wheelWanted && input.wasPressed('Digit1', 'Digit2', 'Digit3', 'Digit4')) {
       // Chỉ dựng danh sách khi có bấm phím (không tạo rác mỗi khung hình).
       const quick = buildWheel(this.inventory);
       const weapons = quick.filter((e) => e.kind === 'weapon');
@@ -868,7 +946,7 @@ export class Game {
     }
     this.syncWeapon();
     // Cận chiến (đi bộ, không mở điện thoại / balo / vòng chọn đồ): chuột trái đòn nhẹ (combo 3 nhịp), chuột phải đòn mạnh.
-    const busyUi = this.hud.phone?.open || this.hud.backpack.open || wheelWanted;
+    const busyUi = locked || this.hud.phone?.open || this.hud.backpack.open || wheelWanted;
     if (this.mode === 'foot' && !busyUi && input.wasPressed('Mouse0', 'Mouse2')) {
       const heavy = input.wasPressed('Mouse2');
       if (!this.attack) this.startAttack(heavy);
@@ -890,7 +968,7 @@ export class Game {
 
     // Balo: I bật/tắt; đang mở thì mũi tên chọn ô, E dùng, X vứt, Esc đóng.
     const bp = this.hud.backpack;
-    if (input.wasPressed('KeyI')) bp.toggle();
+    if (input.wasPressed('KeyI') && !locked) bp.toggle();
     else if (bp.open) {
       if (input.wasPressed('Escape')) bp.setOpen(false);
       if (input.wasPressed('ArrowLeft')) bp.move(-1, 0);
@@ -905,7 +983,7 @@ export class Game {
     // Điện thoại: P bật/tắt, 1–8 mở thẳng app, Backspace / Esc lùi về màn hình chính (đang ở đó thì cất máy).
     const phone = this.hud.phone;
     if (phone) {
-      if (input.wasPressed('KeyP')) phone.toggle();
+      if (input.wasPressed('KeyP') && !locked) phone.toggle();
       else if (phone.open && (input.wasPressed('Escape') || input.wasPressed('Backspace')) && !phone.back()) phone.setOpen(false);
       if (phone.open) {
         for (let i = 0; i < PHONE_KEYS.length; i++) if (input.wasPressed(`Digit${i + 1}`)) phone.show(PHONE_KEYS[i]!);
@@ -950,7 +1028,9 @@ export class Game {
 
     // Lên / xuống xe.
     let prompt = '';
-    if (this.mode === 'foot') {
+    if (locked) {
+      // Đang ở màn hình kết cục: không lên xe / nhặt đồ.
+    } else if (this.mode === 'foot') {
       const near = this.nearestBike();
       if (near && near.dist < MOUNT_RANGE) {
         prompt = '<kbd>F</kbd> Lên xe';
@@ -976,15 +1056,15 @@ export class Game {
     }
     this.hud.setPrompt(prompt);
 
-    if (this.mode === 'foot' && input.wasPressed('Space')) this.jumpQueued = true;
+    if (this.mode === 'foot' && !locked && input.wasPressed('Space')) this.jumpQueued = true;
 
     // Bước vật lý cố định.
     const steps = this.stepper.advance(dt);
     const cam = this.camera.forward();
     // Balo đang mở thì mũi tên dùng để chọn ô ⇒ chỉ đi / lái bằng WASD.
     const keys = this.hud.backpack.open ? MOVE_WASD : MOVE_ALL;
-    const fwd = input.axis(keys.back, keys.fwd);
-    const strafe = input.axis(keys.left, keys.right);
+    const fwd = locked ? 0 : input.axis(keys.back, keys.fwd);
+    const strafe = locked ? 0 : input.axis(keys.left, keys.right);
     for (let i = 0; i < steps; i++) {
       const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
       this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
@@ -1001,7 +1081,7 @@ export class Game {
       const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
       if (this.chase.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.heat.level)) this.caughtThisStep = true;
       // Truy nã: xe công an theo sao; công an thấy thì vùng tìm kiếm đi theo Tín, khuất mặt đủ lâu thì thoát.
-      if (this.police.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.wanted.level)) this.bustedThisStep = true;
+      if (this.police.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.wanted.level) && !this.outcome) this.bustedThisStep = true;
       if (this.wanted.update(STEP, this.police.sim.seen, me.x, me.z, this.wanted.level > 0 && this.inHem(me.x, me.z)) === 'escaped') {
         this.police.sim.disperse();
         this.hud.showToast('Đã thoát khỏi truy nã!', 2.4);
@@ -1030,7 +1110,7 @@ export class Game {
           const controls = this.controls;
           controls.throttle = this.autopilot?.throttle ?? fwd;
           controls.steer = this.autopilot?.steer ?? -strafe;
-          controls.handbrake = this.autopilot?.handbrake ?? input.isDown('Space');
+          controls.handbrake = this.autopilot?.handbrake ?? (locked || input.isDown('Space'));
           this.throttle = Math.max(0, controls.throttle);
           b.phys.update(STEP, controls);
         } else {

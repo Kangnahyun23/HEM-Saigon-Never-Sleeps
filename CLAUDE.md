@@ -86,6 +86,7 @@ src/
     pickupView.ts    mũ bảo hiểm trên yên xe đậu (đồ nhặt được; mũ bị lấy thì ẩn)
     city/layout.ts   BỐ CỤC thuần dữ liệu (đường, block, hẻm, lô nhà, cột điện, cây…) — có unit test
     city/locate.ts   tên địa điểm tại (x, z) cho HUD
+    city/places.ts   đồn công an phường + trạm y tế phường (chỗ thả ra / tỉnh dậy) chọn theo bố cục — có unit test
     city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng + nội thất giả, cửa cuốn theo giờ…), vỉa hè, bê tông hẻm, nhựa đường
     city/signage.ts  nội dung bảng hiệu / băng rôn / câu LED (thuần logic, có unit test); signs.ts vẽ atlas
     city/hemDetails.ts  miệng hẻm, số hẻm, vị trí cửa nhà trong hẻm (thuần logic, có unit test)
@@ -114,7 +115,7 @@ src/
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, máu / giáp, sao truy nã, bảng phím F1, hàng thông báo — toastQueue
                      có unit test), minimap (+ minimapMath có unit test)
                      phone (điện thoại "Sầu Riêng S9" cầm tay, phím P: màn hình chính + 8 app — Kèo, Bản đồ, Tin nhắn, Ví,
-                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu)
+                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu), outcome (màn hình BỊ BẮT / GỤC)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
                      combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục, lượng máu bắn — có unit test),
                      pickups (đồ nhặt ngoài phố, phím G: chồng ghế nhựa quán cóc, mũ bảo hiểm trên yên xe — có unit test),

@@ -311,3 +311,16 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 2px; b
 .age-ok { background: var(--hud-accent); color: #1b1208; flex: 1; }
 .age-ok:hover, .age-ok:focus-visible { filter: brightness(1.08); outline: 2px solid #fff3; }
 .age-leave { background: rgba(255,255,255,.08); color: var(--hud-quiet); }
+
+/* Kết cục kiểu GTA: BỊ BẮT / GỤC — dải tối ngang giữa màn hình, chữ lớn; khung hình mất màu; mờ đen để chuyển cảnh */
+body.outcome-desat #app canvas { filter: grayscale(.9) contrast(1.08) brightness(.88); transition: filter .6s; }
+.hud-outcome { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.hud-outcome[hidden] { display: none; }
+.outcome-band { width: 100%; padding: 22px 0 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: linear-gradient(90deg, transparent, rgba(8, 6, 12, .72) 18%, rgba(8, 6, 12, .72) 82%, transparent); animation: outcome-in .5s ease-out; }
+.outcome-band b { font-size: clamp(48px, 9vw, 104px); font-weight: 900; font-style: italic; letter-spacing: .06em; line-height: 1; text-shadow: 0 4px 0 rgba(0,0,0,.6), 0 0 26px rgba(0,0,0,.5); }
+.outcome-band small { font-size: 16px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--hud-quiet); }
+.hud-outcome.wasted b { color: #e8392b; }
+.hud-outcome.busted b { color: #eaf0ff; text-shadow: 0 4px 0 rgba(0,0,0,.6), -6px 0 22px rgba(255,59,59,.55), 6px 0 22px rgba(59,123,255,.55); }
+@keyframes outcome-in { from { opacity: 0; transform: scale(1.12); } to { opacity: 1; transform: none; } }
+.hud-black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .5s; }
+.hud-black.on { opacity: 1; }

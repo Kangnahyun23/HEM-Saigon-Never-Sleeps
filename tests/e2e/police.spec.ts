@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * Truy nã công an (N5.4): có sao ⇒ xe công an (đèn chớp đỏ – xanh) chạy tới, bản đồ nhỏ có chấm + nón tầm nhìn;
- * đứng yên để công an áp sát ⇒ bị bắt (nộp phạt, tịch thu vũ khí); chui vào hẻm xa khuất mặt ⇒ thoát truy nã.
+ * đứng yên để công an áp sát ⇒ màn hình BỊ BẮT, về đồn công an phường (nộp phạt, tịch thu vũ khí);
+ * chui vào hẻm xa khuất mặt ⇒ thoát truy nã. Hết máu ⇒ màn hình GỤC, tỉnh dậy ở trạm y tế (viện phí).
  * Chạy riêng: npx playwright test police
  */
 
@@ -68,15 +69,21 @@ test('công an truy nã: xe tới, bị bắt khi đứng yên; trốn vào hẻ
   });
   await shot(page, 'police-bike');
 
-  // Đứng yên ⇒ bị bắt: hết sao, bị tịch thu vũ khí, nộp phạt.
+  // Đứng yên ⇒ bị bắt: màn hình BỊ BẮT, rồi về đồn công an phường — hết sao, bị tịch thu vũ khí, nộp phạt.
   const cash0 = await page.evaluate(() => (window.__HEM__!.game as Game).wallet.cash);
-  for (let i = 0; i < 40; i++) {
-    const level = await page.evaluate(() => {
-      (window.__HEM__!.simulate as (s: number) => void)(0.5);
-      return (window.__HEM__!.game as Game).wanted.level;
+  for (let i = 0; i < 60; i++) {
+    const kind = await page.evaluate(() => {
+      (window.__HEM__!.simulate as (s: number) => void)(0.25);
+      return (window.__HEM__!.game as { outcome: string | null }).outcome;
     });
-    if (level === 0) break;
+    if (kind === 'busted') break;
   }
+  await expect(page.locator('.hud-outcome')).toBeVisible();
+  await expect(page.locator('.hud-outcome')).toContainText('BỊ BẮT');
+  await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(0.2));
+  await shot(page, 'busted');
+  await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(2));
+  await expect(page.locator('.hud-outcome')).toBeHidden();
   const after = await page.evaluate(() => {
     const g = window.__HEM__!.game as Game;
     return { level: g.wanted.level, knives: g.inventory.count('maTau'), equipped: g.equipped, cash: g.wallet.cash };
@@ -85,7 +92,14 @@ test('công an truy nã: xe tới, bị bắt khi đứng yên; trốn vào hẻ
   expect(after.knives).toBe(0);
   expect(after.equipped).toBeNull();
   expect(after.cash).toBeLessThan(cash0);
-  await expect(page.locator('.hud-toast')).toContainText('Bị công an bắt');
+  await expect(page.locator('.hud-toast')).toContainText('nộp phạt');
+  // Được thả ra trước cửa đồn công an phường.
+  const nearStation = await page.evaluate(() => {
+    const g = window.__HEM__!.game as Game & { places: { police: { x: number; z: number } } };
+    const p = g.character.feet();
+    return Math.hypot(p.x - g.places.police.x, p.z - g.places.police.z);
+  });
+  expect(nearStation).toBeLessThan(2.5);
 
   // 1 sao, chui sâu vào hẻm cách xa ⇒ khuất mặt, ra khỏi vùng tìm kiếm ⇒ thoát.
   await page.evaluate(() => {
@@ -119,4 +133,45 @@ test('công an truy nã: xe tới, bị bắt khi đứng yên; trốn vào hẻ
   }
   expect(await page.evaluate(() => (window.__HEM__!.game as Game).wanted.level)).toBe(0);
   await expect(page.locator('.hud-toast')).toContainText('thoát khỏi truy nã');
+});
+
+test('hết máu: màn hình GỤC, tỉnh dậy ở trạm y tế, trả viện phí, đầy máu', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.goto('/?moi=1&gio=10');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  const cash0 = await page.evaluate(() => {
+    const h = window.__HEM__!;
+    h.paused = true;
+    const g = h.game as Game & { health: number; pedestrians: { walkers: Array<{ x: number; z: number; yaw: number; react: string }>; startReaction(w: unknown, k: string, t: number): void } };
+    // Còn 5 máu, một thanh niên xông vào đấm.
+    g.health = 5;
+    const p = g.character.feet();
+    const w = [...g.pedestrians.walkers].sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0]!;
+    g.character.teleport(w.x + Math.sin(w.yaw) * 2, 0.5, w.z + Math.cos(w.yaw) * 2, 0);
+    (h.simulate as (s: number) => void)(0.1);
+    g.pedestrians.startReaction(w, 'fight', 25);
+    return g.wallet.cash;
+  });
+  for (let i = 0; i < 40; i++) {
+    const kind = await page.evaluate(() => {
+      (window.__HEM__!.simulate as (s: number) => void)(0.25);
+      return (window.__HEM__!.game as { outcome: string | null }).outcome;
+    });
+    if (kind === 'wasted') break;
+  }
+  await expect(page.locator('.hud-outcome')).toContainText('GỤC');
+  await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(0.3));
+  await shot(page, 'wasted');
+  await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(2));
+  const after = await page.evaluate(() => {
+    const g = window.__HEM__!.game as Game & { health: number; places: { clinic: { x: number; z: number } } };
+    const p = g.character.feet();
+    return { health: g.health, cash: g.wallet.cash, dist: Math.hypot(p.x - g.places.clinic.x, p.z - g.places.clinic.z) };
+  });
+  expect(after.health).toBe(100);
+  expect(after.cash).toBeLessThan(cash0);
+  expect(after.dist).toBeLessThan(2.5);
+  await expect(page.locator('.hud-toast')).toContainText('Viện phí');
+  await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(1));
+  await shot(page, 'clinic');
 });

@@ -5,6 +5,7 @@ import { formatVnd, type Wallet } from '@/systems/wallet';
 import { Minimap } from './minimap';
 import { Backpack } from './backpack';
 import { Phone } from './phone';
+import { OutcomeScreen } from './outcome';
 import { WeaponWheel } from './weaponWheel';
 import { ToastQueue } from './toastQueue';
 
@@ -46,6 +47,8 @@ export class Hud {
   readonly backpack: Backpack;
   /** Vòng chọn đồ (giữ Tab). */
   readonly wheel: WeaponWheel;
+  /** Màn hình kết cục BỊ BẮT / GỤC. */
+  readonly outcome: OutcomeScreen;
   private readonly weapon: HTMLElement;
   private lastWeapon = '';
   private readonly cash: HTMLElement;
@@ -142,6 +145,7 @@ export class Hud {
     this.objectiveTimer = q('[data-objective-timer]');
     this.backpack = new Backpack(root);
     this.wheel = new WeaponWheel(root);
+    this.outcome = new OutcomeScreen(root);
     this.weapon = q('[data-weapon]');
   }
 
