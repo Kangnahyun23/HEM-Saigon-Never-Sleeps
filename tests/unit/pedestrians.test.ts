@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { containsPoint } from '@/core/rect';
-import { PedestrianSim } from '@/ai/pedestrians';
+import { FLEE_SPEED, PedestrianSim } from '@/ai/pedestrians';
 import { generateCity } from '@/world/city/layout';
 
 const city = generateCity();
@@ -80,5 +80,41 @@ describe('PedestrianSim', () => {
     sim.step(STEP, far);
     for (const w of sim.walkers) expect(Math.hypot(w.x - far.x, w.z - far.z)).toBeLessThan(sim.options.despawnRadius + 5);
     expect(sim.respawns).toBeGreaterThan(0);
+  });
+
+  it('trúng đòn: loạng choạng đứng yên rồi bỏ chạy ra xa người đánh; đòn ngã thì nằm; hết máu thì gục hẳn', () => {
+    const sim = new PedestrianSim(city, focus, { count: 6 });
+    for (let i = 0; i < 30; i++) sim.step(STEP, focus);
+    const w = sim.walkers[0]!;
+    const from = { x: w.x + Math.sin(w.yaw) * 0.8, z: w.z + Math.cos(w.yaw) * 0.8 };
+    expect(sim.hit(0, 10, from.x, from.z, false)).toBe('hurt');
+    expect(w.health).toBe(90);
+    const x0 = w.x;
+    const z0 = w.z;
+    sim.step(STEP, focus);
+    expect(Math.hypot(w.x - x0, w.z - z0)).toBe(0);
+    const d0 = Math.hypot(w.x - from.x, w.z - from.z);
+    for (let i = 0; i < 120; i++) sim.step(STEP, focus);
+    expect(w.flee).toBeGreaterThan(0);
+    expect(w.speed).toBeGreaterThan(FLEE_SPEED * 0.8);
+    expect(Math.hypot(w.x - from.x, w.z - from.z)).toBeGreaterThan(d0 + 2);
+
+    expect(sim.hit(0, 10, from.x, from.z, true)).toBe('down');
+    expect(w.down).toBeGreaterThan(0);
+    expect(sim.hit(0, 500, from.x, from.z, false)).toBe('dead');
+    const xd = w.x;
+    for (let i = 0; i < 120; i++) sim.step(STEP, focus);
+    expect(w.dead).toBe(true);
+    expect(w.x).toBe(xd);
+    expect(sim.hit(0, 10, from.x, from.z, false)).toBeNull();
+  });
+
+  it('thấy đánh nhau thì người xung quanh bỏ chạy', () => {
+    const sim = new PedestrianSim(city, focus, { count: 30 });
+    const w = sim.walkers[3]!;
+    sim.scare(w.x + 2, w.z, 12);
+    expect(w.flee).toBeGreaterThan(0);
+    const far = sim.walkers.filter((o) => Math.hypot(o.x - w.x - 2, o.z - w.z) > 12);
+    for (const o of far) expect(o.flee).toBe(0);
   });
 });

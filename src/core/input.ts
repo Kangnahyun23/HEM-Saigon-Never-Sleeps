@@ -32,8 +32,19 @@ export class Input {
         if (document.pointerLockElement !== el) void el.requestPointerLock?.()?.catch?.(() => undefined);
       });
       // Không khoá được con trỏ (iframe, trình duyệt chặn): kéo chuột trái để xoay.
-      el.addEventListener('mousedown', () => (this.dragging = true));
-      target.addEventListener('mouseup', () => (this.dragging = false));
+      // Đã khoá con trỏ: nút chuột thành "phím" Mouse0 (trái — đánh nhẹ) / Mouse2 (phải — đánh mạnh).
+      el.addEventListener('mousedown', (e) => {
+        if (document.pointerLockElement === el) {
+          const code = `Mouse${e.button}`;
+          if (!this.down.has(code)) this.pressed.add(code);
+          this.down.add(code);
+        } else this.dragging = true;
+      });
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      target.addEventListener('mouseup', (e) => {
+        this.dragging = false;
+        this.down.delete(`Mouse${e.button}`);
+      });
       target.addEventListener('blur', () => (this.dragging = false));
       target.addEventListener('mousemove', (e) => {
         if (this.dragging && (e.buttons & 1) === 0) this.dragging = false; // nhả chuột ngoài cửa sổ

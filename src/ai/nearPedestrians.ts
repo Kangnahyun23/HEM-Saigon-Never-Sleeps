@@ -11,14 +11,24 @@ const IDLES: readonly AnimationName[] = ['phone', 'talk', 'foldArms', 'idle', 'i
 /** Bán kính (m) quanh camera vẽ người bằng nhân vật có xương. */
 const NEAR_RADIUS = 32;
 
-/** Thứ tự động tác trong một NPC đi bộ: 0 đứng (kiểu riêng), 1 đi, 2 né xe. */
+/** Thứ tự động tác trong một NPC đi bộ: đứng (kiểu riêng), đi, né xe, trúng đòn, bị đánh ngã, gục, chạy trốn. */
 const IDLE = 0;
 const WALK = 1;
 const DODGE = 2;
+const HIT = 3;
+const KNOCK = 4;
+const DEATH = 5;
+const RUN = 6;
+const ACTION_COUNT = 7;
+/** Thời gian (s) động tác gục — clip dài hơn thì tua nhanh. */
+const DEATH_SECONDS = 1.9;
+type PedState = 'calm' | 'hurt' | 'down' | 'dead';
 
 interface Slot {
   walker: number;
   generation: number;
+  /** Trạng thái lần trước (đổi trạng thái ⇒ phát lại động tác một lần từ đầu). */
+  state: PedState;
   npc: NpcBody | null;
   /** Mỗi chỗ giữ sẵn hình của từng mẫu đã dùng (đổi người khỏi phải nhân bản lại). */
   readonly cache: Map<string, NpcBody>;
@@ -35,11 +45,11 @@ export class NearPedestrianView {
   readonly root = new THREE.Group();
   readonly lod: PedestrianLod;
   private readonly slots: Slot[] = [];
-  private readonly targets = [0, 0, 0];
+  private readonly targets = new Array<number>(ACTION_COUNT).fill(0);
 
   constructor(capacity: number) {
     this.lod = new PedestrianLod(capacity, NEAR_RADIUS);
-    for (let k = 0; k < capacity; k++) this.slots.push({ walker: -1, generation: -1, npc: null, cache: new Map() });
+    for (let k = 0; k < capacity; k++) this.slots.push({ walker: -1, generation: -1, state: 'calm', npc: null, cache: new Map() });
     this.root.name = 'near-pedestrians';
   }
 
@@ -59,9 +69,20 @@ export class NearPedestrianView {
     const key = `${look.id}:${idle}`;
     let npc = slot.cache.get(key) ?? null;
     if (!npc) {
-      npc = buildNpc(this.root, look.id, height, [idle, look.female ? 'walkFemale' : 'walk', 'dodge']);
-      if (npc) slot.cache.set(key, npc);
+      npc = buildNpc(this.root, look.id, height, [idle, look.female ? 'walkFemale' : 'walk', 'dodge', 'hitChest', 'knockback', w.id % 2 ? 'deathA' : 'deathB', look.female ? 'runFemale' : 'jog']);
+      if (npc) {
+        // Trúng đòn / ngã / gục chỉ phát một lần rồi giữ tư thế cuối.
+        for (const i of [HIT, KNOCK, DEATH]) {
+          npc.actions[i]!.setLoop(THREE.LoopOnce, 1);
+          npc.actions[i]!.clampWhenFinished = true;
+        }
+        // Clip gục dài khác nhau (deathA 4,5 s, deathB 1,9 s) — chỉnh cho cùng ngã trong ~1,9 s.
+        const death = npc.actions[DEATH]!;
+        death.timeScale = Math.max(1, death.getClip().duration / DEATH_SECONDS);
+        slot.cache.set(key, npc);
+      }
     }
+    slot.state = 'calm';
     slot.npc = npc;
     if (npc) {
       npc.body.scale.setScalar(npc.perMeter * height);
@@ -90,13 +111,25 @@ export class NearPedestrianView {
       npc.body.position.set(w.prevX + (w.x - w.prevX) * alpha, PAD_HEIGHT, w.prevZ + (w.z - w.prevZ) * alpha);
       npc.body.quaternion.copy(_q.setFromAxisAngle(_up, w.prevYaw + dyaw * alpha));
       const t = this.targets;
-      t[IDLE] = t[WALK] = t[DODGE] = 0;
-      if (w.dodge > 0) t[DODGE] = 1;
+      t.fill(0);
+      const state: PedState = w.dead ? 'dead' : w.down > 0 ? 'down' : w.hurt > 0 ? 'hurt' : 'calm';
+      if (state !== slot.state) {
+        // Vào trạng thái mới: phát động tác một lần từ đầu (trúng đòn, ngã, gục).
+        const idx = state === 'dead' ? DEATH : state === 'down' ? KNOCK : state === 'hurt' ? HIT : -1;
+        if (idx >= 0) npc.actions[idx]!.reset().play();
+        slot.state = state;
+      }
+      if (state === 'dead') t[DEATH] = 1;
+      else if (state === 'down') t[KNOCK] = 1;
+      else if (state === 'hurt') t[HIT] = 1;
+      else if (w.dodge > 0) t[DODGE] = 1;
+      else if (w.flee > 0 && w.speed > 0.15) t[RUN] = 1;
       else if (w.speed > 0.15) t[WALK] = 1;
       else t[IDLE] = 1;
-      // Nhịp bước theo tốc độ đi (clip đi khớp ~1,6 m/s).
+      // Nhịp bước theo tốc độ (clip đi khớp ~1,6 m/s, chạy ~3,6 m/s).
       npc.actions[WALK]!.timeScale = Math.min(1.4, Math.max(0.6, w.speed / 1.6));
-      stepNpc(npc, t, 8, dt);
+      npc.actions[RUN]!.timeScale = Math.min(1.4, Math.max(0.7, w.speed / 3.6));
+      stepNpc(npc, t, state === 'calm' ? 8 : 18, dt);
     }
   }
 }

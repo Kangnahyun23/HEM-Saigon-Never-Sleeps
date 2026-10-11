@@ -12,6 +12,8 @@ export interface CharacterView {
   setHelmet(on: boolean): void;
   /** Vũ khí cầm tay phải (null = tay không). Mẫu khối hộp dự phòng bỏ qua. */
   setWeapon?(id: ItemId | null): void;
+  /** Ra đòn: phát động tác `clip` một lần, dài `duration` giây (đè lên động tác di chuyển). */
+  attack?(clip: AnimationName, duration: number): void;
 }
 
 /** Hình vũ khí dựng từ khối (lưỡi + cán), trục dài theo +Z cục bộ, cán ở gốc. */
@@ -89,6 +91,10 @@ export class SkinnedCharacter implements CharacterView {
   private readonly grip = new THREE.Group();
   private readonly weapons = new Map<ItemId, THREE.Group>();
   private weapon: ItemId | null = null;
+  /** Đòn đang ra: action phát một lần + thời gian còn lại. */
+  private readonly attacks = new Map<AnimationName, THREE.AnimationAction>();
+  private attackAction: THREE.AnimationAction | null = null;
+  private attackLeft = 0;
   /** Độ cao đặt mẫu khi ngồi xe để hông ở đúng mốc yên xe. */
   private readonly rideOffset: number;
 
@@ -162,6 +168,24 @@ export class SkinnedCharacter implements CharacterView {
     this.helmet.visible = on;
   }
 
+  attack(clip: AnimationName, duration: number): void {
+    let action = this.attacks.get(clip);
+    if (!action) {
+      const c = getClip(clip);
+      if (!c) return;
+      action = this.mixer.clipAction(c);
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      this.attacks.set(clip, action);
+    }
+    if (this.attackAction && this.attackAction !== action) this.attackAction.setEffectiveWeight(0);
+    // Co giãn clip cho khớp thời gian đòn (vũ khí nặng chậm hơn).
+    action.timeScale = action.getClip().duration / Math.max(0.1, duration);
+    action.reset().setEffectiveWeight(1).play();
+    this.attackAction = action;
+    this.attackLeft = duration;
+  }
+
   setWeapon(id: ItemId | null): void {
     if (id === this.weapon) return;
     this.weapon = id;
@@ -202,6 +226,17 @@ export class SkinnedCharacter implements CharacterView {
         }
         // Nhịp bước theo tốc độ thật (đỡ trượt chân).
         for (let k = 0; k < 3; k++) this.actions[k + 1]!.timeScale = clipTimeScale(k, s.speed);
+      }
+    }
+    // Đang ra đòn: động tác đòn chiếm trọn thân (các động tác khác lùi về 0).
+    if (this.attackAction) {
+      this.attackLeft -= dt;
+      if (this.attackLeft > 0 && s.mode === 'foot') {
+        t.fill(0);
+        rate = 22;
+      } else {
+        this.attackAction.fadeOut(0.12);
+        this.attackAction = null;
       }
     }
     this.handset.visible = s.mode === 'foot' && s.phone === true;

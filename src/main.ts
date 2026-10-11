@@ -182,8 +182,8 @@ async function main(): Promise<void> {
     timer.update(time);
     const raw = timer.getDelta();
     const dt = Math.min(raw, 0.1);
-    // Vòng chọn đồ (giữ Tab) làm game chậm lại: nhân hệ số thời gian của game vào dt.
-    if (!debug.paused) game.update(dt * game.timeScale);
+    // Khựng hình khi trúng đòn / chậm khi mở vòng chọn đồ (giữ Tab): nhân hệ số thời gian của game vào dt.
+    if (!debug.paused) game.update(dt * game.tickScale(dt));
     if (resolution?.sample(raw)) {
       if (renderer.getPixelRatio() !== resolution.pixelRatio) renderer.setPixelRatio(resolution.pixelRatio);
       env.setShadowInterval(resolution.shadowInterval);

@@ -53,6 +53,13 @@ export class FollowCamera {
     this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.0026 * k * (this.invertY ? -1 : 1), -0.3, 1.25);
   }
 
+  /** Rung camera (đòn đánh trúng, va chạm) — biên độ m, tắt dần nhanh. */
+  shake(amount: number): void {
+    this.shakeAmp = Math.max(this.shakeAmp, amount);
+  }
+  private shakeAmp = 0;
+  private shakeTime = 0;
+
   addZoom(steps: number): void {
     this.zoom = THREE.MathUtils.clamp(this.zoom + steps * 0.12, 0.55, 2.2);
   }
@@ -91,6 +98,15 @@ export class FollowCamera {
     // Không để camera chui xuống đất.
     this.camera.position.y = Math.max(this.camera.position.y, 0.4);
     this.camera.lookAt(this.smoothTarget);
+    if (this.shakeAmp > 0.001) {
+      // Rung theo hàm sin lệch tần số (tất định, không cần số ngẫu nhiên), tắt dần.
+      this.shakeTime += dt;
+      const t = this.shakeTime;
+      this.camera.position.x += Math.sin(t * 53) * this.shakeAmp;
+      this.camera.position.y += Math.sin(t * 71 + 1.3) * this.shakeAmp * 0.6;
+      this.camera.position.z += Math.sin(t * 61 + 2.1) * this.shakeAmp;
+      this.shakeAmp *= Math.exp(-14 * dt);
+    }
 
     const fov = this.baseFov + rig.fovBoost;
     if (Math.abs(this.camera.fov - fov) > 0.01) {

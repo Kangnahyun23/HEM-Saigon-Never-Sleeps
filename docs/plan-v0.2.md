@@ -17,7 +17,10 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] N4.2 điện thoại cầm tay "Sầu Riêng S9": màn hình chính 8 app (thêm Ngân hàng, Phây, Camera chụp ảnh), thông báo trượt xuống;
 - [x] N4.3 balo (phím I): 12 ô xếp chồng, nâng cấp 16 / 24 ô, dùng đồ ăn / thuốc hồi máu, vứt đồ; lưu cùng bản lưu;
 - [x] N4.4 vòng chọn đồ (giữ Tab: game chậm 30 %, rê chuột chọn; phím 1–4), Tín cầm vũ khí (tư thế thủ), ô vũ khí trên HUD;
-- [ ] N5–N10.
+- [x] N5.1 cận chiến: đòn nhẹ 3 nhịp (chuột trái, có bộ đệm combo), đòn mạnh (chuột phải), dừng hình + rung camera,
+  người đi đường trúng đòn / ngã / gục (nằm lại trên vỉa hè), người xung quanh bỏ chạy; vũ khí mòn dần rồi gãy.
+  Vùng trúng đòn tính bằng quạt tầm + góc (thuần logic, rẻ hơn shape cast); né (Q) và đỡ đòn dời sang N5.3 (lúc có người đánh trả);
+- [ ] N5.2–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 
