@@ -93,6 +93,19 @@ export class NearPedestrianView {
     }
   }
 
+  /**
+   * Vị trí hông (thế giới) của người đi bộ `walkerId` nếu người đó đang được vẽ bằng nhân vật có xương — dùng đặt vũng
+   * máu đúng chỗ thân người nằm. Trả false nếu không có.
+   */
+  pelvisOf(walkerId: number, out: THREE.Vector3): boolean {
+    for (const slot of this.slots) {
+      if (slot.walker !== walkerId || !slot.npc?.pelvis || !slot.npc.body.visible) continue;
+      slot.npc.pelvis.getWorldPosition(out);
+      return true;
+    }
+    return false;
+  }
+
   update(walkers: readonly Walker[], alpha: number, dt: number, camX: number, camZ: number): void {
     this.lod.update(walkers, camX, camZ);
     for (let k = 0; k < this.slots.length; k++) {

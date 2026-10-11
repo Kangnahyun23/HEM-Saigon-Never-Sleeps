@@ -1,7 +1,7 @@
 import { mixer } from './mixer';
 
 /** Các hiệu ứng âm thanh theo sự kiện trong game (tổng hợp bằng WebAudio, không dùng file). */
-export type Sfx = 'money' | 'lose' | 'message' | 'phoneOpen' | 'phoneClose' | 'start' | 'complete' | 'fail' | 'alert' | 'escaped' | 'crash' | 'swing' | 'hit' | 'hitHeavy';
+export type Sfx = 'money' | 'lose' | 'message' | 'phoneOpen' | 'phoneClose' | 'start' | 'complete' | 'fail' | 'alert' | 'escaped' | 'crash' | 'swing' | 'hit' | 'hitHeavy' | 'pickup';
 
 type Wave = OscillatorType;
 
@@ -57,6 +57,7 @@ const PRIORITY: Record<Sfx, number> = {
   swing: 2,
   hit: 3,
   hitHeavy: 3,
+  pickup: 1,
 };
 /** Trong khoảng này (giây) sau một tiếng, tiếng ưu tiên thấp hơn bị bỏ. */
 const OVERLAP = 0.4;
@@ -120,6 +121,10 @@ export function playSfx(name: Sfx): void {
       case 'hitHeavy': // đòn mạnh / đánh ngã: "bịch" dày hơn
         thud(ctx, t, 0.24, 300, 0.95);
         note(ctx, 110, t, 0.16, 'sine', 0.3, 45);
+        break;
+      case 'pickup': // nhặt đồ: "lạch cạch" ngắn
+        thud(ctx, t, 0.08, 1800, 0.25);
+        note(ctx, 520, t + 0.04, 0.08, 'triangle', 0.06, 760);
         break;
       case 'crash':
         thud(ctx, t, 0.35, 700, 0.35);

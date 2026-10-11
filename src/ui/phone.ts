@@ -239,6 +239,7 @@ export class Phone {
     const toggle = el.closest('[data-toggle]') as HTMLElement | null;
     if (toggle?.dataset.toggle === 'showFps') next = { ...s, showFps: !s.showFps };
     if (toggle?.dataset.toggle === 'invertY') next = { ...s, invertY: !s.invertY };
+    if (toggle?.dataset.toggle === 'blood') next = { ...s, blood: !s.blood };
     const sens = el.closest('[data-sens]') as HTMLElement | null;
     if (sens) next = { ...s, mouseSensitivity: clampSensitivity(s.mouseSensitivity + Number(sens.dataset.sens)) };
     const vol = el.closest('[data-vol]') as HTMLElement | null;
@@ -347,6 +348,8 @@ export class Phone {
           <h4>Điều khiển</h4>
           <div class="setting"><span>Độ nhạy chuột</span><span class="stepper"><button type="button" data-sens="-0.1">−</button><b data-sensitivity>${s.mouseSensitivity.toFixed(1)}</b><button type="button" data-sens="0.1">+</button></span></div>
           <button type="button" class="setting" data-toggle="invertY"><span>Đảo trục dọc</span>${onOff(s.invertY)}</button>
+          <h4>Nội dung (18+)</h4>
+          <button type="button" class="setting" data-toggle="blood"><span>Máu khi đánh nhau</span>${onOff(s.blood)}</button>
           <p class="muted small">Cài đặt được lưu lại cho lần chơi sau.</p>`;
       }
       case 'wallet': {

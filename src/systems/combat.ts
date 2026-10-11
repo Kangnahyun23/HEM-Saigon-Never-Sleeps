@@ -22,13 +22,26 @@ export interface AttackDef {
   readonly knock: boolean;
 }
 
-/** Chỉ số vũ khí cận chiến: hệ số sát thương, tầm cộng thêm, tốc độ ra đòn (×). */
-export const WEAPON_STATS: Record<'fists' | Extract<ItemId, 'maTau' | 'gaySat' | 'daoBam' | 'conNhiKhuc'>, { damage: number; reach: number; speed: number }> = {
-  fists: { damage: 1, reach: 0, speed: 1 },
-  maTau: { damage: 3.2, reach: 0.55, speed: 0.8 },
-  gaySat: { damage: 2.3, reach: 0.6, speed: 0.85 },
-  daoBam: { damage: 2.6, reach: 0.1, speed: 1.25 },
-  conNhiKhuc: { damage: 1.9, reach: 0.35, speed: 1.15 },
+export interface WeaponStats {
+  /** Hệ số sát thương so với tay không. */
+  readonly damage: number;
+  /** Tầm với cộng thêm (m). */
+  readonly reach: number;
+  /** Tốc độ ra đòn (×). */
+  readonly speed: number;
+  /** Mức chảy máu khi trúng (0..1): lưỡi sắc nhiều, đồ cùn ít. */
+  readonly bleed: number;
+}
+
+/** Chỉ số vũ khí cận chiến. */
+export const WEAPON_STATS: Record<'fists' | Extract<ItemId, 'maTau' | 'gaySat' | 'daoBam' | 'conNhiKhuc' | 'gheNhua' | 'muBaoHiem'>, WeaponStats> = {
+  fists: { damage: 1, reach: 0, speed: 1, bleed: 0.15 },
+  maTau: { damage: 3.2, reach: 0.55, speed: 0.8, bleed: 1 },
+  gaySat: { damage: 2.3, reach: 0.6, speed: 0.85, bleed: 0.35 },
+  daoBam: { damage: 2.6, reach: 0.1, speed: 1.25, bleed: 0.9 },
+  conNhiKhuc: { damage: 1.9, reach: 0.35, speed: 1.15, bleed: 0.3 },
+  gheNhua: { damage: 2.1, reach: 0.4, speed: 0.9, bleed: 0.2 },
+  muBaoHiem: { damage: 1.7, reach: 0.2, speed: 1.05, bleed: 0.25 },
 };
 
 const FIST_COMBO: readonly AttackDef[] = [
@@ -47,7 +60,7 @@ const BLADE_HEAVY: AttackDef = { clip: 'slashC', damage: 16, reach: 1.25, arc: 1
 /** Nghỉ quá ngần này (s) sau đòn trước thì combo về nhịp đầu. */
 export const COMBO_WINDOW = 0.7;
 
-export function weaponStats(weapon: ItemId | null): { damage: number; reach: number; speed: number } {
+export function weaponStats(weapon: ItemId | null): WeaponStats {
   return weapon && weapon in WEAPON_STATS ? WEAPON_STATS[weapon as keyof typeof WEAPON_STATS] : WEAPON_STATS.fists;
 }
 
@@ -89,4 +102,16 @@ export function resolveHit(health: number, maxHealth: number, damage: number, kn
   const left = Math.max(0, health - damage);
   if (left <= 0) return { health: 0, result: 'dead' };
   return { health: left, result: knock || damage >= maxHealth * 0.35 ? 'down' : 'hurt' };
+}
+
+/**
+ * Máu nhẹ sau một đòn trúng: số giọt bắn ra và bán kính vũng máu dưới người gục (0 = không có).
+ * Mã tấu / dao chảy nhiều; tay không, ghế, gậy chỉ vài giọt.
+ */
+export function bloodFor(weapon: ItemId | null, result: HitResult): { drops: number; pool: number } {
+  const bleed = weaponStats(weapon).bleed;
+  const mult = result === 'dead' ? 1.5 : result === 'down' ? 1.2 : 1;
+  const drops = Math.round(10 * bleed * mult);
+  const pool = result === 'dead' ? 0.3 + 0.4 * bleed : result === 'down' && bleed >= 0.8 ? 0.22 : 0;
+  return { drops, pool };
 }

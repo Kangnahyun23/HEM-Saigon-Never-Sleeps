@@ -4,6 +4,7 @@ import { DetailCuller } from '@/render/detailCulling';
 import { mergeStaticMeshes } from '@/render/merge';
 import type { PhysicsWorld } from '@/physics/physics';
 import { StaticWorld } from '@/physics/staticWorld';
+import type { PickupSpot } from '@/systems/pickups';
 import { buildBuildings } from './build/buildings';
 import type { BuildContext, Seat } from './build/context';
 import { buildGround } from './build/ground';
@@ -21,6 +22,8 @@ export interface City {
   lamps: THREE.Vector3[];
   /** Ghế quán cóc / chỗ người bán hàng — xem build/context.ts. */
   seats: readonly Seat[];
+  /** Đồ nhặt được ngoài phố (ghế nhựa, mũ bảo hiểm). */
+  pickups: readonly PickupSpot[];
   stats: { meshes: number; instances: number; colliders: number };
   /** Ẩn / hiện các mảnh chi tiết nhỏ theo khoảng cách tới camera — gọi mỗi khung hình trước khi render. */
   updateDetail(eye: THREE.Vector3): void;
@@ -77,7 +80,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
   const group = new THREE.Group();
   group.name = 'city';
   const statics = new StaticWorld(physics);
-  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [], seats: [] };
+  const ctx: BuildContext = { layout, group, statics, rng: createRng(layout.seed + 1), pad: PAD_HEIGHT, lamps: [], shopFronts: [], seats: [], pickups: [] };
 
   buildGround(ctx);
   buildBuildings(ctx);
@@ -120,6 +123,7 @@ export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Pa
     statics,
     lamps: ctx.lamps,
     seats: ctx.seats,
+    pickups: ctx.pickups,
     stats: { meshes, instances, colliders: statics.colliders },
     updateDetail(eye) {
       if ((eye.x - lastX) ** 2 + (eye.z - lastZ) ** 2 < DETAIL_REFRESH ** 2) return;

@@ -2,7 +2,7 @@ import type { Tier } from './hardware';
 import type { KeyValueStore } from './save';
 
 /**
- * Cài đặt của người chơi (thuần logic, có unit test): chất lượng đồ hoạ, hiện FPS, độ nhạy chuột. Lưu riêng với bản
+ * Cài đặt của người chơi (thuần logic, có unit test): chất lượng đồ hoạ, hiện FPS, độ nhạy chuột, âm lượng, máu nhẹ. Lưu riêng với bản
  * lưu game (chơi lại từ đầu bằng ?moi=1 không mất cài đặt). Bộ nhớ trình duyệt bị chặn / dữ liệu hỏng ⇒ dùng mặc định.
  */
 
@@ -18,11 +18,23 @@ export interface Settings {
   invertY: boolean;
   /** Âm lượng tổng 0…1 (0 = tắt tiếng). */
   volume: number;
+  /** Máu nhẹ khi đánh nhau (giọt bắn, vũng máu) — tắt thì không còn máu. */
+  blood: boolean;
+  /** Đã xác nhận đủ 18 tuổi ở màn hình cảnh báo (chỉ hỏi lần đầu). */
+  adultConfirmed: boolean;
 }
 
 export const SETTINGS_KEY = 'hem.settings.v1';
 
-export const DEFAULT_SETTINGS: Readonly<Settings> = { quality: 'auto', showFps: false, mouseSensitivity: 1, invertY: false, volume: 0.8 };
+export const DEFAULT_SETTINGS: Readonly<Settings> = {
+  quality: 'auto',
+  showFps: false,
+  mouseSensitivity: 1,
+  invertY: false,
+  volume: 0.8,
+  blood: true,
+  adultConfirmed: false,
+};
 
 export const QUALITY_LABELS: Record<Quality, string> = { auto: 'Tự động', low: 'Thấp', medium: 'Vừa', high: 'Cao' };
 
@@ -53,6 +65,8 @@ export function parseSettings(text: string | null): Settings {
   if (typeof s.mouseSensitivity === 'number' && Number.isFinite(s.mouseSensitivity)) out.mouseSensitivity = clampSensitivity(s.mouseSensitivity);
   if (typeof s.invertY === 'boolean') out.invertY = s.invertY;
   if (typeof s.volume === 'number' && Number.isFinite(s.volume)) out.volume = clampVolume(s.volume);
+  if (typeof s.blood === 'boolean') out.blood = s.blood;
+  if (typeof s.adultConfirmed === 'boolean') out.adultConfirmed = s.adultConfirmed;
   return out;
 }
 

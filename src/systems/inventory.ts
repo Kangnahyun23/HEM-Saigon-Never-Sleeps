@@ -30,6 +30,8 @@ export const ITEMS = {
   gaySat: { name: 'Gậy sắt', kind: 'weapon', stack: 1, durability: 90, desc: 'Ống tuýp sắt — bền, đánh choáng.', color: '#6b7280' },
   daoBam: { name: 'Dao bấm', kind: 'weapon', stack: 1, durability: 40, desc: 'Nhỏ, nhanh, tầm ngắn.', color: '#4b5563' },
   conNhiKhuc: { name: 'Côn nhị khúc', kind: 'weapon', stack: 1, durability: 70, desc: 'Xoay nhanh, khó dùng.', color: '#8b5a2b' },
+  gheNhua: { name: 'Ghế nhựa', kind: 'weapon', stack: 1, durability: 4, desc: 'Ghế đẩu quán cóc. Đập 3–4 phát là vỡ — vũ khí truyền thống của mọi vụ ẩu đả vỉa hè.', color: '#d8342c' },
+  muBaoHiem: { name: 'Mũ bảo hiểm', kind: 'weapon', stack: 1, durability: 18, desc: 'Loại "thời trang" 35 nghìn: đội thì không đỡ được gì, cầm đập thì hơi đau.', color: '#e7c22d' },
   goiHang: { name: 'Gói hàng giao', kind: 'quest', stack: 3, desc: 'Hàng của khách — đừng làm rơi.', color: '#ff8c1a' },
   giayToXe: { name: 'Giấy tờ xe', kind: 'misc', stack: 1, desc: 'Cà vẹt + bằng lái. Gặp công an thì cần.', color: '#3b82f6' },
 } as const satisfies Record<string, ItemDef>;

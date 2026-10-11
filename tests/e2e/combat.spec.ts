@@ -103,3 +103,112 @@ test('cận chiến: combo mã tấu đánh ngã rồi gục, người xung quan
   await page.waitForFunction((x) => window.__HEM__!.frames >= x, f0 + 2, { timeout: 120_000 });
   await page.screenshot({ path: 'tests/e2e/__screenshots__/combat.png' });
 });
+
+type Spot = { x: number; y: number; z: number; item: string };
+type ArmedGame = Game & {
+  pickups: { spots: Spot[] };
+  blood: { flying: number; splats: number };
+  setBlood(on: boolean): void;
+};
+
+test('vũ khí nhặt được: lấy ghế nhựa ở quán cóc, đập tới vỡ, máu nhẹ + vũng máu; tắt máu thì sạch', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.goto('/?moi=1&gio=10');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+
+  // Tới chồng ghế gần chỗ xuất phát nhất.
+  await page.evaluate(() => {
+    const h = window.__HEM__!;
+    h.paused = true;
+    const g = h.game as ArmedGame;
+    const p = g.character.feet();
+    let best = g.pickups.spots[0]!;
+    for (const s of g.pickups.spots) {
+      if (s.item === 'gheNhua' && Math.hypot(s.x - p.x, s.z - p.z) < Math.hypot(best.x - p.x, best.z - p.z)) best = s;
+    }
+    g.character.teleport(best.x + 0.8, best.y + 0.2, best.z, -Math.PI / 2);
+    (h.simulate as (s: number) => void)(0.3);
+  });
+  await expect(page.locator('[data-prompt]')).toContainText('Lấy ghế nhựa');
+  await page.evaluate(() => {
+    const h = window.__HEM__!;
+    const input = h.input as { setKey(c: string, d: boolean): void };
+    input.setKey('KeyG', true);
+    (h.simulate as (s: number) => void)(1 / 60);
+    input.setKey('KeyG', false);
+    (h.simulate as (s: number) => void)(1 / 60);
+  });
+  expect(await page.evaluate(() => (window.__HEM__!.game as Game).equipped)).toBe('gheNhua');
+  await expect(page.locator('[data-weapon]')).toContainText('Ghế nhựa');
+
+  // Ra phố đánh một người: máu bắn; đánh tới gục thì có vũng máu.
+  const id = await page.evaluate(() => {
+    const h = window.__HEM__!;
+    const g = h.game as Game;
+    const p = g.character.feet();
+    let best = g.pedestrians.walkers[0]!;
+    for (const w of g.pedestrians.walkers) if (Math.hypot(w.x - p.x, w.z - p.z) < Math.hypot(best.x - p.x, best.z - p.z)) best = w;
+    const fx = Math.sin(best.yaw);
+    const fz = Math.cos(best.yaw);
+    g.character.teleport(best.x + fx * 0.9, 0.45, best.z + fz * 0.9, Math.atan2(-fx, -fz));
+    (h.simulate as (s: number) => void)(0.05);
+    return best.id;
+  });
+  await swing(page);
+  await simulate(page, 0.3);
+  expect(await page.evaluate(() => (window.__HEM__!.game as ArmedGame).blood.flying)).toBeGreaterThan(0);
+  // Ghế nhựa chỉ chịu 4 phát.
+  for (let i = 0; i < 6 && (await page.evaluate(() => (window.__HEM__!.game as Game).equipped)) === 'gheNhua'; i++) {
+    await simulate(page, 0.6);
+    await swing(page);
+  }
+  await simulate(page, 0.6);
+  expect(await page.evaluate(() => (window.__HEM__!.game as Game).equipped)).toBeNull();
+  await expect(page.locator('.hud-toast')).toContainText('Ghế nhựa vỡ tan!');
+
+  // Tay không đánh tiếp tới khi gục; chờ ngã xong + vũng loang.
+  for (let i = 0; i < 20 && !(await victim(page, id)).dead; i++) {
+    await swing(page);
+    await simulate(page, 0.5);
+  }
+  expect((await victim(page, id)).dead).toBe(true);
+  await simulate(page, 5);
+  expect(await page.evaluate(() => (window.__HEM__!.game as ArmedGame).blood.splats)).toBeGreaterThan(0);
+
+  await page.evaluate((i) => {
+    const h = window.__HEM__!;
+    const w = (h.game as Game).pedestrians.walkers[i]!;
+    (h.setCamera as (...a: number[]) => void)(w.x + 2.2, 2.2, w.z + 2.2, w.x, 0.3, w.z);
+  }, id);
+  const f0 = await page.evaluate(() => window.__HEM__!.frames);
+  await page.waitForFunction((x) => window.__HEM__!.frames >= x, f0 + 2, { timeout: 120_000 });
+  await page.screenshot({ path: 'tests/e2e/__screenshots__/blood.png' });
+
+  // Tắt máu trong Cài đặt: vết đang có biến mất.
+  await page.evaluate(() => (window.__HEM__!.game as ArmedGame).setBlood(false));
+  expect(await page.evaluate(() => (window.__HEM__!.game as ArmedGame).blood.splats)).toBe(0);
+});
+
+test('cảnh báo 18+ lần đầu: tắt máu ngay tại đó, xác nhận xong không hỏi lại', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.goto('/?moi=1&canhbao=1');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  const gate = page.locator('.age-gate');
+  await expect(gate).toBeVisible();
+  await expect(gate).toContainText('18 tuổi');
+  await page.screenshot({ path: 'tests/e2e/__screenshots__/age-gate.png' });
+  // Game đứng yên khi chưa xác nhận.
+  const t0 = await page.evaluate(() => (window.__HEM__!.game as { playTime: number }).playTime);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window.__HEM__!.game as { playTime: number }).playTime)).toBe(t0);
+
+  await page.locator('[data-age-blood]').check();
+  await page.locator('[data-age-ok]').click();
+  await expect(gate).toHaveCount(0);
+  const s = await page.evaluate(() => (window.__HEM__!.settings as () => { blood: boolean; adultConfirmed: boolean })());
+  expect(s).toMatchObject({ blood: false, adultConfirmed: true });
+
+  await page.reload();
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  await expect(page.locator('.age-gate')).toHaveCount(0);
+});

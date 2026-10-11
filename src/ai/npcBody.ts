@@ -25,6 +25,8 @@ export interface NpcBody {
   readonly mixer: THREE.AnimationMixer;
   readonly actions: THREE.AnimationAction[];
   readonly weights: number[];
+  /** Xương hông (vị trí thân người khi nằm — đặt vũng máu); null nếu mẫu không có. */
+  readonly pelvis: THREE.Object3D | null;
 }
 
 export function buildNpc(parent: THREE.Object3D, id: CharacterId, height: number, clips: readonly AnimationName[]): NpcBody | null {
@@ -34,7 +36,7 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, height: number
   const actions = clips.map((n) => mixer.clipAction(getClip(n) ?? new THREE.AnimationClip(n, 1, [])));
   for (const a of actions) a.setEffectiveWeight(0).play();
   parent.add(body);
-  return { body, perMeter: body.scale.y / height, mixer, actions, weights: clips.map(() => 0) };
+  return { body, perMeter: body.scale.y / height, mixer, actions, weights: clips.map(() => 0), pelvis: body.getObjectByName('pelvis') ?? null };
 }
 
 /**
