@@ -27,7 +27,11 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   (5 s, biểu tượng điện thoại trên đầu; Tín áp sát kịp thì cúp máy bỏ chạy), thanh niên xông vào đánh trả (Tín mất máu,
   gục hẳn để N5.5 — giờ còn 1 máu). Gọi báo xong ⇒ sao truy nã (đánh người 1 sao, có án mạng 2 sao, dân báo tối đa 3,
   không bị báo thêm 40 s thì hạ một sao) — công an đi tìm ở N5.4;
-- [ ] N5.4–N10.
+- [x] N5.4 công an truy nã 1–5 sao: xe công an (xe trắng, quân phục ô-liu, đèn chớp đỏ – xanh, còi hú) bám theo
+  đường lớn — số xe theo sao (1/2/3/4/6), không vào hẻm; vùng tìm kiếm 60–400 m, công an thấy thì tâm vùng theo Tín,
+  khuất mặt 10–60 s thì thoát (trong vùng chậm, trong hẻm nhanh); bản đồ nhỏ có chấm + nón tầm nhìn + vòng tìm kiếm;
+  đứng yên / chạy chậm để công an áp sát 2 s thì bị bắt (nộp phạt, tịch thu vũ khí). Ô tô chặn đường để N7 (chưa có ô tô);
+- [ ] N5.5–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

@@ -2,6 +2,9 @@ import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
 import { ChaseSystem } from '@/ai/chaseSystem';
+import { POLICE_CHASE } from '@/ai/chase';
+import { Siren } from '@/audio/siren';
+import type { Blip } from '@/ui/minimap';
 import { buildTrafficNetwork } from '@/ai/trafficNetwork';
 import { PedestrianSim, type Threat } from '@/ai/pedestrians';
 import { Heat, SightGrid } from '@/systems/heat';
@@ -121,6 +124,11 @@ export class Game {
   private lowHealthWarned = false;
   readonly story: StoryRunner;
   readonly chase: ChaseSystem;
+  readonly police: ChaseSystem;
+  private readonly siren = new Siren();
+  /** Chấm xe đàn em trên bản đồ nhỏ (dùng lại, không tạo mảng mỗi khung hình). */
+  private readonly gangBlips: Blip[] = [];
+  private bustedThisStep = false;
   private caughtThisStep = false;
   /** Thời gian chơi (giây thật) — dùng hẹn giờ tin nhắn, sự kiện. */
   playTime = 0;
@@ -191,7 +199,10 @@ export class Game {
     this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
     this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
-    this.chase = new ChaseSystem(scene, physics, buildTrafficNetwork(city.layout), sight, city.layout.seed + 11);
+    const network = buildTrafficNetwork(city.layout);
+    this.chase = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 11);
+    // Công an: cùng cách bám theo đường lớn như đàn em Phát, số xe theo sao truy nã, có đèn chớp + còi hú.
+    this.police = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 13, 'police', POLICE_CHASE);
     const { spawn } = city.layout;
     this.fallGuard = new FallGuard({ x: spawn.x, y: PAD_HEIGHT, z: spawn.z, yaw: spawn.yaw });
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
@@ -398,15 +409,15 @@ export class Game {
     }
   }
 
-  /** Sự kiện từ đám đông mỗi bước: bị đấm (người đánh trả), có người gọi báo xong / bị ngăn; sao truy nã hạ dần. */
-  private handleCrowd(dt: number): void {
+  /** Sự kiện từ đám đông mỗi bước: bị đấm (người đánh trả), có người gọi báo xong (⇒ sao truy nã) / bị ngăn. */
+  private handleCrowd(dt: number, px: number, pz: number): void {
     const sim = this.pedestrians;
     if (sim.damageToPlayer > 0) {
       this.hurtPlayer(sim.damageToPlayer);
       sim.damageToPlayer = 0;
     }
     if (sim.reports > 0) {
-      for (; sim.reports > 0; sim.reports--) this.wanted.report(this.murderT > 0 ? 2 : 1);
+      for (; sim.reports > 0; sim.reports--) this.wanted.report(this.murderT > 0 ? 2 : 1, px, pz);
       this.hud.showToast(this.murderT > 0 ? 'Có người báo công an: có án mạng!' : 'Có người gọi công an báo vụ ẩu đả!', 2.6);
       playSfx('alert');
     }
@@ -418,7 +429,6 @@ export class Game {
       sim.callsStopped = 0;
       this.hud.showToast('Người kia hoảng quá, cúp máy bỏ chạy', 1.8);
     }
-    this.wanted.update(dt);
     this.murderT = Math.max(0, this.murderT - dt);
   }
 
@@ -587,6 +597,59 @@ export class Game {
     });
     if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
     return ok;
+  }
+
+  /**
+   * Bị công an bắt (áp sát khi Tín đứng yên / chạy chậm): nộp phạt, bị tịch thu hết vũ khí, hết truy nã.
+   * (N5.5: màn hình bị bắt, đưa về đồn, nhiệm vụ thất bại.)
+   */
+  private busted(): void {
+    const fine = this.wallet.spend(Math.max(200_000, this.wallet.cash * 0.2), 'Nộp phạt (bị công an bắt)', this.clock.hour);
+    let seized = 0;
+    for (let i = 0; i < this.inventory.slots.length; i++) {
+      const sl = this.inventory.slots[i];
+      if (sl && ITEMS[sl.id].kind === 'weapon') {
+        seized += sl.count;
+        this.inventory.slots[i] = null;
+      }
+    }
+    this.equipped = null;
+    this.hud.backpack.invalidate();
+    this.wanted.clear();
+    this.police.sim.disperse();
+    playSfx('fail');
+    this.hud.showToast(`Bị công an bắt! Nộp phạt ${formatVnd(fine)}${seized > 0 ? ', bị tịch thu vũ khí' : ''}`, 3.2);
+  }
+
+  /** Điểm (x, z) có nằm trong hẻm không (trốn trong hẻm thì mau thoát truy nã). */
+  private inHem(x: number, z: number): boolean {
+    const hems = this.city.layout.hems;
+    for (let i = 0; i < hems.length; i++) if (containsPoint(hems[i]!.rect, x, z)) return true;
+    return false;
+  }
+
+  /** Bản đồ nhỏ: chấm đàn em, xe công an + nón tầm nhìn, vùng tìm kiếm khi khuất mặt; còi hú theo xe gần nhất. */
+  private updateMapAndSiren(): void {
+    const gang = this.chase;
+    for (let i = this.gangBlips.length; i < gang.unitCount; i++) this.gangBlips.push({ x: 0, z: 0, color: '#ff4b3e' });
+    for (let i = 0; i < gang.unitCount; i++) {
+      this.gangBlips[i]!.x = gang.units[i]!.x;
+      this.gangBlips[i]!.z = gang.units[i]!.z;
+    }
+    const map = this.hud.minimap;
+    map?.setBlips(this.gangBlips, gang.unitCount);
+    map?.setPolice(this.police.units, this.police.unitCount);
+    const w = this.wanted;
+    map?.setSearch(w.searchX, w.searchZ, w.level > 0 && !w.seen ? w.radius : 0);
+    let nearest = Infinity;
+    const me = this.riding ? this.riding.view.root.position : this.character.curr;
+    const px = me.x;
+    const pz = me.z;
+    for (let i = 0; i < this.police.unitCount; i++) {
+      const u = this.police.units[i]!;
+      nearest = Math.min(nearest, Math.hypot(u.x - px, u.z - pz));
+    }
+    this.siren.update(nearest);
   }
 
   /** Bị đàn em của Phát chặn đầu: bị "lục túi" (mất 30 % tiền mặt, ít nhất 50.000 đ), hết truy đuổi. */
@@ -932,11 +995,18 @@ export class Game {
         threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
       }
       this.pedestrians.step(STEP, me, threats);
-      this.handleCrowd(STEP);
+      this.handleCrowd(STEP, me.x, me.z);
 
       // Truy đuổi: xe đàn em bám theo khi có Độ Nóng; khuất tầm nhìn đủ lâu thì cắt đuôi.
       const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
       if (this.chase.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.heat.level)) this.caughtThisStep = true;
+      // Truy nã: xe công an theo sao; công an thấy thì vùng tìm kiếm đi theo Tín, khuất mặt đủ lâu thì thoát.
+      if (this.police.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.wanted.level)) this.bustedThisStep = true;
+      if (this.wanted.update(STEP, this.police.sim.seen, me.x, me.z, this.wanted.level > 0 && this.inHem(me.x, me.z)) === 'escaped') {
+        this.police.sim.disperse();
+        this.hud.showToast('Đã thoát khỏi truy nã!', 2.4);
+        playSfx('escaped');
+      }
       if (this.heat.update(STEP, this.chase.sim.seen)) {
         this.chase.sim.disperse();
         this.hud.showToast('Cắt đuôi thành công!', 2.4);
@@ -995,15 +1065,20 @@ export class Game {
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
     this.traffic.render(alpha);
     this.chase.render(alpha);
+    this.police.render(alpha, dt);
     if (this.caughtThisStep) {
       this.caughtThisStep = false;
       this.caught();
     }
+    if (this.bustedThisStep) {
+      this.bustedThisStep = false;
+      this.busted();
+    }
     this.hud.setHeat(this.heat.level, this.heat.escapeProgress, this.chase.sim.seen);
-    this.hud.setWanted(this.wanted.level, this.wanted.cooling);
+    this.hud.setWanted(this.wanted.level, this.wanted.escapeProgress, this.wanted.seen);
     // Máu / giáp (giáp có ở N5).
     this.hud.setVitals(this.health / 100, 0);
-    this.hud.minimap?.setBlips(this.chase.positions.map((p) => ({ ...p, color: '#ff4b3e' })));
+    this.updateMapAndSiren();
     if (this.nearPedestrians) this.nearPedestrians.update(this.pedestrians.walkers, alpha, dt, this.view.position.x, this.view.position.z);
     this.pickupView.update(this.view.position.x, this.view.position.z, this.gameHours());
     this.bloodView.update(this.blood);

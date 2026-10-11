@@ -1,5 +1,5 @@
 import type { CityLayout } from '@/world/city/layout';
-import { arrowAngle, mapImageTransform, markerOnMap, type MapView } from './minimapMath';
+import { arrowAngle, mapImageTransform, markerOnMap, worldToMap, type MapView } from './minimapMath';
 
 /** Màu bản đồ (tông đêm Sài Gòn: nền tối, đường sáng, mốc có màu). */
 const MAP = {
@@ -22,6 +22,17 @@ export interface Blip {
   z: number;
   color: string;
 }
+
+/** Xe công an trên bản đồ: chấm nhấp nháy đỏ – xanh + nón tầm nhìn theo hướng xe. */
+export interface PoliceBlip {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** Nón tầm nhìn trên bản đồ: nửa góc (rad) và chiều dài tối đa (px). */
+const CONE_HALF = 0.45;
+const CONE_PX = 34;
 
 /** Điểm đánh dấu: chỗ cần tới (nhiệm vụ, kèo). */
 export interface Waypoint {
@@ -47,7 +58,15 @@ export class Minimap {
   private readonly z0: number;
   private waypoint: Waypoint | null = null;
   private blips: Blip[] = [];
+  private blipCount = 0;
   private zoom = 1.8;
+  private police: readonly PoliceBlip[] = [];
+  private policeCount = 0;
+  /** Vùng tìm kiếm của công an (r = 0: không có). */
+  private searchX = 0;
+  private searchZ = 0;
+  private searchR = 0;
+  private flash = 0;
 
   constructor(parent: HTMLElement, layout: CityLayout) {
     this.root = document.createElement('div');
@@ -126,10 +145,18 @@ export class Minimap {
       c.fill();
       c.stroke();
     }
-    for (const blip of this.blips) {
+    for (let i = 0; i < this.blipCount; i++) {
+      const blip = this.blips[i]!;
       c.fillStyle = blip.color;
       c.beginPath();
       c.arc(toU(blip.x), toV(blip.z), 3.5, 0, Math.PI * 2);
+      c.fill();
+    }
+    for (let i = 0; i < this.policeCount; i++) {
+      const u = this.police[i]!;
+      c.fillStyle = '#3b7bff';
+      c.beginPath();
+      c.arc(toU(u.x), toV(u.z), 3.5, 0, Math.PI * 2);
       c.fill();
     }
     c.fillStyle = '#ff8c1a';
@@ -145,8 +172,23 @@ export class Minimap {
     this.waypoint = w;
   }
 
-  setBlips(blips: Blip[]): void {
+  /** Các chấm (xe truy đuổi…); `count`: chỉ vẽ `count` chấm đầu (mảng dùng lại). */
+  setBlips(blips: Blip[], count = blips.length): void {
     this.blips = blips;
+    this.blipCount = count;
+  }
+
+  /** `count` xe công an đầu của `units` (mảng dùng lại, không tạo mới mỗi khung hình). */
+  setPolice(units: readonly PoliceBlip[], count: number): void {
+    this.police = units;
+    this.policeCount = count;
+  }
+
+  /** Vùng tìm kiếm (tâm, bán kính m); r = 0 thì ẩn. */
+  setSearch(x: number, z: number, r: number): void {
+    this.searchX = x;
+    this.searchZ = z;
+    this.searchR = r;
   }
 
   /** `yaw`: hướng người chơi (xe hoặc người); `riding`: đang chạy xe thì thu nhỏ bản đồ để thấy xa hơn. */
@@ -182,7 +224,47 @@ export class Minimap {
     c.textBaseline = 'middle';
     c.fillText('B', north.u, north.v + 0.5);
 
-    for (const blip of this.blips) {
+    // Vùng tìm kiếm của công an: vòng xanh mờ (khuất mặt + ra khỏi vòng thì mau hết truy nã).
+    if (this.searchR > 0) {
+      const o = worldToMap(view, this.searchX, this.searchZ);
+      c.fillStyle = 'rgba(70,120,255,.14)';
+      c.strokeStyle = 'rgba(130,170,255,.55)';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(o.u, o.v, this.searchR * this.zoom, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+    }
+    // Xe công an: nón tầm nhìn theo hướng xe + chấm nhấp nháy đỏ – xanh.
+    this.flash += dt;
+    const red = Math.floor(this.flash * 4) % 2 === 0;
+    for (let i = 0; i < this.policeCount; i++) {
+      const u = this.police[i]!;
+      const p = markerOnMap(view, u.x, u.z, radius - 4);
+      if (!p.edge) {
+        const hx = Math.sin(u.yaw);
+        const hz = Math.cos(u.yaw);
+        const right = -hx * fz + hz * fx;
+        const ahead = hx * fx + hz * fz;
+        const a = Math.atan2(-ahead, right);
+        c.fillStyle = 'rgba(110,150,255,.24)';
+        c.beginPath();
+        c.moveTo(p.u, p.v);
+        c.arc(p.u, p.v, CONE_PX, a - CONE_HALF, a + CONE_HALF);
+        c.closePath();
+        c.fill();
+      }
+      c.fillStyle = red ? '#ff3b3b' : '#3b7bff';
+      c.strokeStyle = '#fff';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.arc(p.u, p.v, p.edge ? 3.5 : 4.5, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+    }
+
+    for (let i = 0; i < this.blipCount; i++) {
+      const blip = this.blips[i]!;
       const p = markerOnMap(view, blip.x, blip.z, radius - 4);
       c.fillStyle = blip.color;
       c.beginPath();

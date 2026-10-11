@@ -57,6 +57,8 @@ export class Hud {
   private readonly wantedStars: HTMLElement[];
   private lastWanted = -1;
   private lastWantedPhase = -1;
+  private lastWantedPct = -1;
+  private readonly wantedLabel: HTMLElement;
   private readonly objective: HTMLElement;
   private readonly objectiveText: HTMLElement;
   private readonly objectiveTimer: HTMLElement;
@@ -133,6 +135,7 @@ export class Hud {
     this.heat = q('[data-heat]');
     this.wanted = q('[data-wanted]');
     this.wantedStars = Array.from(this.wanted.querySelectorAll('span'));
+    this.wantedLabel = this.wanted.querySelector('small') as HTMLElement;
     this.subtitle = q('[data-subtitle]');
     this.objective = q('[data-objective]');
     this.objectiveText = q('[data-objective-text]');
@@ -174,12 +177,13 @@ export class Hud {
   }
 
   /**
-   * Sao truy nã (công an): trắng như GTA; vừa bị báo thì nhấp nháy đỏ – xanh như đèn xe công an, sắp hạ sao thì mờ dần.
-   * `cooling` 0..1 = tiến độ hạ sao kế tiếp.
+   * Sao truy nã (công an): trắng như GTA; công an đang thấy Tín thì nhấp nháy đỏ – xanh như đèn xe công an, khuất mặt
+   * (đang bị tìm) thì sao mờ nhấp nháy và ghi tiến độ cắt đuôi. `escape` 0..1.
    */
-  setWanted(level: number, cooling: number): void {
-    const phase = level === 0 ? 0 : cooling < 0.25 ? 1 : cooling > 0.8 ? 2 : 0;
-    if (level === this.lastWanted && phase === this.lastWantedPhase) return;
+  setWanted(level: number, escape: number, seen: boolean): void {
+    const phase = level === 0 ? 0 : seen ? 1 : 2;
+    const pct = phase === 2 ? Math.round(escape * 10) : 0;
+    if (level === this.lastWanted && phase === this.lastWantedPhase && pct === this.lastWantedPct) return;
     if (level > this.lastWanted && this.lastWanted >= 0) {
       this.wanted.classList.remove('bump');
       void this.wanted.offsetWidth;
@@ -187,10 +191,12 @@ export class Hud {
     }
     this.lastWanted = level;
     this.lastWantedPhase = phase;
+    this.lastWantedPct = pct;
     this.wanted.hidden = level === 0;
     for (let i = 0; i < this.wantedStars.length; i++) this.wantedStars[i]!.classList.toggle('on', i < level);
     this.wanted.classList.toggle('alarm', phase === 1);
     this.wanted.classList.toggle('fading', phase === 2);
+    this.wantedLabel.textContent = phase === 2 ? `Công an đang tìm… ${pct * 10}%` : 'Công an truy nã';
   }
 
   /** Mục tiêu nhiệm vụ đang làm (giữa trên) + đồng hồ đếm ngược (giây). null = ẩn. */
