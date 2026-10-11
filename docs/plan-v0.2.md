@@ -35,7 +35,12 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   đồn công an phường (nộp phạt ≥ 150.000 đ, tịch thu vũ khí) / trạm y tế phường (viện phí ≥ 100.000 đ, đầy máu);
   hết truy nã + Độ Nóng, nhiệm vụ / kèo đang làm thất bại; xe của Tín được đưa tới đậu cạnh; đồn và trạm có biểu tượng
   trên bản đồ. (Cảnh báo 18+ đã có từ N5.2.)
-- [ ] N6–N10.
+- [x] N6.1 cửa hàng vào được liền mạch: 6 lô nhà phố mặt đường gần chỗ xuất phát (tạp hoá, cơm tấm, nhà thuốc, cầm đồ,
+  shop quần áo, điện thoại) — tầng trệt thành phòng thật sâu 7 m mở thẳng ra phố (sàn gạch caro, tường, trần, đèn tuýp,
+  quầy + chủ tiệm trực cả đêm, kệ / đồ đạc theo nghề), có va chạm; khối nhà tách thành tầng trên + khối sau (shader mặt
+  tiền thêm aBase để cửa sổ các tầng vẫn khớp); bảng hiệu riêng; HUD ghi tên tiệm; camera vào trong thì gần + thấp,
+  chui dưới mái hiên. Karaoke / văn phòng Phát (chuyển cảnh mờ) để N9;
+- [ ] N6.2–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

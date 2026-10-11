@@ -23,7 +23,8 @@ import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@
 import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
 import { attackFor, bloodFor, inStrike, nextCombo, type AttackDef } from '@/systems/combat';
 import { Pickups } from '@/systems/pickups';
-import { cityPlaces, type CityPlaces } from '@/world/city/places';
+import type { CityPlaces } from '@/world/city/places';
+import { insideShop, SHOP_TYPES } from '@/world/city/shops';
 import type { OutcomeKind } from '@/ui/outcome';
 import { Wanted } from '@/systems/wanted';
 import { BloodSim } from '@/world/blood';
@@ -43,7 +44,7 @@ import { GROUP, interaction } from '@/physics/groups';
 import type { PhysicsWorld } from '@/physics/physics';
 import { CHARACTER, CharacterBody } from '@/player/characterBody';
 import { createPlayerView, type CharacterView } from '@/player/skinnedCharacter';
-import { FollowCamera } from '@/player/followCamera';
+import { FollowCamera, type CameraRig } from '@/player/followCamera';
 import type { Hud } from '@/ui/hud';
 import { BIKE_BODY_COLORS } from '@/vehicles/bikeModel';
 import { BIKE_TUNING, MotorbikePhysics, NO_CONTROL, type BikeControls } from '@/vehicles/motorbikePhysics';
@@ -157,6 +158,8 @@ export class Game {
   private locateTimer = 0;
   /** Điều khiển giả lập từ test (ghi đè bàn phím). */
   autopilot: Partial<BikeControls> | null = null;
+  /** Thông số camera khi đi bộ (dùng lại mỗi khung hình). */
+  private readonly footRig: CameraRig = { target: new THREE.Vector3(), distance: 3.6, followYaw: null, followRate: 0, fovBoost: 0 };
   /** Điều khiển xe dùng lại mỗi bước (không tạo đối tượng mới). */
   private readonly controls: BikeControls = { ...NO_CONTROL };
   /** Camera do debug/test điều khiển, game không đụng tới. */
@@ -237,7 +240,7 @@ export class Game {
     if (this.nearPedestrians) scene.add(this.nearPedestrians.root);
     this.seated = SeatedPeopleView.available() && budget.nearPedestrians > 0 ? new SeatedPeopleView(city.seats, Math.max(2, Math.round(budget.nearPedestrians * 0.6))) : null;
     if (this.seated) scene.add(this.seated.root);
-    this.places = cityPlaces(city.layout);
+    this.places = city.places;
     this.hud.minimap?.setPlaces(this.places);
     this.pickups = new Pickups(city.pickups);
     this.pickupView = new PickupView(this.pickups);
@@ -695,6 +698,18 @@ export class Game {
       this.lowHealthWarned = false;
       this.hud.showToast(`Tỉnh dậy ở ${place.name}. Viện phí ${formatVnd(fee)}`, 4);
     }
+  }
+
+  /** Tín đang ở trong một cửa hàng hoặc trên vỉa hè ngay trước cửa (2,5 m). */
+  private nearShop(x: number, z: number): boolean {
+    for (const s of this.city.shops) if (insideShop(s, x, z, 2.5)) return true;
+    return false;
+  }
+
+  /** Tên chỗ đang đứng cho HUD: trong cửa hàng vào được thì tên tiệm, không thì tên đường / khu. */
+  private placeName(x: number, z: number): string {
+    for (const s of this.city.shops) if (insideShop(s, x, z)) return SHOP_TYPES[s.kind].title;
+    return locate(this.city.layout, x, z).name;
   }
 
   /** Điểm (x, z) có nằm trong hẻm không (trốn trong hẻm thì mau thoát truy nã). */
@@ -1213,8 +1228,14 @@ export class Game {
         looking,
       );
     } else {
-      this.tmp.set(feet.x, feet.y + 1.55, feet.z);
-      this.camera.update(dt, { target: this.tmp, distance: 3.6, followYaw: null, followRate: 0, fovBoost: Math.min(this.character.actualSpeed, 6.4) * 0.6 }, looking);
+      // Trong tiệm (hoặc ngay trước cửa): camera gần hơn, thấp hơn, không nhô lên quá mái hiên / trần.
+      const indoors = this.nearShop(feet.x, feet.z);
+      this.tmp.set(feet.x, feet.y + (indoors ? 1.45 : 1.55), feet.z);
+      this.footRig.target = this.tmp;
+      this.footRig.distance = indoors ? 2.6 : 3.6;
+      this.footRig.fovBoost = Math.min(this.character.actualSpeed, 6.4) * 0.6;
+      this.footRig.maxHeight = indoors ? PAD_HEIGHT + 2.1 : undefined;
+      this.camera.update(dt, this.footRig, looking);
     }
     this.env.update(this.tmp);
     this.rain.update(dt, this.camera.camera.position, this.weather.state.rain);
@@ -1235,7 +1256,7 @@ export class Game {
     this.locateTimer -= dt;
     if (this.locateTimer <= 0) {
       this.locateTimer = 0.25;
-      this.hud.setPlace(locate(this.city.layout, this.tmp.x, this.tmp.z).name);
+      this.hud.setPlace(this.placeName(this.tmp.x, this.tmp.z));
     }
   }
 }
