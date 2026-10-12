@@ -26,14 +26,14 @@ export class StaticWorld {
     this.colliders++;
   }
 
-  /** Trụ đứng: tâm đáy (x, y0, z). */
-  cylinder(x: number, y0: number, z: number, radius: number, height: number, group: number = GROUP.WORLD): void {
+  /** Trụ đứng: tâm đáy (x, y0, z). `filter`: chỉ va chạm với các nhóm này (mặc định mọi nhóm). */
+  cylinder(x: number, y0: number, z: number, radius: number, height: number, group: number = GROUP.WORLD, filter: number = GROUP.ALL): void {
     const { RAPIER, world } = this.physics;
     world.createCollider(
       RAPIER.ColliderDesc.cylinder(height / 2, radius)
         .setTranslation(x, y0 + height / 2, z)
         .setFriction(0.8)
-        .setCollisionGroups(interaction(group, GROUP.ALL)),
+        .setCollisionGroups(interaction(group, filter)),
       this.body,
     );
     this.colliders++;

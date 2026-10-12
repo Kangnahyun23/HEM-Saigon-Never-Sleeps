@@ -51,7 +51,15 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   Sửa hai chỗ lệch: tiền phạt / viện phí / bị lục túi có **trần** (400 / 250 / 150 nghìn — trước đây phần trăm không trần
   làm người chơi liều kẹt dưới mốc 1,5 triệu hàng giờ; mức phạt gom về `systems/economy.ts`), cà phê sữa đá hạ giá
   (12 / 15 nghìn — trước đắt bằng bánh mì mà hồi ít máu hơn);
-- [ ] N7–N10.
+- [x] N7.1 (phần 1) ô tô lái được: 3–7 ô tô (theo sức máy — `SCENE_BUDGETS.cars`) đậu sát bó vỉa đại lộ / đường thường
+  (`world/city/carSpots.ts`, có seed; xe đầu tiên gần điểm xuất phát), ba kiểu sedan / taxi "Me Xanh" / bán tải dựng từ khối
+  (`vehicles/carModel.ts` — chưa dùng mẫu CC0, ~8 lệnh vẽ mỗi xe); vật lý bốn bánh trên nền `motorbikePhysics`
+  (`carPhysics.ts`: ~100 km/h, đề-pa chậm hơn xe máy nhưng nhanh hơn trên đường dài, vòng quay rộng gấp đôi); F vào / ra xe
+  (Tín ngồi trong khoang kính tối nên ẩn đi), camera lùi xa hơn, đâm mạnh không văng khỏi xe; xe NPC né ô tô đậu.
+  **Trụ chắn ở miệng hẻm** (`hemBollards`): hẻm chính rộng 3,4 m nên ô tô 1,8 m vốn lọt vừa — thêm trụ sắt chỉ va chạm
+  với ô tô (nhóm `CAR_BLOCK`), xe máy và người đi bộ không bị ảnh hưởng;
+- [ ] N7.1 (phần 2) cướp xe: kéo tài xế ra, tăng sao truy nã — cần ô tô NPC nên làm cùng N7.2. Mẫu xe CC0 thay khối hộp;
+- [ ] N7.2–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

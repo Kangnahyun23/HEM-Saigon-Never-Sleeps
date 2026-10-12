@@ -6,6 +6,10 @@ export const GROUP = {
   PLAYER: 1 << 1,
   VEHICLE: 1 << 2,
   PROP: 1 << 3,
+  /** Thân ô tô (thuộc thêm nhóm này ngoài VEHICLE). */
+  CAR: 1 << 4,
+  /** Trụ chắn miệng hẻm: chỉ va chạm với ô tô — xe máy, người đi bộ lọt qua. */
+  CAR_BLOCK: 1 << 5,
   ALL: 0xffff,
 } as const;
 

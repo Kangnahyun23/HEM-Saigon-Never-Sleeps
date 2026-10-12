@@ -61,3 +61,40 @@ export function hemDoorSpan(faceW: number, right: boolean): [number, number] {
   const w = Math.min(2.4, faceW * 0.5);
   return [right ? faceW - 0.15 - w : 0.15, w];
 }
+
+/** Trụ sắt chắn ô tô ở miệng hẻm (thứ rất quen ở Sài Gòn): xe máy, người đi bộ lách qua khe; ô tô thì không. */
+export const BOLLARD = {
+  radius: 0.07,
+  height: 0.95,
+  /** Khe rộng nhất cho phép giữa hai trụ / giữa trụ và tường — phải hẹp hơn bề ngang ô tô (CAR.width = 1,8 m). */
+  maxGap: 1.5,
+  /** Lùi vào trong hẻm tính từ đường mặt tiền nhà (m). */
+  inset: 0.6,
+} as const;
+
+export interface Bollard {
+  x: number;
+  z: number;
+  hemId: number;
+}
+
+/**
+ * Vị trí các trụ chắn: mỗi miệng hẻm một hàng trụ chia đều bề ngang, ít trụ nhất sao cho mọi khe ≤ `maxGap`
+ * (hẻm chính 3,4 m: 2 trụ, khe ~1,13 m; hẻm nhánh 2,4 m: 1 trụ, khe 1,2 m).
+ */
+export function hemBollards(layout: CityLayout): Bollard[] {
+  const out: Bollard[] = [];
+  for (const m of hemMouths(layout)) {
+    const width = m.halfWidth * 2;
+    const n = Math.max(1, Math.ceil(width / BOLLARD.maxGap) - 1);
+    const c = Math.cos(m.yaw);
+    const s = Math.sin(m.yaw);
+    for (let i = 0; i < n; i++) {
+      // Toạ độ cục bộ của miệng hẻm: lx dọc bề ngang, lz hướng ra đường (âm = vào trong hẻm).
+      const lx = -m.halfWidth + (width * (i + 1)) / (n + 1);
+      const lz = -BOLLARD.inset;
+      out.push({ x: m.x + lx * c + lz * s, z: m.z - lx * s + lz * c, hemId: m.hemId });
+    }
+  }
+  return out;
+}

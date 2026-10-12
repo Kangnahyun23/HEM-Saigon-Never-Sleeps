@@ -64,6 +64,7 @@ const DETAIL_DISTANCE: Record<string, number> = {
   'hem-pots': 90,
   'hem-plants': 90,
   'hem-altars': 110,
+  'hem-bollards': 120,
   'hem-tarps': 140,
   'led-signs': 150,
   'tree-limewash': 120,
