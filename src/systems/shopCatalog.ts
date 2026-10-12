@@ -31,14 +31,14 @@ export const SERVICES: Record<Service, ServiceDef> = {
 export const CATALOG: Record<ShopKind, readonly Offer[]> = {
   tapHoa: [
     { id: 'traDa', price: 5_000 },
-    { id: 'caPheSua', price: 20_000 },
+    { id: 'caPheSua', price: 12_000 },
     { id: 'banhMi', price: 20_000 },
     { id: 'bangCaNhan', price: 15_000 },
   ],
   comTam: [
     { id: 'comTam', price: 45_000 },
     { id: 'traDa', price: 5_000 },
-    { id: 'caPheSua', price: 22_000 },
+    { id: 'caPheSua', price: 15_000 },
   ],
   nhaThuoc: [
     { id: 'bangCaNhan', price: 12_000 },

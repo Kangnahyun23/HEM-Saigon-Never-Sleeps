@@ -45,7 +45,13 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   nâng cấp balo 16 / 24 ô, điện thoại Sầu Riêng S9 Pro (12 ảnh, hình nền mới — lưu cùng bản lưu), bộ đồ mới (đang bị
   truy nã thì coi như đã khuất mặt 60 %); đồ ăn hồi máu từ từ (8 máu/giây), thuốc hồi ngay. Còn lại: nhà Tín (lưu game,
   tủ đồ) → N9; cân bằng kinh tế → N6.4;
-- [ ] N6.4–N10.
+- [x] N6.4 cân bằng kinh tế: mô hình "chơi thử" (`tests/unit/economySim.ts` — người chơi cẩn thận / bình thường / liều chạy
+  Hồi 1 rồi 2 giờ kèo trên dữ liệu thật của game, 30 seed mỗi kiểu) + `economy.test.ts` khoá các mốc: một kèo 50–90 nghìn,
+  2–4 triệu/giờ, Hồi 1 cần thêm 2–6 kèo, sắm hết đồ trong 25–60 phút, ăn uống < 5 % thu nhập, nợ 30 triệu > 8 giờ kèo.
+  Sửa hai chỗ lệch: tiền phạt / viện phí / bị lục túi có **trần** (400 / 250 / 150 nghìn — trước đây phần trăm không trần
+  làm người chơi liều kẹt dưới mốc 1,5 triệu hàng giờ; mức phạt gom về `systems/economy.ts`), cà phê sữa đá hạ giá
+  (12 / 15 nghìn — trước đắt bằng bánh mì mà hồi ít máu hơn);
+- [ ] N7–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 
