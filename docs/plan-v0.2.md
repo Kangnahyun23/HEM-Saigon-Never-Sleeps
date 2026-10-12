@@ -58,8 +58,16 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   (Tín ngồi trong khoang kính tối nên ẩn đi), camera lùi xa hơn, đâm mạnh không văng khỏi xe; xe NPC né ô tô đậu.
   **Trụ chắn ở miệng hẻm** (`hemBollards`): hẻm chính rộng 3,4 m nên ô tô 1,8 m vốn lọt vừa — thêm trụ sắt chỉ va chạm
   với ô tô (nhóm `CAR_BLOCK`), xe máy và người đi bộ không bị ảnh hưởng;
-- [ ] N7.1 (phần 2) cướp xe: kéo tài xế ra, tăng sao truy nã — cần ô tô NPC nên làm cùng N7.2. Mẫu xe CC0 thay khối hộp;
-- [ ] N7.2–N10.
+- [x] N7.2 giao thông đa dạng: ngoài xe máy có **ô tô / taxi / bán tải / buýt** chạy sát tim đường (buýt bám đại lộ) và
+  **ba gác máy / xích lô / xe đẩy bán hàng rong** chạy chậm sát lề — số lượng theo sức máy (`SCENE_BUDGETS.trafficCars`
+  4 / 7 / 10, `trafficSlow` 3 / 4 / 6). Bảng loại xe ở `ai/trafficKinds.ts`; mô phỏng `traffic.ts` tính theo kích thước từng
+  loại: xe có vệt cố định chỉ lách vật cản đứng yên và loại xe vốn chậm hơn rồi về lại vệt, xe máy lách / vượt như cũ.
+  **Xe lớn qua giao lộ theo lượt** (đi thẳng + rẽ phải cùng trục đi chung, rẽ trái cần giao lộ riêng; chưa tới lượt thì chờ ở
+  vạch dừng) — không còn hai ô tô chắn ngang nhau giữa ngã tư; xe nhỏ nhường xe lớn. Mẫu xe tự dựng từ khối
+  (`vehicles/npcVehicleModels.ts`), vẽ bằng `ai/trafficFleetView.ts` (4 lệnh vẽ cho cả đoàn; người đẩy xe có bước chân).
+  Sửa luôn lỗi cũ: hai xe máy chồng sát nhau ở ngã tư không bao giờ được "nhích" ⇒ có xe đứng ì cả phút;
+- [ ] N7.1 (phần 2) cướp xe: kéo tài xế ra, tăng sao truy nã (giờ đã có ô tô NPC). Mẫu xe CC0 thay khối hộp;
+- [ ] N7.3–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

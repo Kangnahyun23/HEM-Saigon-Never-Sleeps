@@ -260,7 +260,7 @@ export class Game {
     this.camera = new FollowCamera(camera, physics);
     this.camera.yaw = spawn.yaw + Math.PI;
 
-    this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z }, { count: budget.traffic });
+    this.traffic = new TrafficSystem(scene, physics, city.layout, { x: spawn.x, z: spawn.z }, { count: budget.traffic, cars: budget.trafficCars, slow: budget.trafficSlow });
     this.pedestrians = new PedestrianSim(city.layout, { x: spawn.x, z: spawn.z }, { count: budget.pedestrians });
     this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
     scene.add(this.pedestrianView.root);
@@ -1346,7 +1346,9 @@ export class Game {
       }
       for (const h of this.traffic.sim.honks) {
         const d = Math.hypot(h.x - me.x, h.z - me.z);
-        this.trafficHorn.beep(1 / (1 + d / 8), 0.85 + ((h.id * 37) % 40) / 100);
+        // Còi xe buýt trầm, còi ô tô vừa, còi xe máy the thé.
+        const pitch = h.kind === 'bike' ? 0.85 : h.kind === 'bus' ? 0.45 : 0.62;
+        this.trafficHorn.beep(1 / (1 + d / 8), pitch + ((h.id * 37) % 40) / (h.kind === 'bike' ? 100 : 400));
       }
       if (this.mode === 'foot') {
         // Phải của hướng nhìn (fx, fz) là (−fz, fx).

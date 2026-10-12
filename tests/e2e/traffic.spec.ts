@@ -3,7 +3,7 @@ import type { TrafficAgent } from '../../src/ai/traffic';
 import type { CityLayout } from '../../src/world/city/layout';
 
 /**
- * Giao thông xe máy NPC: xe chạy được, nằm trên đường, và chụp ảnh để kiểm tra bằng mắt.
+ * Giao thông NPC: xe máy chạy được, nằm trên đường; đủ loại xe khác (ô tô, buýt, ba gác, xích lô, xe đẩy); chụp ảnh để kiểm tra bằng mắt.
  * Chạy riêng: npx playwright test traffic
  */
 test.use({ viewport: { width: 960, height: 540 } });
@@ -62,4 +62,52 @@ test('xe máy NPC chạy khắp phố', async ({ page }) => {
   const f1 = await page.evaluate(() => window.__HEM__!.frames);
   await page.waitForFunction((n) => window.__HEM__!.frames > n + 1, f1, { timeout: 180_000 });
   await page.screenshot({ path: 'tests/e2e/__screenshots__/traffic-closeup.png' });
+});
+
+test('giao thông đa dạng: ô tô, taxi, buýt, ba gác, xích lô, xe đẩy', async ({ page }) => {
+  test.setTimeout(600_000);
+  await page.goto('/?moi=1&gio=10');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  await page.evaluate(() => (window.__HEM__!.paused = true));
+  type Sim = { agents: TrafficAgent[]; bikes: number };
+  const fleet = () =>
+    page.evaluate(() => {
+      const sim = (window.__HEM__!.game as { traffic: { sim: Sim } }).traffic.sim;
+      return { bikes: sim.bikes, others: sim.agents.slice(sim.bikes).map((a) => ({ kind: a.kind, x: a.x, z: a.z })) };
+    });
+
+  const before = await fleet();
+  const kinds = new Set(before.others.map((a) => a.kind));
+  for (const kind of ['sedan', 'taxi', 'pickup', 'bus', 'baGac', 'xichLo', 'cart']) expect(kinds.has(kind as TrafficAgent['kind'])).toBe(true);
+  expect(kinds.has('bike')).toBe(false);
+  expect(before.bikes).toBeGreaterThanOrEqual(40);
+
+  await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(10));
+  const after = await fleet();
+  const moved = after.others.filter((a, i) => Math.hypot(a.x - before.others[i]!.x, a.z - before.others[i]!.z) > 3).length;
+  expect(moved).toBeGreaterThan(after.others.length * 0.6);
+  const layout = (await page.evaluate(() => window.__HEM__!.layout)) as CityLayout;
+  for (const a of after.others) expect(layout.roads.some((r) => a.x >= r.rect.x0 && a.x <= r.rect.x1 && a.z >= r.rect.z0 && a.z <= r.rect.z1)).toBe(true);
+
+  // Cận cảnh từng loại: đứng chéo phía trước bên trái (phía tim đường) nhìn lại, xa gần theo cỡ xe.
+  const closeup = async (kind: string, name: string) => {
+    await page.evaluate((kind) => {
+      const sim = (window.__HEM__!.game as { traffic: { sim: Sim } }).traffic.sim;
+      const a = sim.agents.find((g) => g.kind === kind)!;
+      const fx = Math.sin(a.yaw);
+      const fz = Math.cos(a.yaw);
+      const far = kind === 'bus' ? 11 : 6.5;
+      // Trái của hướng (fx, fz) là (fz, −fx).
+      window.__HEM__!.setCamera(a.x + fx * far * 0.75 + fz * far * 0.6, kind === 'bus' ? 3 : 2, a.z + fz * far * 0.75 - fx * far * 0.6, a.x, kind === 'bus' ? 1.4 : 0.9, a.z);
+    }, kind);
+    const f0 = await page.evaluate(() => window.__HEM__!.frames);
+    await page.waitForFunction((n) => window.__HEM__!.frames > n + 2, f0, { timeout: 180_000 });
+    await page.screenshot({ path: `tests/e2e/__screenshots__/${name}.png` });
+  };
+  for (const kind of ['taxi', 'pickup', 'bus', 'baGac', 'xichLo', 'cart']) await closeup(kind, `fleet-${kind}`);
+
+  // Ban đêm: đèn pha, đèn hậu, bảng tuyến xe buýt, bóng đèn xe đẩy.
+  await page.evaluate(() => (window.__HEM__!.setHour as (h: number) => void)(21));
+  await closeup('bus', 'fleet-night-bus');
+  await closeup('cart', 'fleet-night-cart');
 });
