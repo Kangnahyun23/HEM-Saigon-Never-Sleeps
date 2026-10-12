@@ -13,6 +13,8 @@ export interface CameraRig {
   followRate: number;
   /** Góc nhìn rộng thêm khi chạy nhanh (độ). */
   fovBoost: number;
+  /** Độ cao tối đa của camera (m, toạ độ thế giới) — trong / trước cửa tiệm để camera chui dưới trần, mái hiên. */
+  maxHeight?: number;
 }
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
@@ -90,7 +92,9 @@ export class FollowCamera {
     const { RAPIER, world } = this.physics;
     const ray = new RAPIER.Ray(this.smoothTarget, dir);
     const hit = world.castRay(ray, want + 0.3, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC, interaction(GROUP.ALL, GROUP.WORLD));
-    const allowed = hit ? Math.max(0.6, hit.timeOfImpact - 0.3) : want;
+    let allowed = hit ? Math.max(0.6, hit.timeOfImpact - 0.3) : want;
+    // Trong / trước cửa tiệm: không để camera nhô lên quá trần / mái hiên / bảng hiệu (thu gần lại cho vừa).
+    if (rig.maxHeight !== undefined && dir.y > 0.01) allowed = Math.min(allowed, Math.max(0.6, (rig.maxHeight - this.smoothTarget.y) / dir.y));
     // Thu vào ngay lập tức, nới ra từ từ.
     this.currentDist = allowed < this.currentDist ? allowed : this.currentDist + (allowed - this.currentDist) * (1 - Math.exp(-3 * dt));
 

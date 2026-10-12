@@ -25,6 +25,8 @@ export interface SaveData {
   health?: number;
   /** Vũ khí đang cầm (mã món) — tuỳ chọn. */
   equipped?: string | null;
+  /** Nâng cấp đã mua ở cửa hàng (điện thoại Pro…). Tuỳ chọn — bản lưu cũ không có. */
+  services?: string[];
 }
 
 /** Giao diện tối thiểu của localStorage (để test bằng bộ nhớ giả). */

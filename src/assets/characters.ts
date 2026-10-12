@@ -89,3 +89,18 @@ export function createCharacter(id: CharacterId, height: number): THREE.Object3D
 export function getClip(name: AnimationName): THREE.AnimationClip | undefined {
   return clips.get(name);
 }
+
+/**
+ * Gắn một vật vào xương sao cho trong tư thế gốc nó nằm đúng chỗ `offset` (m, hệ toạ độ nhân vật: +Y lên, +Z trước mặt),
+ * thẳng đứng và đúng cỡ — bù hướng + tỉ lệ của xương.
+ */
+export function attachToBone(model: THREE.Object3D, bone: THREE.Object3D, object: THREE.Object3D, offset: THREE.Vector3): void {
+  model.updateMatrixWorld(true);
+  const boneWorld = bone.matrixWorld.clone();
+  const modelWorld = model.parent ? model.parent.matrixWorld.clone() : new THREE.Matrix4();
+  const anchor = new THREE.Vector3().setFromMatrixPosition(boneWorld).applyMatrix4(modelWorld.clone().invert()).add(offset);
+  const desired = modelWorld.clone().multiply(new THREE.Matrix4().makeTranslation(anchor.x, anchor.y, anchor.z));
+  const local = boneWorld.invert().multiply(desired);
+  local.decompose(object.position, object.quaternion, object.scale);
+  bone.add(object);
+}

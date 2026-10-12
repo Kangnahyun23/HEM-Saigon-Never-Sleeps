@@ -5,6 +5,8 @@ import { formatVnd, type Wallet } from '@/systems/wallet';
 import { Minimap } from './minimap';
 import { Backpack } from './backpack';
 import { Phone } from './phone';
+import { OutcomeScreen } from './outcome';
+import { ShopPanel } from './shopPanel';
 import { WeaponWheel } from './weaponWheel';
 import { ToastQueue } from './toastQueue';
 
@@ -46,6 +48,10 @@ export class Hud {
   readonly backpack: Backpack;
   /** Vòng chọn đồ (giữ Tab). */
   readonly wheel: WeaponWheel;
+  /** Màn hình kết cục BỊ BẮT / GỤC. */
+  readonly outcome: OutcomeScreen;
+  /** Bảng mua bán trong cửa hàng. */
+  readonly shop: ShopPanel;
   private readonly weapon: HTMLElement;
   private lastWeapon = '';
   private readonly cash: HTMLElement;
@@ -53,6 +59,12 @@ export class Hud {
   private subtitleTimer = 0;
   private readonly heat: HTMLElement;
   private lastHeat = '';
+  private readonly wanted: HTMLElement;
+  private readonly wantedStars: HTMLElement[];
+  private lastWanted = -1;
+  private lastWantedPhase = -1;
+  private lastWantedPct = -1;
+  private readonly wantedLabel: HTMLElement;
   private readonly objective: HTMLElement;
   private readonly objectiveText: HTMLElement;
   private readonly objectiveTimer: HTMLElement;
@@ -102,8 +114,11 @@ export class Hud {
       </div>
       <div class="hud-fps" data-fps></div>
       <div class="hud-cash" data-cash></div>
-      <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
-      <div class="hud-weapon panel" data-weapon hidden><span></span><i><u></u></i></div>
+      <div class="hud-right">
+        <div class="hud-wanted" data-wanted hidden><span></span><span></span><span></span><span></span><span></span><small>Công an truy nã</small></div>
+        <div class="hud-heat" data-heat hidden><span></span><span></span><span></span><span></span><span></span><small>Đang bị bám đuôi</small></div>
+        <div class="hud-weapon panel" data-weapon hidden><span></span><i><u></u></i></div>
+      </div>
       <div class="hud-objective panel" data-objective hidden><span data-objective-text></span><b data-objective-timer></b></div>
       <div class="hud-phone-hint panel" data-phone-hint><kbd>P</kbd> Điện thoại</div>`;
     const q = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as T;
@@ -124,12 +139,17 @@ export class Hud {
     this.cash = q('[data-cash]');
     this.phoneHint = q('[data-phone-hint]');
     this.heat = q('[data-heat]');
+    this.wanted = q('[data-wanted]');
+    this.wantedStars = Array.from(this.wanted.querySelectorAll('span'));
+    this.wantedLabel = this.wanted.querySelector('small') as HTMLElement;
     this.subtitle = q('[data-subtitle]');
     this.objective = q('[data-objective]');
     this.objectiveText = q('[data-objective-text]');
     this.objectiveTimer = q('[data-objective-timer]');
     this.backpack = new Backpack(root);
     this.wheel = new WeaponWheel(root);
+    this.outcome = new OutcomeScreen(root);
+    this.shop = new ShopPanel(root);
     this.weapon = q('[data-weapon]');
   }
 
@@ -162,6 +182,29 @@ export class Hud {
     this.heat.querySelectorAll('span').forEach((s, i) => s.classList.toggle('on', i < level));
     this.heat.classList.toggle('hiding', !seen);
     (this.heat.querySelector('small') as HTMLElement).textContent = seen ? 'Đang bị bám đuôi' : `Đang cắt đuôi… ${Math.round(escape * 100)}%`;
+  }
+
+  /**
+   * Sao truy nã (công an): trắng như GTA; công an đang thấy Tín thì nhấp nháy đỏ – xanh như đèn xe công an, khuất mặt
+   * (đang bị tìm) thì sao mờ nhấp nháy và ghi tiến độ cắt đuôi. `escape` 0..1.
+   */
+  setWanted(level: number, escape: number, seen: boolean): void {
+    const phase = level === 0 ? 0 : seen ? 1 : 2;
+    const pct = phase === 2 ? Math.round(escape * 10) : 0;
+    if (level === this.lastWanted && phase === this.lastWantedPhase && pct === this.lastWantedPct) return;
+    if (level > this.lastWanted && this.lastWanted >= 0) {
+      this.wanted.classList.remove('bump');
+      void this.wanted.offsetWidth;
+      this.wanted.classList.add('bump');
+    }
+    this.lastWanted = level;
+    this.lastWantedPhase = phase;
+    this.lastWantedPct = pct;
+    this.wanted.hidden = level === 0;
+    for (let i = 0; i < this.wantedStars.length; i++) this.wantedStars[i]!.classList.toggle('on', i < level);
+    this.wanted.classList.toggle('alarm', phase === 1);
+    this.wanted.classList.toggle('fading', phase === 2);
+    this.wantedLabel.textContent = phase === 2 ? `Công an đang tìm… ${pct * 10}%` : 'Công an truy nã';
   }
 
   /** Mục tiêu nhiệm vụ đang làm (giữa trên) + đồng hồ đếm ngược (giây). null = ẩn. */

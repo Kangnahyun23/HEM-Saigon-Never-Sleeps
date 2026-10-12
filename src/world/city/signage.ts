@@ -193,6 +193,17 @@ export function designShopSign(rng: Rng): SignDesign {
   return { style, lines: [trade.title, second, third], bg, fg, accent, font: fontFor(rng, style), glow: SIGN_GLOW[style] };
 }
 
+/**
+ * Bảng hiệu riêng của cửa hàng vào được (tên + dòng phụ + địa chỉ): hộp đèn nền màu chủ đạo của tiệm, chữ trắng.
+ * Chiếm các ô đầu của atlas bảng tiệm (CUSTOM_SIGNS ô) — nhà khác không chọn trùng.
+ */
+export function designCustomSign(name: string, tagline: string, color: string, rng: Rng): SignDesign {
+  return { style: 'lightbox', lines: [name, tagline, `${1 + Math.floor(rng() * 480)} · ĐT: ${fakePhone(rng)}`], bg: color, fg: '#ffffff', accent: '#ffd23f', font: 'block', glow: SIGN_GLOW.lightbox };
+}
+
+/** Số ô đầu của atlas bảng tiệm dành cho cửa hàng vào được. */
+export const CUSTOM_SIGNS = 8;
+
 /** Bảng dọc chìa ra vỉa hè: tên nghề xếp từng chữ một dòng (2–3 dòng) + số điện thoại. */
 export function designVerticalSign(rng: Rng): SignDesign {
   const short = TRADES.filter((t) => t.title.split(' ').length <= 3);

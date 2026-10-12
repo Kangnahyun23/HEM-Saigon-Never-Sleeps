@@ -59,6 +59,7 @@ export class SeatedPeopleView {
     const share = eateryOccupancy(bucket);
     const vendorsOut = bucket >= VENDOR_HOURS[0] && bucket <= VENDOR_HOURS[1];
     this.occupied = this.seats.filter((s) => {
+      if (s.kind === 'keeper') return true;
       if (s.kind === 'vendor') return vendorsOut;
       return createRng(s.id * 7349 + 3)() < share;
     });
@@ -70,7 +71,7 @@ export class SeatedPeopleView {
     const rng = createRng(seat.id * 2731 + 59);
     const look = pick(rng, CIVILIANS);
     const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
-    const clip = pick(rng, seat.kind === 'vendor' ? VENDOR_IDLES : SITTING);
+    const clip = pick(rng, seat.kind === 'stool' ? SITTING : VENDOR_IDLES);
     const key = `${look.id}:${clip}`;
     let npc = slot.cache.get(key) ?? null;
     if (!npc) {

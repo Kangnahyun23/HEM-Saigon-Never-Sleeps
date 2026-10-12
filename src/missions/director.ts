@@ -65,6 +65,15 @@ export class MissionDirector {
     this.syncPhone();
   }
 
+  /** Nhiệm vụ / kèo đang làm thất bại vì lý do bên ngoài (bị bắt, bị gục…). Không có thì thôi. */
+  fail(reason: string): void {
+    const opts = this.activeOpts;
+    if (!this.active || !opts) return;
+    this.hud.showToast(`Thất bại: ${reason}`, 2.6);
+    this.finish();
+    opts.onFail?.();
+  }
+
   cancel(): void {
     if (!this.active) return;
     this.hud.showToast('Đã huỷ kèo', 1.6);

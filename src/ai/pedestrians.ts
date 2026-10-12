@@ -1,5 +1,6 @@
 import { createRng, range, type Rng } from '@/core/random';
 import { resolveHit, type HitResult } from '@/systems/combat';
+import { CIVILIANS, lookOf } from './civilians';
 import type { Block, CityLayout } from '@/world/city/layout';
 
 /**
@@ -46,7 +47,30 @@ export interface Walker {
   /** Bỏ chạy còn bao lâu (s) — sau khi bị đánh / thấy đánh nhau. */
   flee: number;
   dead: boolean;
+  /** Mẫu người (chỉ số trong CIVILIANS) — hình vẽ dùng đúng mẫu này. */
+  look: number;
+  /** Phản ứng khi thấy đánh nhau (ngoài bỏ chạy): la lên, quay video, gọi báo công an, xông vào đánh trả. */
+  react: Reaction;
+  /** Còn bao lâu (s) cho phản ứng hiện tại; với gọi báo là thời gian đã gọi. */
+  reactT: number;
+  /** Đánh trả: đang vung tay (s còn lại của cú đấm) và thời gian chờ tới cú kế. */
+  punch: number;
+  punchCd: number;
 }
+
+export type Reaction = 'none' | 'shout' | 'film' | 'call' | 'fight';
+
+/** Gọi báo công an mất bấy nhiêu giây; người chơi áp sát trong CALL_STOP_RANGE thì người gọi hoảng sợ cúp máy. */
+export const CALL_TIME = 5;
+export const CALL_STOP_RANGE = 2.2;
+/** Người đánh trả: tốc độ xông tới, tầm đấm, sát thương mỗi cú, bỏ cuộc khi máu dưới mức này. */
+export const FIGHT_SPEED = 3.4;
+export const PUNCH_RANGE = 1.15;
+export const PUNCH_DAMAGE = 6;
+const FIGHT_GIVE_UP_HEALTH = 45;
+/** Cùng lúc tối đa bấy nhiêu người gọi báo / đánh trả (đỡ thành cả phố xông vào). */
+const MAX_CALLERS = 2;
+const MAX_FIGHTERS = 2;
 
 /** Tốc độ chạy trốn (m/s). */
 export const FLEE_SPEED = 4.2;
@@ -136,6 +160,12 @@ export class PedestrianSim {
   private readonly info: SideInfo = { len: 0, width: 0 };
   private readonly here: SidePoint = { x: 0, z: 0, fx: 0, fz: 0 };
   respawns = 0;
+  /** Sự kiện cho game đọc rồi tự đặt lại về 0: cuộc gọi báo công an đã xong, cuộc gọi bị ngăn, máu người chơi mất. */
+  reports = 0;
+  callsStopped = 0;
+  damageToPlayer = 0;
+  /** Số người vừa la lên (game phát tiếng la một lần). */
+  shouts = 0;
 
   constructor(
     layout: CityLayout,
@@ -162,7 +192,11 @@ export class PedestrianSim {
   }
 
   private blank(id: number): Walker {
-    return { id, block: 0, side: 0, t: 0, d: 1, targetD: 1, dir: 1, speed: 0, cruise: 1.3, idle: 0, dodge: 0, x: 0, z: 0, yaw: 0, prevX: 0, prevZ: 0, prevYaw: 0, phase: 0, generation: 0, health: 100, hurt: 0, down: 0, flee: 0, dead: false };
+    return {
+      id, block: 0, side: 0, t: 0, d: 1, targetD: 1, dir: 1, speed: 0, cruise: 1.3, idle: 0, dodge: 0, x: 0, z: 0, yaw: 0,
+      prevX: 0, prevZ: 0, prevYaw: 0, phase: 0, generation: 0, health: 100, hurt: 0, down: 0, flee: 0, dead: false,
+      look: 0, react: 'none', reactT: 0, punch: 0, punchCd: 0,
+    };
   }
 
   /**
@@ -185,16 +219,145 @@ export class PedestrianSim {
       w.hurt = 0;
     } else if (r.result === 'down') w.down = 2.6;
     else w.hurt = 0.9; // đủ dài để nhát combo kế tiếp kịp tới (nhịp chém ~0,7 s)
+    w.punch = 0;
+    // Đang gọi báo mà bị đánh ⇒ cuộc gọi bị cắt. Người đánh trả còn khoẻ thì đánh tiếp, yếu rồi mới chạy.
+    if (w.react === 'call') this.callsStopped++;
+    if (w.react === 'fight' && w.health >= FIGHT_GIVE_UP_HEALTH && !w.dead) return r.result;
+    w.react = 'none';
     this.runFrom(w, fromX, fromZ, 7);
     return r.result;
   }
 
-  /** Người còn đứng được trong bán kính `radius` quanh (x, z) hoảng sợ bỏ chạy (thấy đánh nhau). */
-  scare(x: number, z: number, radius: number): void {
+  /**
+   * Người còn đứng được trong bán kính `radius` quanh (x, z) thấy đánh nhau: phần đông bỏ chạy (một số la lên trước),
+   * vài người đứng xa quay video, vài người gọi báo công an, thanh niên đứng gần có khi xông vào đánh trả.
+   * Ai đang quay / gọi / đánh trả thì giữ nguyên việc đang làm.
+   */
+  witness(x: number, z: number, radius: number): void {
+    let callers = 0;
+    let fighters = 0;
     for (const w of this.walkers) {
-      if (w.dead || w.down > 0) continue;
+      if (w.react === 'call') callers++;
+      else if (w.react === 'fight') fighters++;
+    }
+    for (const w of this.walkers) {
+      if (w.dead || w.down > 0 || w.react === 'film' || w.react === 'call' || w.react === 'fight') continue;
       const d = Math.hypot(w.x - x, w.z - z);
-      if (d < radius && d > 0.5) this.runFrom(w, x, z, 5 + (1 - d / radius) * 4);
+      if (d >= radius || d <= 0.5) continue;
+      const look = CIVILIANS[w.look]!;
+      const r = this.rng();
+      w.idle = 0;
+      w.dodge = 0;
+      if (look.young && d < 9 && r < 0.2 && fighters < MAX_FIGHTERS) {
+        fighters++;
+        this.startReaction(w, 'fight', 25);
+      } else if (r < (look.old ? 0.45 : 0.32) && d > 3 && callers < MAX_CALLERS) {
+        callers++;
+        this.startReaction(w, 'call', 0);
+      } else if (r < 0.55 && d > 4.5) this.startReaction(w, 'film', range(this.rng, 7, 12));
+      else if (r < 0.7 && w.flee <= 0) {
+        this.startReaction(w, 'shout', 1.1);
+        this.shouts++;
+      }
+      else this.runFrom(w, x, z, 5 + (1 - d / radius) * 4);
+    }
+  }
+
+  /** Bắt đầu phản ứng `kind` (đứng lại, thôi chạy) — `witness` chọn; test gọi thẳng. */
+  startReaction(w: Walker, kind: Reaction, time: number): void {
+    w.react = kind;
+    w.reactT = time;
+    w.flee = 0;
+    w.punch = 0;
+    w.punchCd = 0.4;
+  }
+
+  /**
+   * Phản ứng đang làm (người chơi ở `player`): la / quay / gọi thì đứng yên nhìn (gọi thì quay lưng), đánh trả thì xông
+   * tới dọc vỉa hè rồi đấm. Trả false nếu phản ứng vừa kết thúc (bước đi thường xử lý tiếp).
+   */
+  private stepReaction(w: Walker, dt: number, player: { x: number; z: number }): boolean {
+    const dx = player.x - w.x;
+    const dz = player.z - w.z;
+    const dist = Math.hypot(dx, dz);
+    w.speed = 0;
+    switch (w.react) {
+      case 'shout':
+        w.reactT -= dt;
+        if (w.reactT <= 0) return this.endReaction(w, player, 6);
+        break;
+      case 'film':
+        w.reactT -= dt;
+        // Lại gần quá thì sợ, bỏ chạy; hết hứng hoặc đã đi xa thì thôi quay.
+        if (dist < 3) return this.endReaction(w, player, 6);
+        if (w.reactT <= 0 || dist > 30) return this.endReaction(w, player, 0);
+        break;
+      case 'call':
+        w.reactT += dt;
+        if (dist < CALL_STOP_RANGE) {
+          this.callsStopped++;
+          return this.endReaction(w, player, 7);
+        }
+        if (w.reactT >= CALL_TIME) {
+          this.reports++;
+          return this.endReaction(w, player, 6);
+        }
+        // Gọi điện thì quay lưng về phía người đánh.
+        w.yaw = Math.atan2(-dx, -dz);
+        return true;
+      case 'fight':
+        w.reactT -= dt;
+        if (w.reactT <= 0 || dist > 14) return this.endReaction(w, player, 0);
+        this.stepFighter(w, dt, player, dist);
+        break;
+      default:
+        return false;
+    }
+    if (dist > 1e-3) w.yaw = Math.atan2(dx, dz);
+    return true;
+  }
+
+  /** Thôi phản ứng; `flee` > 0 thì bỏ chạy ra xa người chơi trong ngần ấy giây. */
+  private endReaction(w: Walker, player: { x: number; z: number }, flee: number): false {
+    w.react = 'none';
+    w.reactT = 0;
+    w.punch = 0;
+    if (flee > 0) this.runFrom(w, player.x, player.z, flee);
+    return false;
+  }
+
+  /** Xông tới người chơi dọc cạnh vỉa hè đang đứng (không băng qua đường), tới tầm thì đấm. */
+  private stepFighter(w: Walker, dt: number, player: { x: number; z: number }, dist: number): void {
+    const block = this.block(w);
+    const { len, width } = this.sideInfo(block, w.side, this.info);
+    const targetT = clamp(this.alongOf(w, player.x, player.z), 0.3, len - 0.3);
+    const targetD = clamp(this.lateralOf(w, player.x, player.z), MARGIN, Math.max(MARGIN, width - MARGIN));
+    const et = targetT - w.t;
+    const ed = targetD - w.d;
+    const gap = Math.hypot(et, ed);
+    // Dừng cách người chơi ~0,85 m (vừa tầm đấm).
+    const move = Math.min(FIGHT_SPEED * dt, Math.max(0, gap - 0.85));
+    if (move > 0 && gap > 1e-6) {
+      w.t += (et / gap) * move;
+      w.d += (ed / gap) * move;
+      w.targetD = w.d;
+      w.speed = move / dt;
+      const p = this.position(block, w.side, w.t, w.d, this.here);
+      w.x = p.x;
+      w.z = p.z;
+      w.phase += (w.speed / 0.65) * Math.PI * dt;
+    }
+    // Cú đấm: vung tay 0,5 s, trúng ở giữa nhịp nếu người chơi còn trong tầm.
+    if (w.punch > 0) {
+      const before = w.punch;
+      w.punch -= dt;
+      if (before > 0.25 && w.punch <= 0.25 && dist <= PUNCH_RANGE + 0.2) this.damageToPlayer += PUNCH_DAMAGE;
+    } else {
+      w.punchCd -= dt;
+      if (w.punchCd <= 0 && dist <= PUNCH_RANGE) {
+        w.punch = 0.5;
+        w.punchCd = 1.1 + this.rng() * 0.6;
+      }
     }
   }
 
@@ -283,11 +446,16 @@ export class PedestrianSim {
     w.down = 0;
     w.flee = 0;
     w.dead = false;
+    w.react = 'none';
+    w.reactT = 0;
+    w.punch = 0;
+    w.punchCd = 0;
     const p = this.position(this.block(w), w.side, w.t, w.d);
     w.x = w.prevX = p.x;
     w.z = w.prevZ = p.z;
     w.yaw = w.prevYaw = Math.atan2(p.fx * w.dir, p.fz * w.dir);
     w.generation++;
+    w.look = lookOf(w.id, w.generation);
   }
 
   /** Có vật cản tĩnh nào trong bán kính `r` quanh (x, z)? */
@@ -320,6 +488,7 @@ export class PedestrianSim {
         w.speed = 0;
         continue;
       }
+      if (w.react !== 'none' && this.stepReaction(w, dt, focus)) continue;
       const block = this.block(w);
       const { len, width } = this.sideInfo(block, w.side, this.info);
       const lo = MARGIN;
@@ -417,6 +586,21 @@ export class PedestrianSim {
       if (mx * mx + mz * mz > 1e-8) w.yaw = Math.atan2(mx, mz);
       else if (w.dodge > 0 && threats[0]) w.yaw = Math.atan2(threats[0].x - w.x, threats[0].z - w.z); // quay lại nhìn xe
       w.phase += (w.speed / 0.65) * Math.PI * dt;
+    }
+  }
+
+  /** Quãng dọc cạnh hiện tại (t) của điểm (x, z) chiếu lên cạnh. */
+  private alongOf(w: Walker, x: number, z: number): number {
+    const r = this.block(w).rect;
+    switch (w.side) {
+      case 0:
+        return x - r.x0;
+      case 1:
+        return z - r.z0;
+      case 2:
+        return r.x1 - x;
+      default:
+        return r.z1 - z;
     }
   }
 

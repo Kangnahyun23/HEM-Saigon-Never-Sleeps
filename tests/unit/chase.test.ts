@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ChaseSim, CHASERS_PER_LEVEL } from '@/ai/chase';
+import { CHASE, ChaseSim, CHASERS_PER_LEVEL, POLICE_CHASE } from '@/ai/chase';
 import { buildTrafficNetwork } from '@/ai/trafficNetwork';
 import { Heat, segmentHitsRect, SightGrid } from '@/systems/heat';
 import { containsPoint, rect } from '@/core/rect';
@@ -58,6 +58,23 @@ describe('ChaseSim', () => {
       const from = path[i - 1]!;
       expect(net.nodes[from]!.out.some((l) => net.lanes[l]!.to === path[i])).toBe(true);
     }
+  });
+
+  it('công an: số xe theo sao truy nã (5 sao nhiều xe nhất), nhanh hơn đàn em nhưng chậm hơn xe Tín, nhìn xa hơn; bắt người đứng yên', () => {
+    expect(POLICE_CHASE.perLevel).toHaveLength(6);
+    expect(POLICE_CHASE.maxSpeed).toBeGreaterThan(CHASE.maxSpeed);
+    expect(POLICE_CHASE.maxSpeed).toBeLessThan(21);
+    expect(POLICE_CHASE.sightRange).toBeGreaterThan(CHASE.sightRange);
+    const sim = new ChaseSim(net, sight, 5, POLICE_CHASE);
+    const road = city.roads.find((r) => r.axis === 'x' && r.kind === 'avenue')!;
+    const player = { x: city.spawn.x, z: road.pos, speed: 0 };
+    let caught = false;
+    for (let i = 0; i < 60 * 40 && !caught; i++) caught = sim.update(STEP, player, 5);
+    expect(sim.chasers.filter((c) => !c.leaving)).toHaveLength(POLICE_CHASE.perLevel[5]!);
+    expect(caught).toBe(true);
+    // Hết sao: xe công an rút đi.
+    sim.update(STEP, player, 0);
+    expect(sim.chasers.every((c) => c.leaving)).toBe(true);
   });
 
   it('số xe theo cấp; đuổi kịp và chặn đầu người đứng yên giữa đường', () => {

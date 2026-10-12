@@ -1,17 +1,9 @@
 import * as THREE from 'three/webgpu';
-import { createCharacter, getClip, hasCharacter } from '@/assets/characters';
+import { attachToBone, createCharacter, getClip, hasCharacter } from '@/assets/characters';
 import type { AnimationName, CharacterId } from '@/assets/manifest';
+import { CIVILIANS } from './civilians';
 
-/** Mẫu người đi đường (CC0, xem CREDITS.md) — nữ dùng dáng đi nữ. */
-export const CIVILIANS: ReadonlyArray<{ id: CharacterId; female: boolean; height: readonly [number, number] }> = [
-  { id: 'man-shirt', female: false, height: [1.62, 1.74] },
-  { id: 'man-tee', female: false, height: [1.62, 1.74] },
-  { id: 'man-polo', female: false, height: [1.62, 1.74] },
-  { id: 'old-man', female: false, height: [1.58, 1.68] },
-  { id: 'woman-young', female: true, height: [1.52, 1.64] },
-  { id: 'woman-style', female: true, height: [1.52, 1.64] },
-  { id: 'old-woman', female: true, height: [1.48, 1.58] },
-];
+export { CIVILIANS } from './civilians';
 
 export function civiliansAvailable(): boolean {
   return CIVILIANS.every((c) => hasCharacter(c.id));
@@ -27,16 +19,34 @@ export interface NpcBody {
   readonly weights: number[];
   /** Xương hông (vị trí thân người khi nằm — đặt vũng máu); null nếu mẫu không có. */
   readonly pelvis: THREE.Object3D | null;
+  /** Điện thoại trong tay phải (ẩn; hiện khi gọi báo / quay video). */
+  readonly handset: THREE.Object3D;
 }
+
+const PHONE_GEO = new THREE.BoxGeometry(0.07, 0.14, 0.01);
+const PHONE_MAT = new THREE.MeshStandardNodeMaterial({ color: '#15171c', roughness: 0.3 });
 
 export function buildNpc(parent: THREE.Object3D, id: CharacterId, height: number, clips: readonly AnimationName[]): NpcBody | null {
   const body = createCharacter(id, height);
   if (!body) return null;
   const mixer = new THREE.AnimationMixer(body);
-  const actions = clips.map((n) => mixer.clipAction(getClip(n) ?? new THREE.AnimationClip(n, 1, [])));
+  // Cùng một clip xuất hiện hai lần (ví dụ "phone" vừa là kiểu đứng vừa là gọi báo) ⇒ nhân bản để mỗi chỗ có action
+  // riêng (bộ trộn gộp action theo clip, trọng số hai chỗ sẽ ghi đè nhau).
+  const used = new Set<AnimationName>();
+  const actions = clips.map((n) => {
+    const clip = getClip(n) ?? new THREE.AnimationClip(n, 1, []);
+    const action = mixer.clipAction(used.has(n) ? clip.clone() : clip);
+    used.add(n);
+    return action;
+  });
   for (const a of actions) a.setEffectiveWeight(0).play();
   parent.add(body);
-  return { body, perMeter: body.scale.y / height, mixer, actions, weights: clips.map(() => 0), pelvis: body.getObjectByName('pelvis') ?? null };
+  const handset = new THREE.Mesh(PHONE_GEO, PHONE_MAT);
+  handset.visible = false;
+  const hand = body.getObjectByName('hand_r');
+  // Trong lòng bàn tay phải (tư thế gốc chữ T: tay phải duỗi về phía −X), như điện thoại của Tín.
+  if (hand) attachToBone(body, hand, handset, new THREE.Vector3(-0.08, -0.02, 0.03));
+  return { body, perMeter: body.scale.y / height, mixer, actions, weights: clips.map(() => 0), pelvis: body.getObjectByName('pelvis') ?? null, handset };
 }
 
 /**

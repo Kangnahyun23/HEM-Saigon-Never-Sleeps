@@ -9,7 +9,8 @@ import { CITY_COLORS, FACADE_COLORS } from '../palette';
 import { createLedAtlas, createSignSet } from '../signs';
 import { createLedMaterial } from '../nightMaterials';
 import { hemDoorRight } from '../hemDetails';
-import { BANNER_COUNT, cellUv, designLed, H_CELL, hCellPx, SHOP_SIGN_COUNT, V_CELL, V_COUNT, vCellPx, type SignDesign } from '../signage';
+import { BANNER_COUNT, cellUv, CUSTOM_SIGNS, designCustomSign, designLed, H_CELL, hCellPx, SHOP_SIGN_COUNT, V_CELL, V_COUNT, vCellPx, type SignDesign } from '../signage';
+import { SHOP_TYPES } from '../shops';
 import { addMesh, GEO, localToWorld, yawFor, type BuildContext } from './context';
 import { reflective } from '../../reflections';
 
@@ -35,7 +36,7 @@ export function buildBuildings(ctx: BuildContext): void {
 
   const facades = new InstanceBatch(GEO.box, createFacadeMaterial(), {
     name: 'facades',
-    attributes: { aSize: 3, aColor: 3, aInfo: 4 },
+    attributes: { aSize: 3, aColor: 3, aInfo: 4, aBase: 1 },
   });
 
   const concrete = new THREE.MeshStandardNodeMaterial({ roughness: 0.9 });
@@ -60,7 +61,13 @@ export function buildBuildings(ctx: BuildContext): void {
   const acUnits = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.6 }), { colors: true, castShadow: false, name: 'ac-units' });
   const stools = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }), { colors: true, castShadow: false, name: 'stools' });
   // Bảng hiệu cả phố: một atlas, một lệnh vẽ. Ô thu vào 3 px để mipmap không lem màu sang ô bên cạnh.
-  const signSet = createSignSet(layout.seed + 991);
+  // Cửa hàng vào được: tầng trệt là phòng thật (build/shopInteriors.ts), bảng hiệu riêng ở các ô đầu của atlas.
+  const shopByLot = new Map(ctx.shops.map((s) => [s.lotId, s]));
+  const customRng = createRng(layout.seed + 777);
+  const signSet = createSignSet(
+    layout.seed + 991,
+    ctx.shops.map((s) => designCustomSign(SHOP_TYPES[s.kind].name, SHOP_TYPES[s.kind].tagline, SHOP_TYPES[s.kind].color, customRng)),
+  );
   const signs = new InstanceBatch(GEO.plane, createSignMaterial(signSet.atlas), {
     name: 'shop-signs',
     castShadow: false,
@@ -88,13 +95,22 @@ export function buildBuildings(ctx: BuildContext): void {
     // Nhà cao tầng dùng màu sáng, ít bão hoà hơn.
     if (lot.kind === 'tower') color.lerp(new THREE.Color('#d9dde2'), 0.55);
 
-    facades.add(cx, pad + h / 2, cz, w, h, d, 0, undefined, {
-      aSize: [w, h, d],
-      aColor: [color.r, color.g, color.b],
-      // w: 0 mặt đường; nhà trong hẻm 1 (cửa trái) / 1,5 (cửa phải) — khớp hemDoorRight() ở build/hems.ts.
-      aInfo: [FRONT_CODE[lot.front], (lot.seed % 10007) / 10007, KIND_CODE[lot.kind], lot.frontage === 'hem' ? (hemDoorRight(lot.seed) ? 1.5 : 1) : 0],
-    });
-    statics.box(cx, pad + h / 2, cz, w, h, d);
+    // w: 0 mặt đường; nhà trong hẻm 1 (cửa trái) / 1,5 (cửa phải) — khớp hemDoorRight() ở build/hems.ts.
+    const info = [FRONT_CODE[lot.front], (lot.seed % 10007) / 10007, KIND_CODE[lot.kind], lot.frontage === 'hem' ? (hemDoorRight(lot.seed) ? 1.5 : 1) : 0];
+    const shop = shopByLot.get(lot.id);
+    if (!shop) {
+      facades.add(cx, pad + h / 2, cz, w, h, d, 0, undefined, { aSize: [w, h, d], aColor: [color.r, color.g, color.b], aInfo: info });
+      statics.box(cx, pad + h / 2, cz, w, h, d);
+    } else {
+      // Nhà có cửa hàng vào được: khối tầng trên (aBase = 1 tầng ⇒ cửa sổ các tầng vẫn khớp) + khối tầng trệt phía sau
+      // phòng tiệm; phòng (sàn, tường, trần, quầy…) dựng ở build/shopInteriors.ts.
+      const H0 = shop.height;
+      facades.add(cx, pad + H0 + (h - H0) / 2, cz, w, h - H0, d, 0, undefined, { aSize: [w, h - H0, d], aColor: [color.r, color.g, color.b], aInfo: info, aBase: H0 });
+      statics.box(cx, pad + H0 + (h - H0) / 2, cz, w, h - H0, d);
+      const back = shopBackBox(lot, shop.depth);
+      facades.add(back.x, pad + H0 / 2, back.z, back.sx, H0, back.sz, 0, undefined, { aSize: [back.sx, H0, back.sz], aColor: [color.r, color.g, color.b], aInfo: info });
+      statics.box(back.x, pad + H0 / 2, back.z, back.sx, H0, back.sz);
+    }
 
     // Hệ toạ độ mặt tiền: gốc ở giữa chân mặt tiền, x dọc mặt tiền, z hướng ra đường.
     const yaw = yawFor(lot.front);
@@ -188,8 +204,9 @@ export function buildBuildings(ctx: BuildContext): void {
     // Mép dưới bảng hiệu treo trên cửa (để hạ mái hiên xuống dưới, không cắt vào bảng).
     let signBottom = 3.2;
     let mainSign: ReturnType<typeof signLight> = null;
-    if ((onStreet && lotRng(5) < 0.88) || (inHem && lotRng(5) < 0.35)) {
-      const signIdx = Math.floor(lotRng(6) * SHOP_SIGN_COUNT);
+    if (shop || (onStreet && lotRng(5) < 0.88) || (inHem && lotRng(5) < 0.35)) {
+      // Cửa hàng vào được dùng bảng riêng (ô = số thứ tự tiệm); nhà khác chọn trong phần còn lại của atlas.
+      const signIdx = shop ? shop.id : CUSTOM_SIGNS + Math.floor(lotRng(6) * (SHOP_SIGN_COUNT - CUSTOM_SIGNS));
       const cell = shopCell(signIdx);
       let sw: number;
       let sh: number;
@@ -367,4 +384,19 @@ export function buildBuildings(ctx: BuildContext): void {
   addMesh(ctx, backdropPads.build());
 
   for (const b of [facades, slabs, railings, cages, laundry, awnings, plants, tanks, tanksLying, roofStuff, sheets, acUnits, stools, signs, leds]) addMesh(ctx, b.build());
+}
+
+/** Khối tầng trệt phía sau phòng tiệm (toạ độ thế giới + kích thước theo trục X / Z): phần lô lùi vào sau `depth` mét. */
+function shopBackBox(lot: Lot, depth: number): { x: number; z: number; sx: number; sz: number } {
+  const r = lot.rect;
+  switch (lot.front) {
+    case '+z':
+      return { x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1 - depth) / 2, sx: r.x1 - r.x0, sz: r.z1 - r.z0 - depth };
+    case '-z':
+      return { x: (r.x0 + r.x1) / 2, z: (r.z0 + depth + r.z1) / 2, sx: r.x1 - r.x0, sz: r.z1 - r.z0 - depth };
+    case '+x':
+      return { x: (r.x0 + r.x1 - depth) / 2, z: (r.z0 + r.z1) / 2, sx: r.x1 - r.x0 - depth, sz: r.z1 - r.z0 };
+    default:
+      return { x: (r.x0 + depth + r.x1) / 2, z: (r.z0 + r.z1) / 2, sx: r.x1 - r.x0 - depth, sz: r.z1 - r.z0 };
+  }
 }

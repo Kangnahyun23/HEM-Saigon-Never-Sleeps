@@ -2,6 +2,7 @@
 
 Game hành động thế giới mở góc nhìn thứ 3 (cảm hứng GTA V) bối cảnh một Sài Gòn hư cấu, chạy trên trình duyệt.
 Thiết kế đầy đủ: `docs/gdd.md`. Đọc file đó trước khi làm tính năng mới.
+**Bắt đầu phiên mới: đọc `docs/handover.md` trước** (tình trạng, PR đang mở, việc tiếp theo, bẫy đã gặp).
 
 ## Stack
 - TypeScript strict · Vite 8 · Three.js r186 (`three/webgpu`, `WebGPURenderer` tự lùi về WebGL2) · Rapier (`@dimforge/rapier3d-compat`)
@@ -23,7 +24,7 @@ npx playwright test gameplay   # đi bộ → lên xe → chạy → cua → pha
 ```
 Debug trong console trình duyệt: `__HEM__.layout` (bố cục khu phố), `__HEM__.game`, `__HEM__.simulate(giây)`
 (chạy logic không render), `__HEM__.setCamera(px,py,pz, tx,ty,tz)` (camera tự do), `__HEM__.setHour(21)` (đổi giờ).
-Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (bị truy đuổi), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ, `?bloom=0` tắt bloom ban đêm (so hiệu năng). `__HEM__.settings()` = cài đặt hiện tại.
+Thêm `?gio=21` vào URL để vào game lúc 21 giờ (xem cảnh đêm), `?mua=1` để ép trời mưa; `__HEM__.setWeather('rain')`, `__HEM__.setHeat(2)` (đàn em Phát truy đuổi), `__HEM__.setWanted(3)` (công an truy nã 0–5 sao), `__HEM__.save()`. `?moi=1` = chơi lại từ đầu (xoá bản lưu). `?fps=1` hiện FPS / tỉ lệ điểm ảnh / số lệnh vẽ, `?bloom=0` tắt bloom ban đêm (so hiệu năng). `__HEM__.settings()` = cài đặt hiện tại.
 Cảnh báo 18+ hiện lần đầu vào game (game đứng yên tới khi xác nhận); Playwright bỏ qua, thêm `?canhbao=1` để ép hiện.
 Asset nhập ngoài: thêm dòng vào `SOURCES` (scripts/assets.mjs) rồi `npm run assets`; file nén trong `public/media/` có commit
 (ngân sách `MEDIA_BUDGET` 25 MB, test `assets.test.ts` kiểm tra), bản gốc chỉ ở `.cache/assets/`. Code lấy texture bằng
@@ -86,6 +87,9 @@ src/
     pickupView.ts    mũ bảo hiểm trên yên xe đậu (đồ nhặt được; mũ bị lấy thì ẩn)
     city/layout.ts   BỐ CỤC thuần dữ liệu (đường, block, hẻm, lô nhà, cột điện, cây…) — có unit test
     city/locate.ts   tên địa điểm tại (x, z) cho HUD
+    city/places.ts   đồn công an phường + trạm y tế phường (chỗ thả ra / tỉnh dậy) chọn theo bố cục — có unit test
+    city/shops.ts    cửa hàng vào được: chọn lô + loại tiệm (SHOP_TYPES), insideShop — có unit test; dựng phòng ở
+                     build/shopInteriors.ts (lô tiệm: khối tầng trên có aBase + khối tầng trệt phía sau, ở buildings.ts)
     city/materials.ts  shader TSL: mặt tiền (cửa sổ, cửa hàng + nội thất giả, cửa cuốn theo giờ…), vỉa hè, bê tông hẻm, nhựa đường
     city/signage.ts  nội dung bảng hiệu / băng rôn / câu LED (thuần logic, có unit test); signs.ts vẽ atlas
     city/hemDetails.ts  miệng hẻm, số hẻm, vị trí cửa nhà trong hẻm (thuần logic, có unit test)
@@ -98,24 +102,29 @@ src/
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
                      trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
-                     pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe — có unit test), pedestrianView (khối hộp instanced),
+                     pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /
+                     gọi báo / đánh trả — có unit test), civilians (mẫu người dùng chung cho mô phỏng + hình), pedestrianView (khối hộp instanced),
                      nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test),
                      seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương)
-                     chase (đàn em của Phát truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test), chaseSystem
+                     chase (xe truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test; cấu hình CHASE cho đàn em
+                     Phát, POLICE_CHASE cho công an), chaseSystem (thân Rapier + hình; công an có đèn chớp đỏ – xanh)
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker
                      story (5 nhiệm vụ Hồi 1: điểm hẹn, lời thoại, trả nợ — có unit test), storyRunner
   audio/             âm thanh tổng hợp WebAudio (không file): mixer (MỘT AudioContext + âm lượng, phím M), engineSound
                      (tiếng máy theo tốc độ / ga), ambience (ồn phố, dế đêm), sfx (tiền, tin nhắn, nhiệm vụ, truy đuổi, té xe),
-                     horn, rainSound; soundModel (thông số âm thanh — thuần logic, có unit test).
+                     horn, rainSound, siren (còi hú công an theo khoảng cách); soundModel (thông số âm thanh — thuần logic, có unit test).
                      Âm thanh mới nối vào mixer.bus(), KHÔNG tạo AudioContext riêng.
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, máu / giáp, sao truy nã, bảng phím F1, hàng thông báo — toastQueue
                      có unit test), minimap (+ minimapMath có unit test)
                      phone (điện thoại "Sầu Riêng S9" cầm tay, phím P: màn hình chính + 8 app — Kèo, Bản đồ, Tin nhắn, Ví,
-                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu)
+                     Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu), outcome (màn hình BỊ BẮT / GỤC)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
                      combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục, lượng máu bắn — có unit test),
                      pickups (đồ nhặt ngoài phố, phím G: chồng ghế nhựa quán cóc, mũ bảo hiểm trên yên xe — có unit test),
+                     shopCatalog (hàng + giá từng tiệm, mặc cả, cầm đồ mua lại, nâng cấp — có unit test; giao diện ui/shopPanel, phím E),
+                     wanted (sao truy nã công an 0–5: dân gọi báo ⇒ lên sao; vùng tìm kiếm theo sao, khuất mặt đủ lâu — nhanh
+                     hơn khi ra khỏi vùng / trốn trong hẻm — thì thoát; có unit test),
                      social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),
                      inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu — có unit test; giao diện ui/backpack, phím I),
                      wheel (vòng chọn đồ: danh sách ô + chọn theo hướng chuột — có unit test; ui/weaponWheel, giữ Tab),
@@ -125,7 +134,7 @@ src/
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
 scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
-tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat
+tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).

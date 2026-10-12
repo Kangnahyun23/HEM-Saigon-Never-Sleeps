@@ -36,19 +36,58 @@ export interface ChasePlayer {
   speed: number;
 }
 
+/** Thông số một phe truy đuổi (đàn em của Phát, công an). */
+export interface ChaseConfig {
+  /** Số xe theo cấp (Độ Nóng 0–3 / sao truy nã 0–5). */
+  readonly perLevel: readonly number[];
+  readonly maxSpeed: number;
+  readonly accel: number;
+  readonly turnRate: number;
+  readonly sightRange: number;
+  /** Áp sát trong khoảng này và Tín chậm hơn `stopSpeed` đủ `catchTime` giây ⇒ bị chặn đầu / bị bắt. */
+  readonly catchRange: number;
+  readonly stopSpeed: number;
+  readonly catchTime: number;
+  /** Xuất hiện cách Tín trong khoảng này (m). */
+  readonly spawnMin: number;
+  readonly spawnMax: number;
+}
+
+/**
+ * Công an (theo sao truy nã 0–5): nhanh hơn đàn em của Phát nhưng vẫn chậm hơn xe Tín chạy hết ga; nhìn xa hơn;
+ * áp sát khi Tín đứng yên / chạy chậm đủ 2 giây thì bắt. Cũng không vào hẻm.
+ */
+export const POLICE_CHASE: ChaseConfig = {
+  perLevel: [0, 1, 2, 3, 4, 6],
+  maxSpeed: 18.5,
+  accel: 6.5,
+  turnRate: 2.5,
+  sightRange: 60,
+  catchRange: 2.4,
+  stopSpeed: 2,
+  catchTime: 2,
+  spawnMin: 60,
+  spawnMax: 110,
+};
+
 /** Số xe truy đuổi theo cấp Độ Nóng. */
 export const CHASERS_PER_LEVEL = [0, 2, 3, 5] as const;
-export const CHASE = {
+export const CHASE: ChaseConfig = {
+  perLevel: CHASERS_PER_LEVEL,
   /** Nhanh hơn xe NPC nhưng chậm hơn xe Tín chạy hết ga (21 m/s) để còn đường thoát. */
   maxSpeed: 17,
   accel: 6,
   turnRate: 2.4,
   sightRange: 50,
-  /** Áp sát trong khoảng này và Tín chậm hơn `stopSpeed` đủ `catchTime` giây ⇒ bị chặn đầu. */
   catchRange: 2.4,
   stopSpeed: 2.5,
   catchTime: 1.2,
-} as const;
+  spawnMin: 55,
+  spawnMax: 95,
+};
+
+/** Xe truy đuổi dừng cách Tín ngần này (m, tâm tới tâm): đầu xe 0,95 m + thân người 0,3 m + khoảng chừa — vẫn trong tầm bắt. */
+const STOP_GAP = 2;
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -65,6 +104,7 @@ export class ChaseSim {
     private readonly network: TrafficNetwork,
     private readonly sight: SightGrid,
     seed = 31,
+    readonly config: ChaseConfig = CHASE,
   ) {
     this.rng = createRng(seed);
   }
@@ -120,7 +160,7 @@ export class ChaseSim {
       const lane = lanes[Math.floor(this.rng() * lanes.length)] as TrafficLane;
       const p = lanePoint(lane, range(this.rng, 0, lane.length), (lane.minOffset + lane.maxOffset) / 2);
       const d = Math.hypot(p.x - player.x, p.z - player.z);
-      if (d < 55 || d > 95) continue;
+      if (d < this.config.spawnMin || d > this.config.spawnMax) continue;
       best = { x: p.x, z: p.z, yaw: Math.atan2(lane.dx, lane.dz) };
       // Ưu tiên chỗ khuất tầm nhìn (không "hiện ra" ngay trước mặt).
       if (!this.sight.clear(p.x, p.z, player.x, player.z)) break;
@@ -142,9 +182,10 @@ export class ChaseSim {
     });
   }
 
-  /** Một bước. `level`: Độ Nóng hiện tại. Trả về true nếu Tín vừa bị chặn đầu. */
+  /** Một bước. `level`: Độ Nóng / sao truy nã hiện tại. Trả về true nếu Tín vừa bị chặn đầu / bị bắt. */
   update(dt: number, player: ChasePlayer, level: number): boolean {
-    const want = CHASERS_PER_LEVEL[clamp(level, 0, 3)] as number;
+    const cfg = this.config;
+    const want = cfg.perLevel[clamp(level, 0, cfg.perLevel.length - 1)] as number;
     const active = this.chasers.filter((c) => !c.leaving);
     for (let i = active.length; i < want; i++) this.spawn(player);
     // Hạ cấp / hết truy đuổi: các xe thừa rút lui.
@@ -158,9 +199,9 @@ export class ChaseSim {
       c.prevYaw = c.yaw;
       c.prevLean = c.lean;
       const d = Math.hypot(player.x - c.x, player.z - c.z);
-      const visible = d < CHASE.sightRange && this.sight.clear(c.x, c.z, player.x, player.z);
+      const visible = d < cfg.sightRange && this.sight.clear(c.x, c.z, player.x, player.z);
       if (!c.leaving && visible) this.seen = true;
-      if (!c.leaving && d < CHASE.catchRange) close = true;
+      if (!c.leaving && d < cfg.catchRange) close = true;
 
       // Chọn điểm hướng tới: thấy & gần ⇒ lao thẳng; không thì theo đường lớn.
       let tx: number;
@@ -199,13 +240,16 @@ export class ChaseSim {
       // Lái: quay đầu có giới hạn, cua gắt thì giảm tốc.
       const want = Math.atan2(tx - c.x, tz - c.z);
       const diff = wrap(want - c.yaw);
-      const turn = clamp(diff, -CHASE.turnRate * dt, CHASE.turnRate * dt);
+      const turn = clamp(diff, -cfg.turnRate * dt, cfg.turnRate * dt);
       c.yaw = wrap(c.yaw + turn);
       const distT = Math.hypot(tx - c.x, tz - c.z);
-      let target = CHASE.maxSpeed * Math.max(0.3, Math.cos(diff));
-      if (!c.leaving && visible && d < 6) target = Math.min(target, player.speed + 2 + d); // áp sát, không đâm xuyên
+      let target = cfg.maxSpeed * Math.max(0.3, Math.cos(diff));
+      // Áp sát rồi dừng cách STOP_GAP (không đâm xuyên, không hất người đi bộ): tốc độ không quá mức còn phanh kịp.
+      // Không cộng tốc độ của Tín vào đây — bị xe đẩy thì Tín "nhanh" lên, cộng vào sẽ thành vòng lặp càng đẩy càng nhanh;
+      // Tín chạy thật thì xe vẫn bám theo ở khoảng cách mà đường phanh cho phép.
+      if (!c.leaving && visible) target = Math.min(target, Math.sqrt(2 * cfg.accel * 1.5 * Math.max(0, d - STOP_GAP)));
       if (distT < 3 && !visible) target = Math.min(target, 6);
-      c.speed += clamp(target - c.speed, -CHASE.accel * 1.5 * dt, CHASE.accel * dt);
+      c.speed += clamp(target - c.speed, -cfg.accel * 1.5 * dt, cfg.accel * dt);
 
       // Tách nhau ra, không chồng lên xe khác.
       let px = 0;
@@ -231,8 +275,8 @@ export class ChaseSim {
       if (c.leaving && Math.hypot(c.x - player.x, c.z - player.z) > 80) this.chasers.splice(i, 1);
     }
 
-    this.closeTime = close && player.speed < CHASE.stopSpeed ? this.closeTime + dt : 0;
-    if (this.closeTime >= CHASE.catchTime) {
+    this.closeTime = close && player.speed < cfg.stopSpeed ? this.closeTime + dt : 0;
+    if (this.closeTime >= cfg.catchTime) {
       this.closeTime = 0;
       return true;
     }

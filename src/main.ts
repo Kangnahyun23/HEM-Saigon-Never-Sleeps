@@ -123,6 +123,11 @@ async function main(): Promise<void> {
   debug.save = () => game.save(true);
   /** Đặt Độ Nóng 0–3 (bị truy đuổi). */
   debug.setHeat = (level: number) => game.heat.set(level);
+  /** Đặt sao truy nã 0–5 (công an truy đuổi), tâm vùng tìm kiếm ở chỗ Tín. */
+  debug.setWanted = (level: number) => {
+    const p = game.character.feet();
+    game.wanted.set(level, p.x, p.z);
+  };
   /** Đặt giờ trong game (0–24). */
   debug.setHour = (h: number) => {
     game.clock.hour = h;

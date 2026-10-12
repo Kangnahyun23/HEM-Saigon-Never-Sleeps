@@ -4,6 +4,7 @@ import { signFont, type SignFont } from '@/ui/fonts';
 import {
   ATLAS_SIZE,
   BANNER_COUNT,
+  CUSTOM_SIGNS,
   designBanner,
   designShopSign,
   designVerticalSign,
@@ -179,9 +180,11 @@ function drawVertical(ctx: CanvasRenderingContext2D, d: SignDesign, x: number, y
  * Sinh toàn bộ bảng hiệu (có seed) và vẽ lên MỘT atlas 2048² — mọi bảng hiệu cả phố chỉ tốn một lệnh vẽ.
  * Gọi sau loadFonts() để chữ dùng đúng font bảng hiệu.
  */
-export function createSignSet(seed: number): SignSet {
+/** `custom`: bảng riêng của cửa hàng vào được, thay cho các ô đầu (tối đa CUSTOM_SIGNS). */
+export function createSignSet(seed: number, custom: readonly SignDesign[] = []): SignSet {
   const rng = createRng(seed);
   const shops = Array.from({ length: SHOP_SIGN_COUNT }, () => designShopSign(rng));
+  for (let i = 0; i < Math.min(custom.length, CUSTOM_SIGNS); i++) shops[i] = custom[i]!;
   const banners = Array.from({ length: BANNER_COUNT }, (_, i) => designBanner(i, rng));
   const verticals = Array.from({ length: V_COUNT }, () => designVerticalSign(rng));
 

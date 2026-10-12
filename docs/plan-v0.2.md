@@ -23,7 +23,29 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] N5.2 vũ khí nhặt được (phím G: ghế nhựa ở chồng ghế quán cóc — 4 phát là vỡ; mũ bảo hiểm trên yên xe đậu, vài giờ game
   mới có lại), mỗi món có tầm / tốc độ / sát thương / độ bền / mức chảy máu riêng; máu nhẹ (giọt bắn, vết nhỏ, vũng loang
   dưới người gục, tự mờ sau 50 s), tắt được trong Cài đặt; màn hình cảnh báo 18+ lần đầu vào game (tắt máu ngay tại đó);
-- [ ] N5.3–N10.
+- [x] N5.3 người đi đường phản ứng khi thấy đánh nhau (có seed): bỏ chạy, la lên, đứng xa quay video, gọi báo công an
+  (5 s, biểu tượng điện thoại trên đầu; Tín áp sát kịp thì cúp máy bỏ chạy), thanh niên xông vào đánh trả (Tín mất máu,
+  gục hẳn để N5.5 — giờ còn 1 máu). Gọi báo xong ⇒ sao truy nã (đánh người 1 sao, có án mạng 2 sao, dân báo tối đa 3,
+  không bị báo thêm 40 s thì hạ một sao) — công an đi tìm ở N5.4;
+- [x] N5.4 công an truy nã 1–5 sao: xe công an (xe trắng, quân phục ô-liu, đèn chớp đỏ – xanh, còi hú) bám theo
+  đường lớn — số xe theo sao (1/2/3/4/6), không vào hẻm; vùng tìm kiếm 60–400 m, công an thấy thì tâm vùng theo Tín,
+  khuất mặt 10–60 s thì thoát (trong vùng chậm, trong hẻm nhanh); bản đồ nhỏ có chấm + nón tầm nhìn + vòng tìm kiếm;
+  đứng yên / chạy chậm để công an áp sát 2 s thì bị bắt (nộp phạt, tịch thu vũ khí). Ô tô chặn đường để N7 (chưa có ô tô);
+- [x] N5.5 bị bắt / bị gục kiểu GTA: game chậm lại, khung hình mất màu, chữ lớn "BỊ BẮT" / "GỤC", mờ đen rồi về
+  đồn công an phường (nộp phạt ≥ 150.000 đ, tịch thu vũ khí) / trạm y tế phường (viện phí ≥ 100.000 đ, đầy máu);
+  hết truy nã + Độ Nóng, nhiệm vụ / kèo đang làm thất bại; xe của Tín được đưa tới đậu cạnh; đồn và trạm có biểu tượng
+  trên bản đồ. (Cảnh báo 18+ đã có từ N5.2.)
+- [x] N6.1 cửa hàng vào được liền mạch: 6 lô nhà phố mặt đường gần chỗ xuất phát (tạp hoá, cơm tấm, nhà thuốc, cầm đồ,
+  shop quần áo, điện thoại) — tầng trệt thành phòng thật sâu 7 m mở thẳng ra phố (sàn gạch caro, tường, trần, đèn tuýp,
+  quầy + chủ tiệm trực cả đêm, kệ / đồ đạc theo nghề), có va chạm; khối nhà tách thành tầng trên + khối sau (shader mặt
+  tiền thêm aBase để cửa sổ các tầng vẫn khớp); bảng hiệu riêng; HUD ghi tên tiệm; camera vào trong thì gần + thấp,
+  chui dưới mái hiên. Karaoke / văn phòng Phát (chuyển cảnh mờ) để N9;
+- [x] N6.2 + N6.3 mua bán: E trong tiệm mở bảng hàng (↑↓ chọn, E mua, B mặc cả một lần mỗi lần ghé — 55 % được bớt
+  10–20 %, Tab ở tiệm cầm đồ để bán vũ khí 40 % giá theo độ bền); hàng theo tiệm (đồ ăn, thuốc, vũ khí, mũ bảo hiểm);
+  nâng cấp balo 16 / 24 ô, điện thoại Sầu Riêng S9 Pro (12 ảnh, hình nền mới — lưu cùng bản lưu), bộ đồ mới (đang bị
+  truy nã thì coi như đã khuất mặt 60 %); đồ ăn hồi máu từ từ (8 máu/giây), thuốc hồi ngay. Còn lại: nhà Tín (lưu game,
+  tủ đồ) → N9; cân bằng kinh tế → N6.4;
+- [ ] N6.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 
