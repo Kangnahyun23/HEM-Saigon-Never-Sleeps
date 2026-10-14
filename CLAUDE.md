@@ -39,6 +39,12 @@ alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính l�
 NPC có xương lấy / trả qua `KeyedPool` (core/keyedPool.ts) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
 three.js vẫn tính ma trận xương của vật đang ẩn; bộ đệm hình riêng từng ô từng phình tới hàng chục nghìn xương sau vài phút chơi.
 Mỗi lệnh vẽ tốn CPU (three.js ~15–20 µs / vật / lượt, cả lượt bóng): vật nhỏ nằm dưới / trong vật khác thì `castShadow = false`.
+InstancedMesh hết bản (count = 0) thì ẩn luôn (`visible = false`): three.js vẫn tốn lệnh vẽ cho mesh 0 bản ở mọi lượt.
+Pipeline biên dịch sẵn lúc tải (render/warmup.ts): `warmUpPipelines` vẽ một lần MỌI vật (kể cả đang ẩn, ngoài khung nhìn,
+chỉ hiện ban đêm) + lượt bloom, rồi `gpuIdle` chờ GPU biên dịch xong. Thiếu thì vật lần đầu xuất hiện làm khựng 60–90 ms
+(D3D11), lượt bloom đầu tiên lúc trời tối ~1 s, và ngay sau màn hình tải game đứng 5–8 s chờ GPU. Vật tạo muộn (chưa nằm
+trong cảnh, kể cả dạng ẩn) thì đưa một mẫu vào `samples` (như `civilianSamples()`); kiểm tra bằng cách đếm
+`renderer.backend.createRenderPipeline` lúc chơi — phải bằng 0.
 Thuộc tính instance tới fragment qua nội suy: số nguyên có thể thành 0,9999… ⇒ giải mã bằng ngưỡng, đừng `fract()` đúng tại số nguyên.
 `material.positionNode` được gán SAU bước instancing (ghi đè cả phần dịch của instance).
 Nhân vật có xương: đừng gọi `skeleton.pose()` (lưới lượng tử hoá meshopt ⇒ xương gốc lệch chỗ); động tác mới thêm vào
@@ -81,7 +87,8 @@ src/
   render/            renderer (WebGPU→WebGL2, tối đa 1,5× điểm ảnh), instancing.ts (InstanceBatch),
                      resolution (chất lượng tự động theo FPS: bóng đổ cách khung → hạ độ phân giải), detailCulling (chi tiết nhỏ chỉ vẽ quanh camera),
                      merge (gộp khối tĩnh cùng vật liệu: xe, nhân vật, công trình) — đều có unit test,
-                     bloom (NightBloom: hậu kỳ chỉ chạy lúc tối, tắt ở mức Thấp — QualityProfile.bloom)
+                     bloom (NightBloom: hậu kỳ chỉ chạy lúc tối, tắt ở mức Thấp — QualityProfile.bloom),
+                     warmup (biên dịch sẵn pipeline lúc tải: revealAll có unit test, warmUpPipelines, gpuIdle)
   world/
     environment.ts   bầu trời SkyMesh + vòm trời đêm, nắng/trăng + bóng đổ bám điểm nhìn, đèn bù sáng envFill, sương; setLighting()
     reflections.ts   ảnh bầu trời (PMREM) chỉ cho vật liệu cần phản chiếu: reflective(mat)
@@ -107,7 +114,7 @@ src/
                      locomotion (trộn đứng/đi/chạy theo tốc độ — có unit test), followCamera (góc nhìn 3, chống xuyên tường)
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
                      carModel (sedan / taxi / bán tải từ khối), carPhysics (bốn bánh, khoá nghiêng như xe máy — có unit test),
-                     carView (thân gộp theo vật liệu, màu trong đỉnh; chúi / nghiêng là hiệu ứng hình).
+                     carView (thân gộp theo vật liệu, màu trong đỉnh, bốn bánh một InstancedMesh; chúi / nghiêng là hiệu ứng hình).
                      Trong game.ts xe là `Vehicle = Bike | Car` (trường `kind`); ô tô đậu: `game.cars`, chỗ đậu world/city/carSpots.ts.
                      Ô tô không vào hẻm nhờ trụ chắn miệng hẻm (hemDetails.hemBollards, nhóm va chạm CAR_BLOCK ⇄ CAR).
                      Cướp ô tô NPC: `game.carjack()` đổi xe NPC thành Car lái được (takeCar: tối đa `maxCars` thân vật lý,

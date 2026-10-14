@@ -21,9 +21,17 @@ function partGeometry(p: CarPart, atOrigin: boolean): THREE.BufferGeometry {
   return geo;
 }
 
+const _wm = new THREE.Matrix4();
+const _wq = new THREE.Quaternion();
+const _we = new THREE.Euler();
+const _wp = new THREE.Vector3();
+const _one = new THREE.Vector3(1, 1, 1);
+/** Khối cầu bao cố định của bốn bánh (quanh gốc xe) — ma trận bánh đổi mỗi khung, khỏi tính lại. */
+const WHEEL_REACH = Math.max(...CAR_WHEELS.map(([x, z]) => Math.hypot(x, z))) + CAR.wheelRadius + 0.4;
+
 /**
  * Hình ô tô dựng từ carParts: thân sơn (màu trong đỉnh) + kính + đèn pha + đèn hậu gộp thành vài mesh, bốn bánh quay,
- * hai bánh trước xoay theo lái; thân chúi / nghiêng nhẹ khi phanh, cua. Mỗi xe chỉ ~8 lệnh vẽ.
+ * hai bánh trước xoay theo lái; thân chúi / nghiêng nhẹ khi phanh, cua. Mỗi xe chỉ ~5 lệnh vẽ.
  */
 export class CarView {
   readonly root = new THREE.Group();
@@ -31,8 +39,10 @@ export class CarView {
   readonly model = new THREE.Group();
   /** Chỗ người lái (trong khoang kín, kính tối — người lái được ẩn đi). */
   readonly seat = new THREE.Group();
-  private readonly wheelSteer: THREE.Group[] = [];
-  private readonly wheelSpin: THREE.Group[] = [];
+  /** Bốn bánh trong MỘT InstancedMesh (1 lệnh vẽ thay vì 4); ma trận từng bánh tính trong `sync`. */
+  private readonly wheels: THREE.InstancedMesh;
+  /** Độ cao, góc lái, góc quay của từng bánh lần ghi trước — xe đứng yên thì khỏi ghi lại bộ đệm. */
+  private readonly wheelState = new Float64Array(12).fill(NaN);
   private readonly headlight: THREE.MeshStandardNodeMaterial;
   private readonly taillight: THREE.MeshStandardNodeMaterial;
   private readonly sign: THREE.MeshStandardNodeMaterial | null = null;
@@ -51,10 +61,12 @@ export class CarView {
 
     const colorOf = (p: CarPart): string => (p.role === 'body' ? bodyColor : p.role === 'trim' ? trimColor : CAR_ROLE_COLORS[p.role]);
     const groups: Record<'paint' | 'glass' | 'light' | 'tail' | 'sign', THREE.BufferGeometry[]> = { paint: [], glass: [], light: [], tail: [], sign: [] };
-    const wheels: THREE.BufferGeometry[][] = [[], [], [], []];
+    // Bốn bánh giống hệt nhau (dựng tại gốc): lấy hình bánh số 0 cho cả bốn bản.
+    const wheel: THREE.BufferGeometry[] = [];
     for (const p of carParts(kind)) {
-      if (p.wheel !== undefined) (wheels[p.wheel] as THREE.BufferGeometry[]).push(tinted(partGeometry(p, true), colorOf(p)));
-      else if (p.role === 'glass' || p.role === 'light' || p.role === 'tail' || p.role === 'sign') groups[p.role].push(partGeometry(p, false));
+      if (p.wheel !== undefined) {
+        if (p.wheel === 0) wheel.push(tinted(partGeometry(p, true), colorOf(p)));
+      } else if (p.role === 'glass' || p.role === 'light' || p.role === 'tail' || p.role === 'sign') groups[p.role].push(partGeometry(p, false));
       else groups.paint.push(tinted(partGeometry(p, false), colorOf(p)));
     }
     const add = (parent: THREE.Object3D, geos: THREE.BufferGeometry[], mat: THREE.Material, shadow = true): void => {
@@ -71,17 +83,11 @@ export class CarView {
       this.sign = new THREE.MeshStandardNodeMaterial({ color: CAR_ROLE_COLORS.sign, emissive: new THREE.Color('#ffe060'), emissiveIntensity: 0.2 });
       add(this.model, groups.sign, this.sign, false);
     }
-    // Bánh xe nằm ngoài thân (không chúi / nghiêng theo thân): nhóm lái (xoay quanh Y) bọc nhóm quay (quanh X).
-    for (const geos of wheels) {
-      const steer = new THREE.Group();
-      const spin = new THREE.Group();
-      steer.add(spin);
-      // Bánh không đổ bóng: nằm gọn dưới thân (bóng thân đã che), mà mỗi bánh là một lệnh vẽ riêng trong lượt bóng.
-      add(spin, geos, rubber, false);
-      this.root.add(steer);
-      this.wheelSteer.push(steer);
-      this.wheelSpin.push(spin);
-    }
+    // Bánh xe nằm ngoài thân (không chúi / nghiêng theo thân). Không đổ bóng: nằm gọn dưới thân (bóng thân đã che).
+    this.wheels = new THREE.InstancedMesh(mergeGeometries(wheel, false), rubber, 4);
+    this.wheels.castShadow = false;
+    this.wheels.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, CAR.wheelRadius, 0), WHEEL_REACH);
+    this.root.add(this.wheels);
 
     this.seat.position.set(CAR.seat[0], CAR.seat[1], CAR.seat[2]);
     this.model.add(this.seat);
@@ -115,12 +121,23 @@ export class CarView {
     // Thân bám theo gốc thân vật lý (lún theo giảm xóc); bánh nằm trên mặt đường theo độ nén từng giảm xóc.
     this.model.position.y = -rideHeight();
     this.model.rotation.set(phys.pitch, 0, phys.roll);
+    let changed = false;
+    const state = this.wheelState;
     for (let i = 0; i < 4; i++) {
-      const steer = this.wheelSteer[i] as THREE.Group;
+      const y = CAR_TUNING.connectionY - phys.suspension(i);
+      const steer = i < 2 ? phys.steer : 0;
+      const spin = phys.wheelSpin[i] as number;
+      const k = i * 3;
+      if (state[k] === y && state[k + 1] === steer && state[k + 2] === spin) continue;
+      state[k] = y;
+      state[k + 1] = steer;
+      state[k + 2] = spin;
       const [wx, wz] = CAR_WHEELS[i] as readonly [number, number];
-      steer.position.set(wx, CAR_TUNING.connectionY - phys.suspension(i), wz);
-      steer.rotation.y = i < 2 ? phys.steer : 0;
-      (this.wheelSpin[i] as THREE.Group).rotation.x = phys.wheelSpin[i] as number;
+      // Lái quanh Y rồi quay quanh X (Euler 'YXZ': Ry·Rx) — như nhóm lái bọc nhóm quay.
+      _wq.setFromEuler(_we.set(spin, steer, 0, 'YXZ'));
+      this.wheels.setMatrixAt(i, _wm.compose(_wp.set(wx, y, wz), _wq, _one));
+      changed = true;
     }
+    if (changed) this.wheels.instanceMatrix.needsUpdate = true;
   }
 }

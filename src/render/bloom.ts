@@ -35,6 +35,15 @@ export class NightBloom {
     return this.scale > 0;
   }
 
+  /** Vẽ một lần qua bloom (kể cả ban ngày) để tạo sẵn pipeline lúc tải — tránh khựng khi trời vừa tối. */
+  warm(): void {
+    if (this.scale <= 0) return;
+    const s = this.strength.value;
+    this.strength.value = 1;
+    this.pipeline.render();
+    this.strength.value = s;
+  }
+
   /** Vẽ khung hình qua bloom nếu đang bật và trời đủ tối; trả false để nơi gọi tự vẽ thẳng. */
   render(night: number): boolean {
     const s = this.scale > 0 ? bloomStrength(night) : 0;

@@ -129,6 +129,42 @@ describe('ResolutionGovernor', () => {
   });
 });
 
+describe('revealAll (làm nóng pipeline lúc tải)', () => {
+  it('tạm hiện vật ẩn (kể cả con của nhóm ẩn), tắt cắt khung nhìn, cho InstancedMesh rỗng 1 bản — rồi trả lại y như cũ', async () => {
+    const { revealAll } = await import('@/render/warmup');
+    const root = new THREE.Group();
+    const hiddenGroup = new THREE.Group();
+    hiddenGroup.visible = false;
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicNodeMaterial());
+    inner.visible = false;
+    hiddenGroup.add(inner);
+    const shown = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicNodeMaterial());
+    shown.frustumCulled = false;
+    const empty = new THREE.InstancedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicNodeMaterial(), 8);
+    empty.count = 0;
+    const partial = new THREE.InstancedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicNodeMaterial(), 8);
+    partial.count = 3;
+    root.add(hiddenGroup, shown, empty, partial);
+
+    const restore = revealAll(root);
+    root.traverse((o) => {
+      expect(o.visible).toBe(true);
+      expect(o.frustumCulled).toBe(false);
+    });
+    expect(empty.count).toBe(1);
+    expect(partial.count).toBe(3);
+
+    restore();
+    expect(hiddenGroup.visible).toBe(false);
+    expect(inner.visible).toBe(false);
+    expect(shown.visible).toBe(true);
+    expect(shown.frustumCulled).toBe(false);
+    expect(inner.frustumCulled).toBe(true);
+    expect(empty.count).toBe(0);
+    expect(partial.count).toBe(3);
+  });
+});
+
 describe('mergeStaticMeshes', () => {
   it('gộp khối cùng vật liệu trong từng nhóm, giữ nguyên nhóm con xoay được và vị trí các khối', async () => {
     const { mergeStaticMeshes } = await import('@/render/merge');
