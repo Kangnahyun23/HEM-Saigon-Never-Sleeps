@@ -196,7 +196,8 @@ export class NearPedestrianView {
       // Cú đấm mới (người đánh trả) ⇒ phát lại động tác đấm từ đầu.
       if (w.punch > 0 && !slot.punching) npc.actions[PUNCH]!.reset().play();
       slot.punching = w.punch > 0;
-      const reacting = state === 'calm' ? w.react : 'none';
+      // Tài xế vừa bị kéo khỏi xe còn đang chạy lên vỉa hè: chưa rút điện thoại.
+      const reacting = state === 'calm' && w.enter <= 0 ? w.react : 'none';
       npc.handset.visible = reacting === 'call' || reacting === 'film';
       if (reacting === 'call') {
         // Biểu tượng gọi điện nhấp nháy trên đầu (người chơi chạy tới kịp thì ngăn được cuộc gọi).
@@ -213,7 +214,7 @@ export class NearPedestrianView {
       else if (reacting === 'film') t[FILM] = 1;
       else if (reacting === 'shout') t[SHOUT] = 1;
       else if (w.dodge > 0) t[DODGE] = 1;
-      else if (w.flee > 0 && w.speed > 0.15) t[RUN] = 1;
+      else if ((w.flee > 0 || w.enter > 0) && w.speed > 0.15) t[RUN] = 1;
       else if (w.speed > 0.15) t[WALK] = 1;
       else t[IDLE] = 1;
       // Nhịp bước theo tốc độ (clip đi khớp ~1,6 m/s, chạy ~3,6 m/s).

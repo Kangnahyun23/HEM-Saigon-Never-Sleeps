@@ -5,6 +5,7 @@ import { generateCity } from '../../src/world/city/layout';
 /**
  * Ô tô lái được (N7.1): đứng cạnh xe đậu ven đường thì có gợi ý "Vào xe"; F vào xe (Tín ngồi trong khoang kín),
  * ga, cua, phanh, F ra khỏi xe đứng cạnh cửa; trụ chắn ở miệng hẻm cản ô tô nhưng xe máy lọt qua.
+ * Cướp xe (N7.1 phần 2): chặn đầu ô tô NPC cho nó dừng, F kéo tài xế ra rồi lái đi; tài xế gọi báo ⇒ có sao truy nã.
  * Chạy riêng: npx playwright test car
  */
 
@@ -23,6 +24,15 @@ type G = {
   character: { feet(): { x: number; y: number; z: number }; teleport(x: number, y: number, z: number, yaw: number): void };
   mount(v: Vehicle): void;
   freeCamera: boolean;
+  wanted: { level: number };
+  pedestrians: { walkers: { x: number; z: number; react: string; enter: number; generation: number }[] };
+  traffic: {
+    sim: {
+      bikes: number;
+      network: { lanes: { length: number }[] };
+      agents: { kind: string; x: number; z: number; yaw: number; speed: number; lane: number; s: number; turn: unknown; generation: number }[];
+    };
+  };
 };
 
 const simulate = (page: Page, s: number) => page.evaluate((sec) => (window.__HEM__!.simulate as (n: number) => void)(sec), s);
@@ -182,4 +192,112 @@ test('trụ chắn miệng hẻm: ô tô không vào được, xe máy lọt qua
   }, home);
   const bike = await driveIn('bike', 2.4);
   expect(bike).toBeGreaterThan(8);
+});
+
+test('cướp ô tô NPC: chặn đầu xe, kéo tài xế ra, lái đi, tài xế gọi báo công an', async ({ page }) => {
+  test.setTimeout(600_000);
+  await page.goto('/?moi=1&gio=10');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+
+  // Chọn một ô tô con đang chạy trên đoạn thẳng còn dài, ra đứng chặn trước mũi nó 10 m rồi chờ nó dừng.
+  const stop = await page.evaluate(() => {
+    const h = window.__HEM__!;
+    h.paused = true;
+    const g = h.game as G;
+    const sim = h.simulate as (n: number) => void;
+    const t = g.traffic.sim;
+    const index = t.agents.findIndex(
+      (a, i) => i >= t.bikes && ['sedan', 'taxi', 'pickup'].includes(a.kind) && !a.turn && t.network.lanes[a.lane]!.length - a.s > 40,
+    );
+    if (index < 0) return null;
+    const a = t.agents[index]!;
+    const fx = Math.sin(a.yaw);
+    const fz = Math.cos(a.yaw);
+    g.character.teleport(a.x + fx * 10, 0.05, a.z + fz * 10, a.yaw + Math.PI);
+    const cars = g.cars.length;
+    let waited = 0;
+    for (; waited < 120 && !(a.speed < 0.6 && Math.hypot(a.x - g.character.feet().x, a.z - g.character.feet().z) < 4); waited++) sim(0.1);
+    const f = g.character.feet();
+    // Camera nhìn từ bên hông: thấy Tín đứng trước mũi xe.
+    h.setCamera(a.x + fz * 6 + fx * 5, 2.6, a.z - fx * 6 + fz * 5, a.x + fx * 1.5, 0.9, a.z + fz * 1.5);
+    return {
+      index,
+      cars,
+      kind: a.kind,
+      generation: a.generation,
+      speed: a.speed,
+      gap: Math.hypot(a.x - f.x, a.z - f.z),
+      x: a.x,
+      z: a.z,
+      yaw: a.yaw,
+      // Gợi ý ẩn đi thì chữ cũ vẫn còn trong thẻ ⇒ chỉ đọc khi đang hiện.
+      prompt: document.querySelector('.hud-prompt:not(.hidden)')?.textContent ?? '',
+    };
+  });
+  expect(stop, 'không tìm được ô tô NPC nào trên đoạn thẳng').not.toBeNull();
+  if (!stop) return;
+  // Xe dừng trước mặt Tín (không cán qua), hiện gợi ý cướp xe.
+  expect(stop.speed).toBeLessThan(0.6);
+  expect(stop.gap).toBeGreaterThan(2.4);
+  expect(stop.prompt).toContain('Cướp xe');
+  await shot(page, 'car-5-jack-stop');
+
+  const jacked = await page.evaluate((stop) => {
+    const h = window.__HEM__!;
+    const g = h.game as G;
+    const sim = h.simulate as (n: number) => void;
+    const input = h.input as { setKey(c: string, d: boolean): void };
+    input.setKey('KeyF', true);
+    sim(1 / 60);
+    input.setKey('KeyF', false);
+    sim(0.35);
+    const a = g.traffic.sim.agents[stop.index]!;
+    const car = g.riding;
+    const driver = g.pedestrians.walkers.find((w) => w.react === 'call' && Math.hypot(w.x - stop.x, w.z - stop.z) < 14);
+    const fx = Math.sin(stop.yaw);
+    const fz = Math.cos(stop.yaw);
+    // Nhìn từ phía trước bên trái: xe vừa cướp + tài xế đang chạy lên vỉa hè.
+    h.setCamera(stop.x + fz * 5 + fx * 7, 2.8, stop.z - fx * 5 + fz * 7, stop.x + fz * 1.5, 0.9, stop.z - fx * 1.5);
+    return {
+      mode: g.mode,
+      kind: car?.kind ?? null,
+      model: (car?.view as unknown as { kind: string } | undefined)?.kind ?? null,
+      cars: g.cars.length,
+      moved: car ? Math.hypot(car.phys.curr.x - stop.x, car.phys.curr.z - stop.z) : -1,
+      npcAway: Math.hypot(a.x - stop.x, a.z - stop.z),
+      generation: a.generation,
+      driver: driver ? { entering: driver.enter > 0, from: Math.hypot(driver.x - stop.x, driver.z - stop.z) } : null,
+      wanted: g.wanted.level,
+    };
+  }, stop);
+  expect(jacked.mode).toBe('ride');
+  expect(jacked.kind).toBe('car');
+  // Xe lái được đúng kiểu chiếc NPC, nằm đúng chỗ nó vừa đứng; chiếc NPC đã rời đi chỗ khác.
+  expect(jacked.model).toBe(stop.kind);
+  expect(jacked.cars).toBe(stop.cars + 1);
+  expect(jacked.moved).toBeLessThan(0.6);
+  expect(jacked.npcAway).toBeGreaterThan(40);
+  expect(jacked.generation).toBe(stop.generation + 1);
+  // Tài xế đã ra khỏi xe, đang chạy lên vỉa hè; chưa gọi xong nên chưa có sao.
+  expect(jacked.driver).not.toBeNull();
+  expect(jacked.driver!.from).toBeLessThan(12);
+  expect(jacked.wanted).toBe(0);
+  await shot(page, 'car-6-jacked');
+
+  // Lái đi; vài giây sau tài xế gọi xong ⇒ 1 sao truy nã.
+  const after = await page.evaluate((stop) => {
+    const h = window.__HEM__!;
+    const g = h.game as G;
+    const sim = h.simulate as (n: number) => void;
+    g.freeCamera = false;
+    g.autopilot = { throttle: 0.7, steer: 0 };
+    sim(2.5);
+    const run = Math.hypot(g.riding!.phys.curr.x - stop.x, g.riding!.phys.curr.z - stop.z);
+    g.autopilot = { throttle: 0, steer: 0, handbrake: true };
+    sim(6);
+    return { run, wanted: g.wanted.level, mode: g.mode };
+  }, stop);
+  expect(after.run).toBeGreaterThan(5);
+  expect(after.mode).toBe('ride');
+  expect(after.wanted).toBe(1);
 });

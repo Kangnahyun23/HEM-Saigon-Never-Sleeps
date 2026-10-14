@@ -86,6 +86,17 @@ export class CarView {
     this.model.add(this.seat);
   }
 
+  /** Gỡ khỏi cảnh và giải phóng bộ đệm (xe bị thay bằng chiếc khác). */
+  dispose(): void {
+    this.root.removeFromParent();
+    this.root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+  }
+
   /** Bật/tắt đèn pha; `night` 0..1 làm đèn hậu và hộp đèn taxi rực hơn khi tối. */
   setLights(on: boolean, night = 0): void {
     this.headlight.emissiveIntensity = on ? 2.5 + night * 3 : 0.5;

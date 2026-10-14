@@ -1,4 +1,5 @@
-import { CAR_ROLE_COLORS, carParts, type CarKind } from './carModel';
+import { createRng, pick } from '@/core/random';
+import { CAR_BODY_COLORS, CAR_ROLE_COLORS, carParts, TAXI_COLORS, type CarKind } from './carModel';
 
 /**
  * Mẫu xe NPC ngoài xe máy (hư cấu, tự dựng từ hộp và trụ): ô tô (lấy lại carModel), xe buýt, ba gác máy, xích lô,
@@ -229,6 +230,16 @@ export function npcVehicleParts(kind: NpcVehicleKind): NpcPart[] {
 }
 
 /** Bảng màu cho từng loại (lớp hình chọn có seed). */
+/**
+ * Màu sơn (thân, phụ) của một ô tô NPC theo số thứ tự + lượt thả. Lớp hình và game cùng gọi hàm này: xe bị cướp
+ * (thành ô tô lái được) phải giữ đúng màu chiếc NPC vừa đứng đó.
+ */
+export function npcCarPaint(kind: CarKind, id: number, generation: number): { body: string; trim: string } {
+  if (kind === 'taxi') return TAXI_COLORS;
+  const body = pick(createRng(id * 7919 + generation * 104729 + 29), CAR_BODY_COLORS);
+  return { body, trim: body };
+}
+
 export const NPC_PAINT: Record<'bus' | 'baGac' | 'xichLo' | 'cart', { body: readonly string[]; trim: readonly string[] }> = {
   bus: { body: ['#2f9c95', '#3a6fb5', '#d9862b'], trim: ['#f2f2ec'] },
   baGac: { body: ['#2f5f9e', '#a03a2e', '#3d7a4a', '#7d848c'], trim: ['#7d848c'] },

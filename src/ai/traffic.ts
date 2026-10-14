@@ -21,6 +21,8 @@ export interface Obstacle {
   z: number;
   /** Bán kính chiếm chỗ (m). */
   radius: number;
+  /** Người đi bộ (Tín): ô tô / buýt dừng lại chờ + bóp còi chứ không lách qua ngay như với xe đậu. */
+  person?: boolean;
 }
 
 export interface Focus {
@@ -142,6 +144,8 @@ const NODE_ALONG_Z = 2;
 const NODE_TURNING = 3;
 /** Xe lớn chờ lượt: mũi xe dừng cách đầu làn chừng này về phía giao lộ (m) — chưa lấn sang đường cắt ngang. */
 const STOP_LINE_NOSE = 1.2;
+/** Xe lớn bị người đi bộ chắn đường: chờ ngần này giây (bóp còi) rồi mới lách qua. */
+export const PERSON_PATIENCE = 6;
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
@@ -155,6 +159,8 @@ interface SafeInfo {
   /** Khoảng cách ngang (tim tới tim) cần có với xe sát sườn đó. */
   sideClear: number;
   byObstacle: boolean;
+  /** Vật chắn gần nhất là người đi bộ. */
+  byPerson: boolean;
   leaderSpeed: number;
   /** Nửa bề ngang và khoảng tim-tới-tim theo chiều dọc của vật chắn gần nhất. */
   blockHalf: number;
@@ -370,6 +376,17 @@ export class TrafficSim {
     agent.generation++;
   }
 
+  /**
+   * Đưa xe `index` đi chỗ khác ngay (xe vừa bị cướp: chiếc người chơi lái là xe thật, còn chỗ này trong đàn xe NPC
+   * hiện lại ở xa như một chiếc khác — `generation` đổi nên màu sơn cũng đổi).
+   */
+  respawn(index: number, focus: Focus): void {
+    const agent = this.agents[index];
+    if (!agent) return;
+    this.place(agent, focus, this.options.respawnMin, this.options.respawnMax, true);
+    this.respawns++;
+  }
+
   /** Độ lệch tương ứng trên làn mới, giữ nguyên tỉ lệ trong dải (sát lề vẫn sát lề). */
   private mapOffset(from: TrafficLane, to: TrafficLane, offset: number): number {
     const f = clamp((offset - from.minOffset) / Math.max(0.01, from.maxOffset - from.minOffset), 0, 1);
@@ -422,14 +439,14 @@ export class TrafficSim {
   }
 
   /** Kết quả `safeSpeed` (dùng lại một đối tượng, không tạo rác mỗi bước). */
-  private readonly safe: SafeInfo = { speed: 0, gap: 0, lateral: 0, slow: false, side: 0, sideClear: 0, byObstacle: false, leaderSpeed: 0, blockHalf: 0, ahead: 0, blockTop: 0, look: 0, fx: 0, fz: 0 };
+  private readonly safe: SafeInfo = { speed: 0, gap: 0, lateral: 0, slow: false, side: 0, sideClear: 0, byObstacle: false, byPerson: false, leaderSpeed: 0, blockHalf: 0, ahead: 0, blockTop: 0, look: 0, fx: 0, fz: 0 };
 
   /**
    * Ghi nhận một vật phía trước nếu nó nằm trong hành lang của `agent` và gần hơn vật đã có.
    * `halfWidth`: nửa bề ngang vật đó (theo phương ngang của `agent`); `ahead`: khoảng tim-tới-tim khi hai bên chạm nhau;
    * `top`: tốc độ tối đa của vật đó (0 = vật cản đứng yên, không phải xe NPC).
    */
-  private consider(agent: TrafficAgent, ownHalf: number, ox: number, oz: number, halfWidth: number, ahead: number, speed: number, top: number): void {
+  private consider(agent: TrafficAgent, ownHalf: number, ox: number, oz: number, halfWidth: number, ahead: number, speed: number, top: number, person = false): void {
     const r = this.safe;
     const dx = ox - agent.x;
     const dz = oz - agent.z;
@@ -445,6 +462,7 @@ export class TrafficSim {
       r.leaderSpeed = speed;
       r.slow = speed < agent.speed * 0.7 || speed < 1;
       r.byObstacle = top === 0;
+      r.byPerson = person;
       r.blockHalf = halfWidth;
       r.ahead = ahead;
       r.blockTop = top;
@@ -473,6 +491,7 @@ export class TrafficSim {
     r.side = 0;
     r.sideClear = 0;
     r.byObstacle = false;
+    r.byPerson = false;
     r.blockHalf = 0;
     r.ahead = 0;
     r.blockTop = 0;
@@ -517,7 +536,7 @@ export class TrafficSim {
     for (const ob of obstacles) {
       const box = look + spec.length / 2;
       if (Math.abs(ob.x - agent.x) > box || Math.abs(ob.z - agent.z) > box) continue;
-      this.consider(agent, spec.halfWidth, ob.x, ob.z, ob.radius, ob.radius + spec.length / 2, 0, 0);
+      this.consider(agent, spec.halfWidth, ob.x, ob.z, ob.radius, ob.radius + spec.length / 2, 0, 0, ob.person === true);
     }
 
     if (r.gap === Infinity) {
@@ -586,7 +605,9 @@ export class TrafficSim {
         agent.weaveTimer -= dt;
         const roomLeft = lane.length - agent.s > 4;
         // Xe có vệt cố định không chen lấn: chỉ lách vật cản đứng yên và loại xe vốn chậm hơn mình (xích lô, xe đẩy…).
-        const worthPassing = !fixed || safe.blockTop < cruise * 0.7;
+        // Người đứng giữa đường thì xe lớn dừng lại bóp còi, chờ mãi không được mới lách qua.
+        const patient = spec.big && safe.byPerson && agent.blocked < PERSON_PATIENCE;
+        const worthPassing = (!fixed || safe.blockTop < cruise * 0.7) && !patient;
         if (safe.slow && safe.gap < 9 && roomLeft && worthPassing) {
           const blocker = agent.offset + safe.lateral;
           const clear = spec.halfWidth + safe.blockHalf + DODGE_GAP;

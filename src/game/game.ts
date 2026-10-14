@@ -53,7 +53,9 @@ import type { Hud } from '@/ui/hud';
 import { BIKE_BODY_COLORS } from '@/vehicles/bikeModel';
 import { BIKE_TUNING, MotorbikePhysics, NO_CONTROL, type BikeControls } from '@/vehicles/motorbikePhysics';
 import { MotorbikeView } from '@/vehicles/motorbikeView';
-import { CAR, CAR_BODY_COLORS, TAXI_COLORS } from '@/vehicles/carModel';
+import { CAR, CAR_BODY_COLORS, TAXI_COLORS, type CarKind } from '@/vehicles/carModel';
+import { npcCarPaint } from '@/vehicles/npcVehicleModels';
+import { CARJACK, driverDoor, jackableKind, jackTarget } from '@/systems/carjack';
 import { CAR_TUNING, CarPhysics } from '@/vehicles/carPhysics';
 import { CarView } from '@/vehicles/carView';
 import { carSpots, type CarSpot } from '@/world/city/carSpots';
@@ -112,6 +114,8 @@ type Vehicle = Bike | Car;
 
 /** Ô tô đậu xa hơn ngần này thì khỏi vẽ (đã chìm trong sương). */
 const CAR_DRAW_DISTANCE = 170;
+/** Ô tô cướp được giữ thêm tối đa ngần này chiếc ngoài số xe đậu sẵn; quá thì chiếc xa Tín nhất nhường chỗ. */
+const STOLEN_CARS = 2;
 /** Đứng cách hông / đầu xe trong khoảng này thì vào xe được (tính từ tâm xe, đã trừ nửa bề ngang). */
 const CAR_DOOR_REACH = CAR.width / 2;
 
@@ -155,6 +159,13 @@ export class Game {
   readonly wanted = new Wanted();
   /** Còn bao lâu (s) thì vụ có người chết còn "nóng" (báo lúc này là 2 sao). */
   private murderT = 0;
+  /** Còn bao lâu (s) thì cuộc gọi báo công an được tính là báo vụ cướp xe vừa rồi. */
+  private carjackT = 0;
+  /** Số ô tô tối đa cùng tồn tại (xe đậu sẵn + xe cướp được). */
+  private readonly maxCars: number;
+  /** Vật cản "người đi bộ" báo cho xe NPC (dùng lại mỗi bước). */
+  private readonly selfObstacle: Obstacle = { x: 0, z: 0, radius: 0.45, person: true };
+  private readonly door = { x: 0, z: 0 };
   private lowHealthWarned = false;
   readonly story: StoryRunner;
   readonly chase: ChaseSystem;
@@ -256,6 +267,7 @@ export class Game {
     this.addBike(spawn.x + lx * 1.6 + fx * 3.0, spawn.z + lz * 1.6 + fz * 3.0, spawn.yaw + Math.PI / 2, BIKE_BODY_COLORS[2]);
     this.addBike(spawn.x + lx * 1.6 + fx * 4.5, spawn.z + lz * 1.6 + fz * 4.5, spawn.yaw + Math.PI / 2, BIKE_BODY_COLORS[3]);
     for (const spot of carSpots(city.layout, budget.cars)) this.addCar(spot);
+    this.maxCars = this.cars.length + STOLEN_CARS;
 
     this.camera = new FollowCamera(camera, physics);
     this.camera.yaw = spawn.yaw + Math.PI;
@@ -478,7 +490,8 @@ export class Game {
     }
     if (sim.reports > 0) {
       for (; sim.reports > 0; sim.reports--) this.wanted.report(this.murderT > 0 ? 2 : 1, px, pz);
-      this.hud.showToast(this.murderT > 0 ? 'Có người báo công an: có án mạng!' : 'Có người gọi công an báo vụ ẩu đả!', 2.6);
+      const what = this.murderT > 0 ? 'Có người báo công an: có án mạng!' : this.carjackT > 0 ? 'Tài xế gọi công an báo vụ cướp xe!' : 'Có người gọi công an báo vụ ẩu đả!';
+      this.hud.showToast(what, 2.6);
       playSfx('alert');
     }
     if (sim.shouts > 0) {
@@ -490,6 +503,7 @@ export class Game {
       this.hud.showToast('Người kia hoảng quá, cúp máy bỏ chạy', 1.8);
     }
     this.murderT = Math.max(0, this.murderT - dt);
+    this.carjackT = Math.max(0, this.carjackT - dt);
   }
 
   /** Tín trúng đòn (người đi đường đánh trả): mất máu, khựng nhẹ, rung camera; hết máu thì GỤC. */
@@ -1029,7 +1043,9 @@ export class Game {
     const out: Obstacle[] = [];
     if (this.mode === 'foot') {
       const f = this.character.feet();
-      out.push({ x: f.x, z: f.z, radius: 0.45 });
+      this.selfObstacle.x = f.x;
+      this.selfObstacle.z = f.z;
+      out.push(this.selfObstacle);
     }
     for (const b of this.bikes) {
       const t = b.phys.body.translation();
@@ -1064,6 +1080,58 @@ export class Game {
     view.sync(phys);
     this.scene.add(view.root);
     this.cars.push({ kind: 'car', phys, view, obstacles: [{ x: spot.x, z: spot.z, radius: 1.05 }, { x: spot.x, z: spot.z, radius: 1.05 }] });
+  }
+
+  /**
+   * Một ô tô lái được ở (x, z): còn chỗ thì tạo mới, hết chỗ thì lấy chiếc xa Tín nhất (không phải chiếc đang lái) dời tới
+   * và thay hình — số thân vật lý ô tô không bao giờ vượt `maxCars`.
+   */
+  private takeCar(kind: CarKind, body: string, trim: string, x: number, z: number, yaw: number): Car {
+    const view = new CarView(kind, body, trim);
+    let car: Car | null = null;
+    if (this.cars.length < this.maxCars) {
+      const phys = new CarPhysics(this.physics.RAPIER, this.physics.world, x, 0, z, yaw);
+      car = { kind: 'car', phys, view, obstacles: [{ x, z, radius: 1.05 }, { x, z, radius: 1.05 }] };
+      this.cars.push(car);
+    } else {
+      const p = this.character.feet();
+      let far = -1;
+      for (const c of this.cars) {
+        const d = Math.hypot(c.phys.curr.x - p.x, c.phys.curr.z - p.z);
+        if (c !== this.riding && d > far) {
+          far = d;
+          car = c;
+        }
+      }
+      car ??= this.cars[0] as Car;
+      car.view.dispose();
+      car.view = view;
+      car.phys.reset(x, 0, z, yaw);
+    }
+    view.sync(car.phys);
+    this.scene.add(view.root);
+    return car;
+  }
+
+  /**
+   * Cướp ô tô NPC số `index`: tài xế bị kéo ra cửa trái, chạy lên vỉa hè gọi công an (gọi xong là thêm sao truy nã);
+   * chiếc NPC biến khỏi dòng xe, thay bằng một ô tô lái được cùng kiểu, cùng màu, Tín ngồi vào luôn.
+   */
+  private carjack(index: number): void {
+    const agent = this.traffic.sim.agents[index];
+    const kind = agent ? jackableKind(agent.kind) : null;
+    if (!agent || !kind) return;
+    const paint = npcCarPaint(kind, agent.id, agent.generation);
+    const me = this.character.feet();
+    const car = this.takeCar(kind, paint.body, paint.trim, agent.x, agent.z, agent.yaw);
+    const door = driverDoor(agent, this.door);
+    this.pedestrians.eject(door.x, door.z, me);
+    const cam = this.camera.forward();
+    this.traffic.sim.respawn(index, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z });
+    this.mount(car);
+    this.carjackT = CARJACK.crimeMemory;
+    this.hud.showToast(kind === 'taxi' ? 'Cướp taxi! Tài xế bị lôi ra đường…' : 'Cướp xe! Tài xế bị lôi ra đường…', 2.2);
+    playSfx('scream');
   }
 
   /** Xe gần Tín nhất (xe máy hoặc ô tô); với ô tô, khoảng cách tính từ hông xe. */
@@ -1278,6 +1346,14 @@ export class Game {
       if (near && near.dist < MOUNT_RANGE) {
         prompt = near.vehicle.kind === 'car' ? '<kbd>F</kbd> Vào xe' : '<kbd>F</kbd> Lên xe';
         if (input.wasPressed('KeyF')) this.mount(near.vehicle);
+      } else {
+        // Không đứng cạnh xe đậu nào: ô tô NPC đang đứng / bò chậm sát bên thì cướp được.
+        const me = this.character.feet();
+        const jack = jackTarget(this.traffic.sim.agents, this.traffic.sim.bikes, me.x, me.z);
+        if (jack >= 0) {
+          prompt = '<kbd>F</kbd> Cướp xe';
+          if (input.wasPressed('KeyF')) this.carjack(jack);
+        }
       }
       // Cửa hàng: đứng trong tiệm thì E mở bảng mua bán.
       this.updateShop(input);

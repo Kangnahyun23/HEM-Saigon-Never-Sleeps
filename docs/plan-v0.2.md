@@ -66,7 +66,13 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   vạch dừng) — không còn hai ô tô chắn ngang nhau giữa ngã tư; xe nhỏ nhường xe lớn. Mẫu xe tự dựng từ khối
   (`vehicles/npcVehicleModels.ts`), vẽ bằng `ai/trafficFleetView.ts` (4 lệnh vẽ cho cả đoàn; người đẩy xe có bước chân).
   Sửa luôn lỗi cũ: hai xe máy chồng sát nhau ở ngã tư không bao giờ được "nhích" ⇒ có xe đứng ì cả phút;
-- [ ] N7.1 (phần 2) cướp xe: kéo tài xế ra, tăng sao truy nã (giờ đã có ô tô NPC). Mẫu xe CC0 thay khối hộp;
+- [x] N7.1 (phần 2) cướp xe: đứng sát một ô tô NPC (sedan / taxi / bán tải) đang dừng hoặc bò dưới ~12 km/h thì F kéo
+  tài xế ra và lái đi (`systems/carjack.ts`). Ô tô / buýt / ba gác nay **dừng lại bóp còi chờ người đứng chắn đầu xe**
+  ~6 giây rồi mới lách (`PERSON_PATIENCE`) — đó là cách chặn xe để cướp; xe máy vẫn lách qua người như cũ. Tài xế chạy
+  từ cửa trái lên vỉa hè gần nhất rồi gọi công an (5 giây, đánh / áp sát thì cúp máy) ⇒ **+1 sao truy nã**. Chiếc NPC
+  thành ô tô lái được cùng kiểu cùng màu (`npcCarPaint`), chỗ của nó trong dòng xe hiện lại ở xa; giữ tối đa 2 xe cướp
+  được ngoài xe đậu sẵn (quá thì chiếc xa nhất nhường chỗ);
+- [ ] N7.1 (phần 3) mẫu xe CC0 thay khối hộp (cả xe đậu lẫn đàn xe NPC — phải cùng một mẫu thì xe bị cướp mới không đổi hình);
 - [ ] N7.3–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa

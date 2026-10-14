@@ -158,15 +158,29 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
     dính). Chờ "đường trống" không ăn thua (60 giây vẫn không có lúc nào trống 35 m) — cho xe xuất phát từ vỉa hè.
 - **Số đo** (80 xe máy + 10 ô tô + 6 xe thô sơ, người chơi đứng yên giữa khu): xe máy ~29 km/h, đứng yên ~3 %; ô tô chờ ở
   ngã tư 15–30 % thời gian, lần chờ dài nhất ~35 giây. Tăng số ô tô quá ~14 là ngã tư hai đại lộ quá tải.
-- **Chưa làm**: cướp xe NPC (N7.1 phần 2); xe buýt dừng trạm đón khách; ô tô rẽ còn "quay quanh tâm" (buýt dài nên thấy rõ);
+- **Chưa làm**: xe buýt dừng trạm đón khách; ô tô rẽ còn "quay quanh tâm" (buýt dài nên thấy rõ);
   đèn giao thông; xe NPC chưa né người đi bộ băng qua đường.
+
+### N7.1 phần 2 — cướp xe (nhánh `n7.1b-cuop-xe`, tách từ nhánh N7.2)
+- **Cách chơi**: ra đứng chắn đầu một ô tô con NPC ⇒ nó trườn chậm lại, bóp còi, chờ ~6 giây (`PERSON_PATIENCE`) rồi mới
+  lách; trong lúc đó (hoặc khi nó chờ lượt ở ngã tư) đứng cách thân xe dưới 2 m là có gợi ý **F Cướp xe**.
+- **Code**: `systems/carjack.ts` (thuần logic: `jackTarget`, `driverDoor`), `game.carjack()` + `takeCar()`,
+  `TrafficSim.respawn()`, `PedestrianSim.eject()` (tài xế = người đi bộ rảnh ở xa nhất, chạy từ cửa xe lên vỉa hè —
+  trường `enter` — rồi `react = 'call'`), `npcCarPaint()` (màu xe NPC, lớp hình và game dùng chung).
+- **Sao truy nã** đi qua đúng đường có sẵn: tài xế gọi xong ⇒ `pedestrians.reports` ⇒ `wanted.report(1)`; đánh / áp sát
+  tài xế thì cuộc gọi bị cắt. `game.carjackT` chỉ để chọn câu thông báo ("báo vụ cướp xe").
+- **Bẫy**: xe bị chặn đầu KHÔNG bao giờ đứng khựng hẳn (tốc độ = khoảng hở × 0,9 ⇒ giảm theo hàm mũ): đừng viết điều
+  kiện "tốc độ = 0"; gợi ý ẩn đi thì chữ cũ vẫn còn trong thẻ `.hud-prompt` — test đọc `.hud-prompt:not(.hidden)`.
+- **Chưa làm**: động tác mở cửa / lôi tài xế (hiện đổi chỗ tức thì); cướp xe máy NPC; người đi đường chứng kiến chưa phản
+  ứng (chỉ tài xế gọi báo); xe cướp được không lưu vào bản lưu.
 
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
 2. **N7 xe cộ**:
    - N7.1 phần 1 (ô tô đậu ven đường lái được, trụ chắn miệng hẻm) — xong, nhánh `n7.1-o-to-lai-duoc`;
-     còn phần 2: cướp xe (kéo tài xế ra, tăng sao) — ô tô NPC đã có từ N7.2; thay khối hộp bằng mẫu xe CC0;
+     phần 2 (cướp ô tô NPC) — xong, nhánh `n7.1b-cuop-xe`; còn phần 3: thay khối hộp bằng mẫu xe CC0
+     (phải thay cả xe đậu lẫn đàn xe NPC cùng lúc, không thì xe bị cướp đổi hình);
    - N7.2 giao thông đa dạng (ô tô, taxi, buýt, ba gác, xích lô, xe đẩy) — xong, nhánh `n7.2-giao-thong-da-dang`;
    - N7.3 xe tuần tra công an: phần xe máy đã có ở N5.4, còn ô tô công an + ô tô chặn đường từ 3 sao;
    - N7.4 độ xe ở tiệm của Vy.
@@ -226,7 +240,9 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 - N7.1 phần 1 nằm trên nhánh `n7.1-o-to-lai-duoc`, tách từ nhánh N6.4 ⇒ merge PR #28 trước rồi mới tới PR của N7.1.
   Unit test: 225. E2E thêm `car` (2 test, 4 ảnh `car-*`). PR #29, CI xanh.
 - N7.2 nằm trên nhánh `n7.2-giao-thong-da-dang`, tách từ nhánh N7.1 ⇒ thứ tự merge: #28 → #29 → PR của N7.2.
-  Unit test: 245. E2E `traffic` thêm 1 test (8 ảnh `fleet-*`).
+  Unit test: 245. E2E `traffic` thêm 1 test (8 ảnh `fleet-*`). PR #30, CI xanh.
+- N7.1 phần 2 nằm trên nhánh `n7.1b-cuop-xe`, tách từ nhánh N7.2 ⇒ thứ tự merge: #28 → #29 → #30 → PR cướp xe.
+  Unit test: 257 (thêm `carjack.test.ts`, 12 test). E2E `car` thêm 1 test (ảnh `car-5-jack-stop`, `car-6-jacked`).
 - N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
   test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.

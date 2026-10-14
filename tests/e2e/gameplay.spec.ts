@@ -79,8 +79,15 @@ test('đi bộ, lên xe, chạy xe, cua, phanh, xuống xe', async ({ page }) =>
   // Phanh tới khi dừng hẳn (không để xe lùi), rồi nhấn F xuống xe.
   // Mọi thao tác chạy trong cùng một lệnh evaluate để khung hình render thật (chậm trên CI) không chen vào giữa.
   const stopped = await page.evaluate(() => {
-    const g = window.__HEM__!.game as G;
+    const g = window.__HEM__!.game as G & { bikes: Array<unknown>; mount(b: unknown): void };
     const sim = window.__HEM__!.simulate as (n: number) => void;
+    // Lúc tải trang game chạy theo giờ thật nên dòng xe NPC mỗi lần một khác: thỉnh thoảng xe Tín tông phải xe NPC và
+    // văng xuống đường. Khi đó lên lại xe rồi mới thử phanh + xuống xe (nhấn F lúc đang đi bộ cạnh xe sẽ là LÊN xe).
+    const thrown = g.mode !== 'ride';
+    if (thrown) {
+      g.mount(g.bikes[0]);
+      sim(0.3);
+    }
     for (let i = 0; i < 40; i++) {
       const v = g.riding ? g.riding.phys.speed : 0;
       g.autopilot = v > 0.8 ? { throttle: -1, steer: 0, handbrake: false } : { throttle: 0, steer: 0, handbrake: true };
@@ -88,13 +95,14 @@ test('đi bộ, lên xe, chạy xe, cua, phanh, xuống xe', async ({ page }) =>
     }
     g.autopilot = { throttle: 0, steer: 0, handbrake: true };
     const input = window.__HEM__!.input as { setKey(c: string, d: boolean): void };
+    const before = { mode: g.mode, speed: g.riding ? g.riding.phys.speed : 0, thrown };
     input.setKey('KeyF', true);
     sim(1 / 60);
     input.setKey('KeyF', false);
     sim(0.5);
-    return g.mode;
+    return { ...before, after: g.mode };
   });
-  expect(stopped).toBe('foot');
+  expect(stopped.after, JSON.stringify(stopped)).toBe('foot');
   await nextFrames(page);
   await page.screenshot({ path: 'tests/e2e/__screenshots__/play-5-dismounted.png' });
 });
