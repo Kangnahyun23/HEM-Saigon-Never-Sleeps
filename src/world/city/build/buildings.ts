@@ -41,7 +41,10 @@ export function buildBuildings(ctx: BuildContext): void {
 
   const concrete = new THREE.MeshStandardNodeMaterial({ roughness: 0.9 });
   const slabs = new InstanceBatch(GEO.box, concrete, { colors: true, name: 'balcony-slabs' });
-  const railings = new InstanceBatch(GEO.box, createRailingMaterial(), { colors: true, name: 'railings' });
+  // Lan can / lồng sắt (alphaTest) KHÔNG đổ bóng: song sắt ~3 cm nhỏ hơn một texel bóng (~7 cm) nên bóng chỉ là nhiễu,
+  // và trong lượt vẽ bóng three.js dùng chung một vật liệu bóng — vật có / không alphaTest xen nhau làm nó tăng
+  // `version` liên tục ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (~16 % CPU, hơn nửa rác bộ nhớ).
+  const railings = new InstanceBatch(GEO.box, createRailingMaterial(), { colors: true, castShadow: false, name: 'railings' });
   const painted = new THREE.MeshStandardNodeMaterial({ roughness: 0.75 });
   const awnings = new InstanceBatch(GEO.box, painted, { colors: true, name: 'awnings' });
   const plantMat = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, flatShading: true });
@@ -52,7 +55,7 @@ export function buildBuildings(ctx: BuildContext): void {
   const plain = new THREE.MeshStandardNodeMaterial({ roughness: 0.85 });
   const roofStuff = new InstanceBatch(GEO.box, plain, { colors: true, name: 'roof-stuff' });
   const sheets = new InstanceBatch(GEO.box, createRoofSheetMaterial(), { colors: true, name: 'roof-sheets', attributes: { aSize: 3 } });
-  const cages = new InstanceBatch(GEO.box, createCageMaterial(), { colors: true, name: 'railings-cage', attributes: { aSize: 3 } });
+  const cages = new InstanceBatch(GEO.box, createCageMaterial(), { colors: true, castShadow: false, name: 'railings-cage', attributes: { aSize: 3 } });
   const laundry = new InstanceBatch(GEO.box, new THREE.MeshStandardNodeMaterial({ roughness: 0.9, side: THREE.DoubleSide }), {
     colors: true,
     castShadow: false,

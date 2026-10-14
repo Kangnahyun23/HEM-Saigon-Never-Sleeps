@@ -80,6 +80,10 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   Tín đang phóng ≥ 8 m/s thì 2–3 ô tô đỗ ngang đường ~140 m phía trước (đường có dải phân cách chỉ chặn nửa chiều đi; chừa
   khe ở lề cho xe máy lách), vượt qua 25 m hoặc 45 giây thì giải tán, xe trong chốt chuyển sang đuổi. Xe NPC dừng / lách
   quanh chốt như vật cản. Hình ô tô công an dùng chung `TrafficFleetView`;
+- [x] P1 tối ưu hiệu năng (chen ngang theo yêu cầu chủ dự án — máy RTX 3060 vẫn lag): hình NPC có xương dùng chung kho
+  `KeyedPool`, ẩn thì thôi tính xương (trước đây phình tới hàng chục nghìn xương sau vài phút ⇒ game chậm dần); lan can thôi đổ
+  bóng (alphaTest làm three.js tính lại khoá vật liệu mọi vật mỗi khung); bớt rác mỗi khung (~105 → ~40 MB/s) và lệnh vẽ
+  ô tô đậu. Chạy xe ban đêm 106 → 130 fps, ban ngày 118 → 155 fps (CPU Ryzen 5800H, 2560×1600). Đo lại: `npm run perf`;
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa

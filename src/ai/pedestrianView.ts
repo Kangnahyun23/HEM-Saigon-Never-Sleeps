@@ -115,7 +115,8 @@ export class PedestrianView {
       const legSwing = Math.sin(w.phase) * 0.55 * amp;
       // Nhảy tránh xe: giơ hai tay lên (hoạt hình).
       const dodging = w.dodge > 0;
-      PARTS.forEach((part, k) => {
+      for (let k = 0; k < PARTS.length; k++) {
+        const part = PARTS[k]!;
         let angle = 0;
         if (part.limb === 'leg') angle = legSwing * part.swing;
         else if (part.limb === 'arm') angle = dodging ? -2.6 : legSwing * part.swing * 0.8;
@@ -126,7 +127,7 @@ export class PedestrianView {
         _a.multiply(_m);
         _a.scale(_s.set(part.size[0], part.size[1], part.size[2]));
         this.bodies.setMatrixAt(i * PARTS.length + k, _m.multiplyMatrices(_w, _a));
-      });
+      }
       this.hats.setMatrixAt(i, look.hat ? _m.multiplyMatrices(_w, HAT_LOCAL) : ZERO);
     }
     this.bodies.count = n * PARTS.length;

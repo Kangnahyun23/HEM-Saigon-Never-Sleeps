@@ -34,6 +34,11 @@ Vòng lặp mỗi khung hình KHÔNG tạo đối tượng / mảng / closure m�
 Game chậm lại (vòng chọn đồ 30 %, dừng hình khi trúng đòn) qua `game.tickScale(dt)` ở vòng lặp main.ts — `simulate()` không áp hệ số này.
 Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `world.step()` (Rapier 0.21 duyệt lại mọi collider, ~300 KB rác/bước).
 Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ.
+Vật đổ bóng KHÔNG dùng `alphaTest` (để `castShadow: false`): lượt vẽ bóng dùng chung một vật liệu bóng, vật có / không
+alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (từng ăn ~16 % CPU + nửa rác bộ nhớ).
+NPC có xương lấy / trả qua `KeyedPool` (core/keyedPool.ts) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
+three.js vẫn tính ma trận xương của vật đang ẩn; bộ đệm hình riêng từng ô từng phình tới hàng chục nghìn xương sau vài phút chơi.
+Mỗi lệnh vẽ tốn CPU (three.js ~15–20 µs / vật / lượt, cả lượt bóng): vật nhỏ nằm dưới / trong vật khác thì `castShadow = false`.
 Thuộc tính instance tới fragment qua nội suy: số nguyên có thể thành 0,9999… ⇒ giải mã bằng ngưỡng, đừng `fract()` đúng tại số nguyên.
 `material.positionNode` được gán SAU bước instancing (ghi đè cả phần dịch của instance).
 Nhân vật có xương: đừng gọi `skeleton.pose()` (lưới lượng tử hoá meshopt ⇒ xương gốc lệch chỗ); động tác mới thêm vào
@@ -70,7 +75,8 @@ src/
                      characters.ts (mẫu người có xương + clip động tác Mesh2Motion CC0: createCharacter, getClip)
   main.ts            khởi tạo renderer, physics, khu phố, Game; vòng lặp khung hình; móc __HEM__
   game/game.ts       vòng chơi: đi bộ ⇄ lái xe, bước vật lý cố định + nội suy, camera, HUD
-  core/              fixedStep, input (phím + chuột/pointer lock; khi khoá chuột, nút chuột thành mã `Mouse0` / `Mouse2`), random (seed), rect
+  core/              fixedStep, input (phím + chuột/pointer lock; khi khoá chuột, nút chuột thành mã `Mouse0` / `Mouse2`), random (seed), rect,
+                     keyedPool (kho đồ dùng lại theo khoá — hình NPC có xương; có unit test)
   physics/           Rapier: physics.ts (stepWorld — bước không tạo rác), groups.ts (nhóm va chạm), staticWorld.ts (vật cản tĩnh)
   render/            renderer (WebGPU→WebGL2, tối đa 1,5× điểm ảnh), instancing.ts (InstanceBatch),
                      resolution (chất lượng tự động theo FPS: bóng đổ cách khung → hạ độ phân giải), detailCulling (chi tiết nhỏ chỉ vẽ quanh camera),

@@ -3,7 +3,8 @@ import type { AnimationName } from '@/assets/manifest';
 import { createRng, pick } from '@/core/random';
 import type { Seat } from '@/world/city/build/context';
 import { eateryOccupancy } from '@/world/timeOfDay';
-import { buildNpc, CIVILIANS, civiliansAvailable, hipHeightIn, stepNpc, type NpcBody } from './npcBody';
+import { KeyedPool } from '@/core/keyedPool';
+import { buildNpc, CIVILIANS, civiliansAvailable, hipHeightIn, showNpc, stepNpc, type NpcBody } from './npcBody';
 import { PedestrianLod, type LodPoint } from './pedestrianLod';
 
 /** Bán kính (m) quanh camera có người ngồi quán / người bán hàng (xa hơn thì bàn ghế trống — khó thấy). */
@@ -19,7 +20,6 @@ const VENDOR_HOURS: readonly [number, number] = [6, 22.5];
 interface Slot {
   seat: number;
   npc: NpcBody | null;
-  readonly cache: Map<string, NpcBody>;
 }
 
 /** Hông cao bao nhiêu khi ngồi, tính trên 1 đơn vị co giãn của hình (đo một lần cho mỗi hình). */
@@ -34,6 +34,11 @@ export class SeatedPeopleView {
   readonly root = new THREE.Group();
   private readonly lod: PedestrianLod;
   private readonly slots: Slot[] = [];
+  /** Hình dùng chung cho mọi ô theo mẫu người + động tác (xem NearPedestrianView.pool). */
+  readonly pool = new KeyedPool<NpcBody>(
+    (npc) => showNpc(npc, true),
+    (npc) => showNpc(npc, false),
+  );
   /** Ghế đang có người (dựng lại khi giờ đổi đủ nhiều). */
   private occupied: LodPoint[] = [];
   private occupancyHour = -1;
@@ -43,7 +48,7 @@ export class SeatedPeopleView {
     capacity: number,
   ) {
     this.lod = new PedestrianLod(capacity, RADIUS);
-    for (let k = 0; k < capacity; k++) this.slots.push({ seat: -1, npc: null, cache: new Map() });
+    for (let k = 0; k < capacity; k++) this.slots.push({ seat: -1, npc: null });
     this.root.name = 'seated-people';
   }
 
@@ -65,19 +70,22 @@ export class SeatedPeopleView {
     });
   }
 
+  /** Trả hình của ô về kho (ẩn, thôi cập nhật xương). */
+  private release(slot: Slot): void {
+    if (!slot.npc) return;
+    this.pool.give(slot.npc);
+    slot.npc = null;
+  }
+
   private assign(slot: Slot, seat: Seat): void {
-    if (slot.npc) slot.npc.body.visible = false;
+    this.release(slot);
     slot.seat = seat.id;
     const rng = createRng(seat.id * 2731 + 59);
     const look = pick(rng, CIVILIANS);
     const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
     const clip = pick(rng, seat.kind === 'stool' ? SITTING : VENDOR_IDLES);
     const key = `${look.id}:${clip}`;
-    let npc = slot.cache.get(key) ?? null;
-    if (!npc) {
-      npc = buildNpc(this.root, look.id, height, [clip]);
-      if (npc) slot.cache.set(key, npc);
-    }
+    const npc = this.pool.take(key, () => buildNpc(this.root, look.id, height, [clip]));
     slot.npc = npc;
     if (!npc) return;
     const scale = npc.perMeter * height;
@@ -95,7 +103,6 @@ export class SeatedPeopleView {
     }
     npc.body.position.set(seat.x, y, seat.z);
     npc.body.rotation.set(0, seat.yaw, 0);
-    npc.body.visible = true;
     npc.weights.fill(1);
     npc.mixer.setTime(rng() * 4);
   }
@@ -107,7 +114,7 @@ export class SeatedPeopleView {
       const slot = this.slots[k]!;
       const id = this.lod.slots[k]!;
       if (id < 0) {
-        if (slot.npc) slot.npc.body.visible = false;
+        this.release(slot);
         slot.seat = -1;
         continue;
       }

@@ -38,6 +38,24 @@ describe('DetailCuller', () => {
     expect(mesh.boundingSphere!.containsPoint(new THREE.Vector3(120, 2, 5))).toBe(true);
   });
 
+  it('khối cầu bao chứa trọn mọi instance được chọn (kể cả góc hộp, instance co giãn và nằm cao)', () => {
+    const batch = new InstanceBatch(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicNodeMaterial(), {});
+    for (let i = 0; i < 20; i++) batch.add(i * 7, i * 3, (i % 3) * 4, 1 + (i % 4), 2, 1.5, i * 0.3);
+    const mesh = batch.build() as THREE.InstancedMesh;
+    const culler = new DetailCuller(mesh, 30);
+    culler.update(60, 4);
+    expect(mesh.count).toBeGreaterThan(5);
+    const m = new THREE.Matrix4();
+    const corner = new THREE.Vector3();
+    for (let j = 0; j < mesh.count; j++) {
+      mesh.getMatrixAt(j, m);
+      for (let c = 0; c < 8; c++) {
+        corner.set(c & 1 ? 0.5 : -0.5, c & 2 ? 0.5 : -0.5, c & 4 ? 0.5 : -0.5).applyMatrix4(m);
+        expect(mesh.boundingSphere!.containsPoint(corner)).toBe(true);
+      }
+    }
+  });
+
   it('đi xa rồi quay lại: lấy lại đủ instance từ bản gốc; không còn gì trong tầm thì ẩn', () => {
     const mesh = build();
     const culler = new DetailCuller(mesh, 15);
