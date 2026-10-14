@@ -202,10 +202,31 @@ Chủ dự án báo máy RTX 3060 Laptop vẫn lag (2026-10-14). Đo bằng Chro
 - **Lệnh vẽ**: 7 ô tô đậu chiếm ~1/3 lệnh vẽ ⇒ bánh xe thôi đổ bóng, tầm vẽ xe đậu 170 → 110 m. Bản đồ nhỏ vẽ lại tối đa 30 lần / giây.
 - **Kết quả** (fps / khung hình ms, trước → sau): chạy xe ngày 118 / 8,5 → 155 / 6,5; đêm 106 / 9,4 → 130 / 7,7; mưa đêm
   ~107 → 147; truy đuổi ~114 → 141. Rác bộ nhớ ~105 → ~40 MB/s (dọn rác 36 → 10 lần / 8 s). Khựng lớn nhất 221 → ~90 ms.
-- **Còn lại (ứng viên P2)**: ~40 MB/s rác còn lại phần lớn trong three.js (`needsRefresh`/`equals`, sắp xếp danh sách vẽ) và
-  `pedestrians.step` / `traffic.step`; mỗi ô tô vẫn ~8 lệnh vẽ (gộp 4 bánh thành 1 InstancedMesh); lượt bóng vẽ lại mọi khung
-  (có thể cách khung khi fps cao); khựng lúc vật / nhân vật mới xuất hiện lần đầu (biên dịch pipeline — thử
-  `renderer.compileAsync` lúc tải với mọi mẫu NPC / xe công an / vật ban đêm).
+- **Còn lại**: xem P2 ngay dưới.
+
+### P2 — hết khựng do biên dịch shader (nhánh `perf-2-toi-uu`, tách từ `main` sau PR #33)
+Sau P1 fps trung bình đã ổn (130–170 không khoá vsync) nhưng vẫn khựng. Bắt từng khung > 25 ms (Chrome trace + đếm
+`backend.createRenderPipeline`): gần như mọi khung khựng là `CommandBufferProxyImpl::WaitForToken` — luồng chính chờ tiến trình GPU
+biên dịch shader (D3D11 / FXC chậm).
+- **Đứng hình 5–8 giây ngay sau khi vào game** (có cả trên `main`): khung hình đầu gửi ~150–270 lệnh tạo pipeline, lệnh trả về
+  ngay nhưng GPU biên dịch dần phía sau; màn hình tải tắt rồi khung đầu tiên cần đồng bộ mới đứng chờ. Playwright mặc định đợi
+  1,5 s sau `ready` nên đo cũ không thấy — đo `rAF` thuần ngay khi `ready` mới lộ ra.
+- **Vật lần đầu xuất hiện** (ô tô đậu lọt vào tầm 110 m, mẫu người mới, băng ghế ngoài tầm chi tiết…): 60–90 ms mỗi lần.
+- **Lượt bloom đầu tiên lúc trời tối**: vẽ vào ảnh HDR (định dạng khác) ⇒ mọi vật cần pipeline thứ hai, ~0,9 s CPU + GPU.
+- **Sửa** (`render/warmup.ts`): lúc tải `revealAll` tạm hiện mọi vật (ẩn / ngoài khung nhìn / InstancedMesh 0 bản) + mỗi mẫu người
+  dân một thân (`civilianSamples`), vẽ thật một lần ở 0,25× điểm ảnh (lượt chính + bóng) rồi một lượt bloom, sau đó
+  `gpuIdle` chờ `queue.onSubmittedWorkDone()`. Bẫy: ShadowNode chỉ vẽ bóng một lần mỗi camera mỗi khung, mà trước vòng lặp
+  hoạt ảnh khung chưa sang ⇒ lượt chính dùng `camera.clone()` để lượt bloom vẫn vẽ bóng (bóng trong bloom có pipeline riêng).
+  Pipeline bóng của nhân vật có xương riêng theo từng mẫu người. `compileAsync` thử rồi: chậm hơn (11,6 s so với 9,5 s) và không làm lượt bóng.
+- **Thời gian tải**: hồ sơ Chrome mới ~11 s (biên dịch ~7,5 s), lần sau Chrome đã lưu shader ~6 s. Trước: ~2,4 s rồi đứng 5–8 s.
+- **Lệnh vẽ**: InstancedMesh hết bản thì ẩn (đàn em / công an lúc không truy đuổi: ~20 lệnh vẽ, đèn chớp, mũ trên yên);
+  bốn bánh ô tô một InstancedMesh (~8 → ~5 lệnh vẽ / xe, chỉ ghi lại bộ đệm khi bánh đổi).
+- **Kết quả** (`npm run perf`, trước → sau): khựng (> 33 ms / 8 s) chạy xe đêm 3 → 0–1, mưa đêm 3 → 0, khung lâu nhất
+  đêm 90 → 16–36 ms; fps chạy xe ngày 154 → 167, đêm 129 → 143–158. Lúc chơi không còn tạo pipeline nào (ngày, đêm, mưa, đàn em,
+  công an 3 sao, chuyển ngày → đêm).
+- **Còn lại**: ~40 MB/s rác (dọn rác nhỏ giờ chỉ ~0,2 % thời gian — không còn gây khựng); dịch chuyển xa (bị bắt / tỉnh dậy ở
+  trạm y tế) vẫn có 1–2 khung 40–90 ms (tải lại bộ đệm chi tiết + nhân vật có xương mới); dựng node cho nhân vật có xương mới
+  (~10 ms mỗi người) khi pool tạo thân mới.
 
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
@@ -240,7 +261,7 @@ Chủ dự án báo máy RTX 3060 Laptop vẫn lag (2026-10-14). Đo bằng Chro
   - mảng `threats` mỗi bước vật lý;
   - chuỗi khoá trong `hud.setHeat` / `setVitals`;
   - `markerOnMap` trên bản đồ nhỏ (nay chỉ vẽ lại 30 lần / giây);
-  - xem thêm "Còn lại (ứng viên P2)" ở mục P1 phía trên.
+  - xem thêm "Còn lại" ở mục P2 phía trên.
 
 ## 5. Bẫy đã gặp (đọc trước khi sửa)
 
@@ -272,18 +293,10 @@ Chủ dự án báo máy RTX 3060 Laptop vẫn lag (2026-10-14). Đo bằng Chro
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- PR #27 đã merge vào `main` (2026-10-12). N6.4 nằm trên nhánh `n6.4-can-bang-kinh-te` (PR #28, CI xanh).
-- N7.1 phần 1 nằm trên nhánh `n7.1-o-to-lai-duoc`, tách từ nhánh N6.4 ⇒ merge PR #28 trước rồi mới tới PR của N7.1.
-  Unit test: 225. E2E thêm `car` (2 test, 4 ảnh `car-*`). PR #29, CI xanh.
-- N7.2 nằm trên nhánh `n7.2-giao-thong-da-dang`, tách từ nhánh N7.1 ⇒ thứ tự merge: #28 → #29 → PR của N7.2.
-  Unit test: 245. E2E `traffic` thêm 1 test (8 ảnh `fleet-*`). PR #30, CI xanh.
-- N7.1 phần 2 nằm trên nhánh `n7.1b-cuop-xe`, tách từ nhánh N7.2 ⇒ thứ tự merge: #28 → #29 → #30 → PR cướp xe.
-  Unit test: 257 (thêm `carjack.test.ts`, 12 test). E2E `car` thêm 1 test (ảnh `car-5-jack-stop`, `car-6-jacked`). PR #31.
-- N7.3 nằm trên nhánh `n7.3-xe-tuan-tra`, tách từ nhánh `n7.1b-cuop-xe` ⇒ thứ tự merge: #28 → #29 → #30 → #31 → PR xe tuần tra.
-  Unit test: 267 (thêm `police.test.ts`). E2E mới `patrol` (2 test, ảnh `patrol-1-car` … `patrol-4-police-car-night`).
-- P1 tối ưu hiệu năng nằm trên nhánh `perf-1-toi-uu`, tách từ nhánh N7.3 ⇒ merge sau PR xe tuần tra.
-  Unit test: 271 (thêm `keyedPool.test.ts`, 1 test khối cầu bao của `DetailCuller`). Lệnh mới: `npm run perf`.
-- N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
+- PR #28–#33 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1) đã merge vào `main` (2026-10-14), `main` đã deploy.
+- P2 nằm trên nhánh `perf-2-toi-uu`, tách từ `main`. Unit test: 272 (thêm test `revealAll`).
+- Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
+  (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
   test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.
   `npm run e2e` ở máy này tự chạy 8 tiến trình: mỗi lượt đỏ 2–3 test KHÁC NHAU (`missions`, `gameplay`, `phone`, `shops`, `story` —

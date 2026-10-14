@@ -8,6 +8,8 @@ import { createPhysics } from '@/physics/physics';
 import { NightBloom } from '@/render/bloom';
 import { createRenderer } from '@/render/renderer';
 import { ResolutionGovernor } from '@/render/resolution';
+import { gpuIdle, warmUpPipelines } from '@/render/warmup';
+import { civilianSamples } from '@/ai/npcBody';
 import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { nightUniform } from '@/world/nightGlow';
@@ -196,6 +198,15 @@ async function main(): Promise<void> {
   debug.settings = () => settings;
   debug.hardware = { ...hardware, autoTier, budget };
 
+  // Biên dịch sẵn shader của mọi vật (kể cả đang ẩn, chỉ hiện ban đêm, lượt bloom) khi màn hình tải còn che —
+  // không thì mỗi loại vật lần đầu lọt vào tầm nhìn làm game khựng 60–90 ms giữa lúc chơi.
+  if (loadingSub) loadingSub.textContent = 'Sài Gòn Không Ngủ · đang chuẩn bị đồ hoạ…';
+  warmUpPipelines(renderer, scene, camera, { samples: civilianSamples(), extra: () => bloom.warm() });
+  lap('warmup');
+  if (loadingSub) loadingSub.textContent = 'Sài Gòn Không Ngủ · đang biên dịch shader (lần đầu hơi lâu)…';
+  await gpuIdle(renderer);
+  lap('gpuCompile');
+
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const raw = timer.getDelta();
@@ -250,7 +261,6 @@ async function main(): Promise<void> {
     debug.physicsSteps = game.physicsSteps;
   });
 
-  if (loadingSub) loadingSub.textContent = 'Sài Gòn Không Ngủ · đang chuẩn bị đồ hoạ…';
   debug.ready = true;
   console.info(`[HẺM] sẵn sàng · render ${backend} · ${city.stats.meshes} mesh · ${city.stats.instances} instance · ${city.stats.colliders} collider`);
 }

@@ -234,6 +234,7 @@ export class ChaseSystem {
       }
     }
     lights.count = n * 2;
+    lights.visible = n > 0;
     lights.instanceMatrix.needsUpdate = true;
   }
 

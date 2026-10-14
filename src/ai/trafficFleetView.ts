@@ -206,6 +206,8 @@ export class TrafficFleetView {
    */
   update(agents: readonly FleetPose[], first: number, alpha: number, count = Infinity): void {
     const n = Math.min(this.slots.length, agents.length - first, count);
+    // Không còn xe nào (đoàn xe công an lúc không bị truy nã): ẩn cả nhóm — khỏi tốn 6 lệnh vẽ + ghi bộ đệm mỗi khung.
+    this.root.visible = n > 0;
     for (let i = n; i < this.slots.length; i++) this.hide(i);
     for (let i = 0; i < n; i++) {
       const a = agents[first + i] as FleetPose;

@@ -234,6 +234,8 @@ export class TrafficView {
   /** `count`: chỉ vẽ `count` xe đầu của `agents` (mảng dùng lại có thể dài hơn số xe thật). */
   update(agents: readonly BikePose[], alpha: number, count = agents.length): void {
     const n = Math.min(count, agents.length, this.capacity);
+    // Không có xe (đàn em / công an lúc không truy đuổi): ẩn cả nhóm — InstancedMesh 0 bản vẫn tốn lệnh vẽ ở mọi lượt.
+    this.root.visible = n > 0;
     for (let i = 0; i < n; i++) {
       const a = agents[i] as BikePose;
       const look = this.lookFor(a);

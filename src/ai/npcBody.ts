@@ -50,6 +50,16 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, height: number
 }
 
 /**
+ * Mỗi mẫu người dân một thân, chỉ để làm nóng pipeline lúc tải (render/warmup.ts): bóng đổ của nhân vật có xương biên
+ * dịch riêng theo từng mẫu, gặp mẫu mới giữa phố là khựng.
+ */
+export function civilianSamples(): THREE.Group {
+  const group = new THREE.Group();
+  for (const c of CIVILIANS) buildNpc(group, c.id, 1.65, []);
+  return group;
+}
+
+/**
  * Hiện / ẩn NPC. Ẩn thì tắt luôn cập nhật ma trận cả cây (~66 xương): three.js vẫn tính ma trận cho vật đang ẩn, mà
  * mỗi ô LOD giữ sẵn nhiều hình ẩn (bộ đệm theo kiểu người) ⇒ hàng nghìn xương bị tính vô ích mỗi khung hình.
  */
