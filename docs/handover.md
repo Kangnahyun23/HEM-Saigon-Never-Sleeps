@@ -234,6 +234,8 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 - `pkill -f "playwright test"` tự giết luôn shell đang chạy lệnh đó. Dùng mẫu có ngoặc như `pkill -f "[p]laywright…"`.
 - e2e tất định: đặt `__HEM__.paused = true` rồi `simulate(giây)`. `simulate` gọi `game.update(1/60)` thẳng, KHÔNG nhân
   `tickScale`. Nhịp màn hình kết cục đổi dt game sang giây thật bằng cách chia `timeScale`.
+- Test đánh người giữa phố: xe tuần tra (N7.3) đi ngang thấy là bắt ngay ⇒ màn hình BỊ BẮT khoá điều khiển, đòn sau
+  không ra. Test không kiểm tra công an thì tắt nó: `game.patrolSees = () => undefined` (xem `combat.spec.ts`).
 - HUD chỉ cập nhật trong `game.update`: đổi trạng thái lúc đang dừng thì phải `simulate(1/60)` rồi mới kiểm tra DOM.
 - Test `phone` từng hỏng một lần trên CI (3 thay vì 4 tin nhắn) mà không tái hiện được. Test giờ chờ đủ tin và in
   `playTime` + hộp thư nếu thiếu — gặp lại thì đọc thông tin đó.
