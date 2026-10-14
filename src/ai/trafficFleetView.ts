@@ -1,7 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { createRng, pick } from '@/core/random';
-import { CAR_BODY_COLORS, TAXI_COLORS } from '@/vehicles/carModel';
-import { NPC_PAINT, npcVehicleParts, WALKER_HIP, type NpcLook, type NpcPart, type NpcVehicleKind } from '@/vehicles/npcVehicleModels';
+import { NPC_PAINT, npcCarPaint, npcVehicleParts, WALKER_HIP, type NpcLook, type NpcPart, type NpcVehicleKind } from '@/vehicles/npcVehicleModels';
 import { addNightOnly } from '@/world/nightGlow';
 import type { TrafficAgent } from './traffic';
 import { VEHICLE_SPECS, type TrafficKind } from './trafficKinds';
@@ -137,14 +136,13 @@ export class TrafficFleetView {
     const kind = agent.kind;
     slot.generation = agent.generation;
     slot.optional = rng() < OPTIONAL_CHANCE;
-    if (kind === 'taxi') {
-      _colors.body = TAXI_COLORS.body;
-      _colors.trim = TAXI_COLORS.trim;
-    } else if (kind === 'bus' || kind === 'baGac' || kind === 'xichLo' || kind === 'cart') {
+    if (kind === 'bus' || kind === 'baGac' || kind === 'xichLo' || kind === 'cart') {
       _colors.body = pick(rng, NPC_PAINT[kind].body);
       _colors.trim = pick(rng, NPC_PAINT[kind].trim);
-    } else {
-      _colors.body = _colors.trim = pick(rng, CAR_BODY_COLORS);
+    } else if (kind !== 'bike') {
+      const paint = npcCarPaint(kind, agent.id, agent.generation);
+      _colors.body = paint.body;
+      _colors.trim = paint.trim;
     }
     _colors.shirt = pick(rng, SHIRTS);
     _colors.pants = pick(rng, PANTS);

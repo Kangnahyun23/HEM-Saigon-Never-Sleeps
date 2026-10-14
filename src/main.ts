@@ -243,7 +243,9 @@ async function main(): Promise<void> {
       }
     }
     hud.update(dt);
-    input.endFrame();
+    // Test đang dừng game (paused) thì phím nhấn để dành cho simulate() — xoá ở đây thì một khung hình chen giữa
+    // keyboard.press và simulate làm mất phím.
+    if (!debug.paused) input.endFrame();
     debug.frames++;
     debug.physicsSteps = game.physicsSteps;
   });

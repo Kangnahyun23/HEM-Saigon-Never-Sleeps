@@ -53,6 +53,14 @@ export interface Walker {
   react: Reaction;
   /** Còn bao lâu (s) cho phản ứng hiện tại; với gọi báo là thời gian đã gọi. */
   reactT: number;
+  /**
+   * Tài xế vừa bị kéo khỏi xe: còn `enter` giây (trên tổng `enterTime`) chạy từ cửa xe (fromX, fromZ) lên chỗ đứng
+   * trên vỉa hè; 0 = người đi bộ bình thường.
+   */
+  enter: number;
+  enterTime: number;
+  fromX: number;
+  fromZ: number;
   /** Đánh trả: đang vung tay (s còn lại của cú đấm) và thời gian chờ tới cú kế. */
   punch: number;
   punchCd: number;
@@ -195,7 +203,7 @@ export class PedestrianSim {
     return {
       id, block: 0, side: 0, t: 0, d: 1, targetD: 1, dir: 1, speed: 0, cruise: 1.3, idle: 0, dodge: 0, x: 0, z: 0, yaw: 0,
       prevX: 0, prevZ: 0, prevYaw: 0, phase: 0, generation: 0, health: 100, hurt: 0, down: 0, flee: 0, dead: false,
-      look: 0, react: 'none', reactT: 0, punch: 0, punchCd: 0,
+      look: 0, react: 'none', reactT: 0, punch: 0, punchCd: 0, enter: 0, enterTime: 0, fromX: 0, fromZ: 0,
     };
   }
 
@@ -450,12 +458,73 @@ export class PedestrianSim {
     w.reactT = 0;
     w.punch = 0;
     w.punchCd = 0;
+    w.enter = 0;
     const p = this.position(this.block(w), w.side, w.t, w.d);
     w.x = w.prevX = p.x;
     w.z = w.prevZ = p.z;
     w.yaw = w.prevYaw = Math.atan2(p.fx * w.dir, p.fz * w.dir);
     w.generation++;
     w.look = lookOf(w.id, w.generation);
+  }
+
+  /**
+   * Tài xế bị kéo khỏi xe ở (x, z) giữa lòng đường: lấy người đi bộ đang rảnh ở xa người chơi nhất làm tài xế, cho chạy
+   * từ cửa xe lên vỉa hè gần nhất rồi rút điện thoại gọi công an (đứng sát thì người đó sợ, cúp máy — như mọi cuộc gọi báo).
+   * Trả về người đó, null nếu không còn ai rảnh.
+   */
+  eject(x: number, z: number, player: { x: number; z: number }): Walker | null {
+    let driver: Walker | null = null;
+    let far = -1;
+    for (const w of this.walkers) {
+      if (w.dead || w.down > 0 || w.hurt > 0 || w.react !== 'none' || w.enter > 0) continue;
+      const d = Math.hypot(w.x - player.x, w.z - player.z);
+      if (d > far) {
+        far = d;
+        driver = w;
+      }
+    }
+    if (!driver) return null;
+    // Vỉa hè gần nhất: khối phố gần (x, z) nhất, cạnh quay ra phía chiếc xe.
+    let block = 0;
+    let side = 0;
+    let near = Infinity;
+    for (let i = 0; i < this.blocks.length; i++) {
+      const r = (this.blocks[i] as Block).rect;
+      const ox = Math.max(r.x0 - x, 0, x - r.x1);
+      const oz = Math.max(r.z0 - z, 0, z - r.z1);
+      const d = Math.hypot(ox, oz);
+      if (d >= near) continue;
+      near = d;
+      block = i;
+      if (ox > oz) side = x < r.x0 ? 3 : 1;
+      else side = z < r.z0 ? 0 : 2;
+    }
+    const w = driver;
+    w.block = block;
+    w.side = side;
+    const { len, width } = this.sideInfo(this.block(w), side, this.info);
+    w.d = clamp(1, MARGIN, Math.max(MARGIN, width - MARGIN));
+    w.t = clamp(this.alongOf(w, x, z), Math.min(w.d + 1, len / 2), Math.max(len - w.d - 1, len / 2));
+    w.targetD = w.d;
+    w.cruise = range(this.rng, 1.0, 1.6);
+    w.speed = FLEE_SPEED;
+    w.idle = 0;
+    w.dodge = 0;
+    w.health = 100;
+    w.flee = 0;
+    w.punch = 0;
+    w.punchCd = 0;
+    const p = this.position(this.block(w), w.side, w.t, w.d, this.here);
+    w.fromX = x;
+    w.fromZ = z;
+    w.enterTime = w.enter = Math.max(0.4, Math.hypot(p.x - x, p.z - z) / FLEE_SPEED);
+    w.x = w.prevX = x;
+    w.z = w.prevZ = z;
+    w.yaw = w.prevYaw = Math.atan2(p.x - x, p.z - z);
+    w.generation++;
+    w.look = lookOf(w.id, w.generation);
+    this.startReaction(w, 'call', 0);
+    return w;
   }
 
   /** Có vật cản tĩnh nào trong bán kính `r` quanh (x, z)? */
@@ -486,6 +555,17 @@ export class PedestrianSim {
         w.down = Math.max(0, w.down - dt);
         w.hurt = Math.max(0, w.hurt - dt);
         w.speed = 0;
+        continue;
+      }
+      if (w.enter > 0) {
+        // Tài xế bị kéo khỏi xe: chạy thẳng từ cửa xe lên vỉa hè, tới nơi mới gọi điện.
+        w.enter = Math.max(0, w.enter - dt);
+        const k = w.enter / w.enterTime;
+        const p = this.position(this.block(w), w.side, w.t, w.d, this.here);
+        w.x = p.x + (w.fromX - p.x) * k;
+        w.z = p.z + (w.fromZ - p.z) * k;
+        w.speed = FLEE_SPEED;
+        w.phase += (w.speed / 0.65) * Math.PI * dt;
         continue;
       }
       if (w.react !== 'none' && this.stepReaction(w, dt, focus)) continue;
