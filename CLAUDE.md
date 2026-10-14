@@ -120,6 +120,8 @@ src/
                      phone (điện thoại "Sầu Riêng S9" cầm tay, phím P: màn hình chính + 8 app — Kèo, Bản đồ, Tin nhắn, Ví,
                      Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu), outcome (màn hình BỊ BẮT / GỤC)
   systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
+                     economy (mức phạt khi bị bắt / viện phí / bị lục túi: phần trăm tiền mặt có sàn + trần — có unit test;
+                     đổi giá, tiền công, mức phạt thì chạy economy.test.ts: mô hình chơi thử tests/unit/economySim.ts),
                      combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục, lượng máu bắn — có unit test),
                      pickups (đồ nhặt ngoài phố, phím G: chồng ghế nhựa quán cóc, mũ bảo hiểm trên yên xe — có unit test),
                      shopCatalog (hàng + giá từng tiệm, mặc cả, cầm đồ mua lại, nâng cấp — có unit test; giao diện ui/shopPanel, phím E),

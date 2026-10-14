@@ -71,6 +71,9 @@ Không làm trong MVP: ô tô lái được, vũ khí, đánh tay đôi, multipl
 
 Cân bằng Hồi 1: kỳ trả nợ đầu 1.500.000 đ; thưởng 4 nhiệm vụ đầu + tiền mặt ban đầu = 1.400.000 đ ⇒ phải chạy thêm vài
 kèo giao hàng (~40–90 nghìn/kèo, ~12 % "hàng nóng" trả gần gấp đôi nhưng bị bám đuôi).
+Cân bằng v0.2 (N6.4, khoá bằng `tests/unit/economy.test.ts`): chạy kèo đều tay 2–4 triệu/giờ; vũ khí rẻ nhất ≈ 2 kèo, món đắt
+nhất tiệm ≈ 9 kèo, sắm hết đồ 25–60 phút; bị bắt 20 % tiền mặt (150–400 nghìn), viện phí 10 % (100–250 nghìn), bị lục túi
+30 % (50–150 nghìn); nợ 30 triệu là mục tiêu dài hơi (> 8 giờ kèo).
 
 Trễ thì cắt bớt M2 (mưa, người đi bộ), không cắt M3.
 

@@ -1,6 +1,6 @@
 # Bàn giao dự án — HẺM: Sài Gòn Không Ngủ
 
-Cập nhật: 2026-10-11, cuối phiên làm N4.2 → N6.3. Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
+Cập nhật: 2026-10-12, sau N6.4 (phiên trước: N4.2 → N6.3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
 `docs/plan-v0.2.md` (kế hoạch v0.2 chi tiết + tiến độ) và `docs/gdd.md` (thiết kế đầy đủ).
 
 ## 1. Dự án là gì
@@ -59,7 +59,7 @@ npm run e2e      # build + Playwright (~17 phút trên máy cloud không GPU, Sw
 | #25 | N5.1 cận chiến |
 | #26 | N5.2 vũ khí nhặt được, máu nhẹ, cảnh báo 18+ |
 
-### Đang mở: PR #27
+### PR #27 (đã merge 2026-10-12)
 Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đẩy lên cùng nhánh nên **PR #27 chứa các commit sau**
 (mỗi commit = một bước, e2e đầy đủ đã chạy xanh ở máy cho từng bước):
 
@@ -72,11 +72,13 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 | `4415930` | N6.2 + N6.3 mua bán trong tiệm, mặc cả, cầm đồ, nâng cấp, đồ ăn hồi máu từ từ |
 | (cuối) | file bàn giao này |
 
-**Việc đầu tiên của phiên mới:** xem CI của PR #27.
-- Xanh: merge (`merge_pull_request`, `expectedHeadSha` = SHA đầy đủ 40 ký tự của đầu nhánh, lấy bằng `git rev-parse`).
-- Đỏ: đọc log job, sửa, đẩy thêm commit.
-
-Nếu muốn tách lại thành nhiều PR nhỏ thì làm trước khi merge (nhưng không force-push được ⇒ thực tế cứ merge một lần).
+### N6.4 cân bằng kinh tế (nhánh `n6.4-can-bang-kinh-te`)
+- `systems/economy.ts`: mức phạt khi bị bắt / viện phí / bị lục túi (phần trăm tiền mặt, có sàn và **trần**), `game.ts` dùng chung.
+- `tests/unit/economySim.ts`: mô hình chơi thử (Hồi 1 + chạy kèo, ăn uống, tai nạn, sắm đồ) chạy trên dữ liệu thật;
+  `tests/unit/economy.test.ts` khoá các mốc cân bằng. Đổi giá / tiền công / mức phạt mà test đỏ thì đọc tên test để biết lệch chỗ nào.
+- Đã sửa: trần phạt 400 / 250 / 150 nghìn; cà phê sữa đá 12 / 15 nghìn.
+- Chưa đụng (ghi lại để cân nhắc): trả nợ qua app Ngân hàng không được tính vào kỳ đầu 1,5 triệu (nhiệm vụ 5 đòi đủ tiền mặt);
+  lãi 0,3 %/ngày mới chỉ hiện chữ, chưa cộng vào nợ; giới hạn giờ của kèo rất rộng (mô phỏng không kèo nào trễ).
 
 ### Hệ thống mới trong phiên này (chỗ tìm code)
 - **Điện thoại** `ui/phone.ts`:
@@ -118,15 +120,13 @@ Nếu muốn tách lại thành nhiều PR nhỏ thì làm trước khi merge (n
   - camera trong nhà: `CameraRig.maxHeight`.
 
 ### Số liệu kiểm tra lúc bàn giao
-- Unit test: 194/194 xanh (`npm run check`).
+- Unit test: 210/210 xanh sau N6.4 (`npm run check`); lúc bàn giao N6.3 là 194.
 - e2e: 24 test (mới: `combat` ×3, `reactions`, `police` ×2, `shops` ×2). Lượt đầy đủ trên bản cuối (N6.3): **24/24 xanh**
   (18,6 phút ở máy cloud). Từng bước N5.3 → N5.5 cũng đã chạy đầy đủ xanh trước đó.
 
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
-1. **N6.4 (S) Cân bằng kinh tế**:
-   - thu nhập kèo / nhiệm vụ so với giá đồ, phạt, viện phí, nợ kỳ 1 (1,5 triệu);
-   - unit test mô phỏng vài giờ chơi.
+1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
 2. **N7 xe cộ**:
    - N7.1 ô tô lái được (mẫu CC0; cướp xe kéo tài xế ra, tăng sao);
    - N7.2 giao thông đa dạng (ô tô, taxi, buýt, ba gác, xích lô);
@@ -184,6 +184,7 @@ Nếu muốn tách lại thành nhiều PR nhỏ thì làm trước khi merge (n
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- Toàn bộ code đã commit và đẩy lên `claude/fervent-goldberg-zf4y8b` (PR #27).
-- Trước khi đẩy: `npm run check` xanh (194 unit test), `npm run e2e` đầy đủ 24/24 xanh. CI của PR #27 chạy lại toàn bộ
-  sau lần đẩy cuối — phiên mới kiểm tra rồi merge nếu xanh.
+- PR #27 đã merge vào `main` (2026-10-12). N6.4 nằm trên nhánh `n6.4-can-bang-kinh-te`, có PR riêng.
+- N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
+- Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
+  test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.

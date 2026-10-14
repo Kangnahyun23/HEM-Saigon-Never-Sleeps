@@ -18,6 +18,7 @@ import { StoryRunner } from '@/missions/storyRunner';
 import { FIRST_INSTALLMENT } from '@/missions/story';
 import { Inbox, type Contact } from '@/systems/inbox';
 import { formatVnd, Wallet } from '@/systems/wallet';
+import { BUSTED, HOSPITAL, penalty, SHAKEDOWN } from '@/systems/economy';
 import type { PhoneTab } from '@/ui/phone';
 import { Inventory, ITEMS, starterInventory, type ItemDef, type ItemId } from '@/systems/inventory';
 import { buildWheel, sectorAt, type WheelEntry } from '@/systems/wheel';
@@ -82,9 +83,6 @@ const PICKUP_DONE: Partial<Record<ItemId, string>> = {
 const BREAK_TEXT: Partial<Record<ItemId, string>> = { gheNhua: 'Ghế nhựa vỡ tan!', muBaoHiem: 'Mũ bảo hiểm bể làm đôi!' };
 /** Nhịp màn hình kết cục (giây): bắt đầu mờ đen, đưa về đồn / trạm, sáng lại, hết khoá điều khiển. */
 const OUTCOME = { black: 2.6, respawn: 3.2, reveal: 3.5, end: 4.1 } as const;
-/** Tiền phạt khi bị bắt / viện phí khi gục: ít nhất ngần này, hoặc 20 % / 10 % tiền mặt (không đủ thì lấy hết). */
-const BUSTED_FINE = 150_000;
-const HOSPITAL_FEE = 100_000;
 /** Số vũng máu chờ loang cùng lúc tối đa. */
 const POOL_QUEUE = 8;
 const MOUNT_RANGE = 2.4;
@@ -697,7 +695,7 @@ export class Game {
     this.chase.sim.disperse();
     this.missions.fail(kind === 'busted' ? 'Tín bị công an bắt' : 'Tín bị gục');
     if (kind === 'busted') {
-      const fine = this.wallet.spend(Math.max(BUSTED_FINE, this.wallet.cash * 0.2), 'Nộp phạt (bị công an bắt)', this.clock.hour);
+      const fine = this.wallet.spend(penalty(BUSTED, this.wallet.cash), 'Nộp phạt (bị công an bắt)', this.clock.hour);
       let seized = 0;
       for (let i = 0; i < this.inventory.slots.length; i++) {
         const sl = this.inventory.slots[i];
@@ -711,7 +709,7 @@ export class Game {
       this.hud.showToast(`Ra khỏi ${place.name}: nộp phạt ${formatVnd(fine)}${seized > 0 ? ', bị tịch thu vũ khí' : ''}`, 4);
       this.schedule(3, () => this.inbox.receive('Ngân', 'Anh lại lên phường hả?? Hàng xóm đăng lên Phây rồi kìa 😭', this.clock.hour));
     } else {
-      const fee = this.wallet.spend(Math.max(HOSPITAL_FEE, this.wallet.cash * 0.1), 'Viện phí', this.clock.hour);
+      const fee = this.wallet.spend(penalty(HOSPITAL, this.wallet.cash), 'Viện phí', this.clock.hour);
       this.health = 100;
       this.lowHealthWarned = false;
       this.hud.showToast(`Tỉnh dậy ở ${place.name}. Viện phí ${formatVnd(fee)}`, 4);
@@ -907,9 +905,9 @@ export class Game {
     this.siren.update(nearest);
   }
 
-  /** Bị đàn em của Phát chặn đầu: bị "lục túi" (mất 30 % tiền mặt, ít nhất 50.000 đ), hết truy đuổi. */
+  /** Bị đàn em của Phát chặn đầu: bị "lục túi" (mức mất tiền SHAKEDOWN trong systems/economy.ts), hết truy đuổi. */
   private caught(): void {
-    const lost = this.wallet.spend(Math.max(50_000, this.wallet.cash * 0.3), 'Bị đàn em Phát chặn đầu', this.clock.hour);
+    const lost = this.wallet.spend(penalty(SHAKEDOWN, this.wallet.cash), 'Bị đàn em Phát chặn đầu', this.clock.hour);
     this.heat.set(0);
     this.chase.sim.disperse();
     this.hud.showToast(lost > 0 ? `Bị chặn đầu! Mất ${formatVnd(lost)}` : 'Bị chặn đầu! May mà túi rỗng', 3);
