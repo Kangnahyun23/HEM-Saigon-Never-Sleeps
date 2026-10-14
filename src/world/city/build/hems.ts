@@ -4,7 +4,8 @@ import { range } from '@/core/random';
 import { InstanceBatch } from '@/render/instancing';
 import { signFont } from '@/ui/fonts';
 import { nightUniform } from '../../nightGlow';
-import { hemDoorRight, hemDoorSpan, hemMouths } from '../hemDetails';
+import { GROUP } from '@/physics/groups';
+import { BOLLARD, hemBollards, hemDoorRight, hemDoorSpan, hemMouths } from '../hemDetails';
 import type { Lot } from '../layout';
 import { createSignMaterial } from '../materials';
 import { CITY_COLORS } from '../palette';
@@ -147,5 +148,14 @@ export function buildHemLife(ctx: BuildContext): void {
     }
   }
 
-  for (const b of [plates, meters, tarps, altars, pots, leaves]) addMesh(ctx, b.build());
+  // ---- Trụ chắn ô tô ở miệng hẻm: chỉ ô tô va vào (nhóm CAR_BLOCK), xe máy và người đi bộ lách qua --------------
+  const bollards = new InstanceBatch(GEO.cylBase, new THREE.MeshStandardNodeMaterial({ roughness: 0.55, metalness: 0.3 }), { colors: true, name: 'hem-bollards' });
+  for (const p of hemBollards(layout)) {
+    bollards.add(p.x, 0, p.z, BOLLARD.radius, pad + BOLLARD.height, BOLLARD.radius, 0, '#e3b71d');
+    // Khoanh phản quang đen gần đỉnh trụ.
+    bollards.add(p.x, pad + BOLLARD.height * 0.7, p.z, BOLLARD.radius + 0.006, 0.14, BOLLARD.radius + 0.006, 0, '#1d1d1f');
+    ctx.statics.cylinder(p.x, 0, p.z, BOLLARD.radius, pad + BOLLARD.height, GROUP.CAR_BLOCK, GROUP.CAR);
+  }
+
+  for (const b of [plates, meters, tarps, altars, pots, leaves, bollards]) addMesh(ctx, b.build());
 }

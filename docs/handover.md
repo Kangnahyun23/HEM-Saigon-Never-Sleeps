@@ -124,11 +124,23 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 - e2e: 24 test (mới: `combat` ×3, `reactions`, `police` ×2, `shops` ×2). Lượt đầy đủ trên bản cuối (N6.3): **24/24 xanh**
   (18,6 phút ở máy cloud). Từng bước N5.3 → N5.5 cũng đã chạy đầy đủ xanh trước đó.
 
+### N7.1 phần 1 — ô tô lái được (nhánh `n7.1-o-to-lai-duoc`, tách từ nhánh N6.4)
+- **Xe**: `vehicles/carModel.ts` (sedan / taxi / bán tải từ khối), `carPhysics.ts` (bốn bánh, khoá nghiêng như xe máy),
+  `carView.ts`. Trong `game.ts`: `Vehicle = Bike | Car`, `game.cars`, `nearestVehicle`, `mount` / `dismount` theo `kind`.
+- **Chỗ đậu**: `world/city/carSpots.ts` (có seed); số xe theo `SCENE_BUDGETS.cars` (3 / 5 / 7).
+- **Trụ chắn miệng hẻm**: `hemDetails.hemBollards` + dựng ở `build/hems.ts`; collider thuộc nhóm `CAR_BLOCK`, chỉ va chạm
+  với nhóm `CAR` (thân ô tô) — xe máy, người đi bộ, tia giảm xóc không đụng. Lý do: hẻm chính rộng 3,4 m, ô tô 1,8 m lọt vừa.
+- **Bẫy đã gặp**: ô tô ở xa thì ẩn + bỏ đồng bộ hình (`CAR_DRAW_DISTANCE`), nhưng camera bám theo vị trí HÌNH của xe đang
+  lái ⇒ xe đang lái phải luôn được đồng bộ, không thì dời xe đi xa (reset) là hình đứng yên mãi. Sau `dismount()` thì
+  `this.riding` là null — đừng đọc lại trong cùng khối lệnh.
+- **Chưa làm**: người lái hiện trong xe (đang ẩn Tín vì kính tối), tiếng máy ô tô riêng, hư hỏng xe, mẫu xe CC0, cướp xe.
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
 2. **N7 xe cộ**:
-   - N7.1 ô tô lái được (mẫu CC0; cướp xe kéo tài xế ra, tăng sao);
+   - N7.1 phần 1 (ô tô đậu ven đường lái được, trụ chắn miệng hẻm) — xong, nhánh `n7.1-o-to-lai-duoc`;
+     còn phần 2: cướp xe (kéo tài xế ra, tăng sao) làm cùng N7.2 vì cần ô tô NPC; thay khối hộp bằng mẫu xe CC0;
    - N7.2 giao thông đa dạng (ô tô, taxi, buýt, ba gác, xích lô);
    - N7.3 xe tuần tra công an: phần xe máy đã có ở N5.4, còn ô tô công an + ô tô chặn đường từ 3 sao;
    - N7.4 độ xe ở tiệm của Vy.
@@ -184,7 +196,9 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- PR #27 đã merge vào `main` (2026-10-12). N6.4 nằm trên nhánh `n6.4-can-bang-kinh-te`, có PR riêng.
+- PR #27 đã merge vào `main` (2026-10-12). N6.4 nằm trên nhánh `n6.4-can-bang-kinh-te` (PR #28, CI xanh).
+- N7.1 phần 1 nằm trên nhánh `n7.1-o-to-lai-duoc`, tách từ nhánh N6.4 ⇒ merge PR #28 trước rồi mới tới PR của N7.1.
+  Unit test: 225. E2E thêm `car` (2 test, 4 ảnh `car-*`).
 - N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
   test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.

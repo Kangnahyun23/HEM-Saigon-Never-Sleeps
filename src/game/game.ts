@@ -53,6 +53,10 @@ import type { Hud } from '@/ui/hud';
 import { BIKE_BODY_COLORS } from '@/vehicles/bikeModel';
 import { BIKE_TUNING, MotorbikePhysics, NO_CONTROL, type BikeControls } from '@/vehicles/motorbikePhysics';
 import { MotorbikeView } from '@/vehicles/motorbikeView';
+import { CAR, CAR_BODY_COLORS, TAXI_COLORS } from '@/vehicles/carModel';
+import { CAR_TUNING, CarPhysics } from '@/vehicles/carPhysics';
+import { CarView } from '@/vehicles/carView';
+import { carSpots, type CarSpot } from '@/world/city/carSpots';
 import type { City } from '@/world/city/buildCity';
 import { PAD_HEIGHT } from '@/world/city/layout';
 import { locate } from '@/world/city/locate';
@@ -91,9 +95,25 @@ const DISMOUNT_MAX_SPEED = 4;
 const PARKED: BikeControls = { ...NO_CONTROL, handbrake: true };
 
 interface Bike {
+  kind: 'bike';
   phys: MotorbikePhysics;
   view: MotorbikeView;
 }
+
+interface Car {
+  kind: 'car';
+  phys: CarPhysics;
+  view: CarView;
+  /** Hai vòng tròn (đầu + đuôi xe) báo cho xe NPC biết để phanh / lách — dùng lại mỗi bước. */
+  obstacles: [Obstacle, Obstacle];
+}
+
+type Vehicle = Bike | Car;
+
+/** Ô tô đậu xa hơn ngần này thì khỏi vẽ (đã chìm trong sương). */
+const CAR_DRAW_DISTANCE = 170;
+/** Đứng cách hông / đầu xe trong khoảng này thì vào xe được (tính từ tâm xe, đã trừ nửa bề ngang). */
+const CAR_DOOR_REACH = CAR.width / 2;
 
 /**
  * Vòng chơi M1: đi bộ quanh khu phố, lên xe máy, chạy xe; camera góc nhìn thứ 3, HUD địa điểm + tốc độ.
@@ -103,6 +123,8 @@ export class Game {
   readonly model: CharacterView = createPlayerView();
   readonly camera: FollowCamera;
   readonly bikes: Bike[] = [];
+  /** Ô tô đậu ven đường, vào lái được (N7.1). */
+  readonly cars: Car[] = [];
   readonly traffic: TrafficSystem;
   readonly pedestrians: PedestrianSim;
   private readonly pedestrianView: PedestrianView;
@@ -148,7 +170,7 @@ export class Game {
   /** Đèn pha thật của xe người chơi (một SpotLight dùng chung, gắn vào xe đang chạy). */
   private readonly headlamp = new THREE.SpotLight('#fff1d6', 0, 45, 0.55, 0.65, 1.2);
   mode: 'foot' | 'ride' = 'foot';
-  riding: Bike | null = null;
+  riding: Vehicle | null = null;
   physicsSteps = 0;
   private readonly stepper = new FixedStepAccumulator(STEP, 5);
   private readonly horn = new Horn();
@@ -159,6 +181,8 @@ export class Game {
   /** Lệnh nhảy chờ bước vật lý kế tiếp (nhấn một lần = nhảy một lần). */
   private jumpQueued = false;
   private stillTime = 0;
+  /** Đếm ngược để tiếng đâm xe ô tô không kêu liên tục khi cạ tường. */
+  private crashCooldown = 0;
   private locateTimer = 0;
   /** Điều khiển giả lập từ test (ghi đè bàn phím). */
   autopilot: Partial<BikeControls> | null = null;
@@ -231,6 +255,7 @@ export class Game {
     this.addBike(spawn.x + lx * 1.6 + fx * 1.5, spawn.z + lz * 1.6 + fz * 1.5, spawn.yaw + Math.PI / 2, '#b3242b');
     this.addBike(spawn.x + lx * 1.6 + fx * 3.0, spawn.z + lz * 1.6 + fz * 3.0, spawn.yaw + Math.PI / 2, BIKE_BODY_COLORS[2]);
     this.addBike(spawn.x + lx * 1.6 + fx * 4.5, spawn.z + lz * 1.6 + fz * 4.5, spawn.yaw + Math.PI / 2, BIKE_BODY_COLORS[3]);
+    for (const spot of carSpots(city.layout, budget.cars)) this.addCar(spot);
 
     this.camera = new FollowCamera(camera, physics);
     this.camera.yaw = spawn.yaw + Math.PI;
@@ -920,8 +945,9 @@ export class Game {
     if (bike) this.dismount();
     this.character.teleport(spot.x, spot.y + 0.3, spot.z, spot.yaw);
     // Dắt xe lên theo, đậu bên trái người chơi (trái của hướng (sin, cos) là (cos, −sin)).
-    if (bike) bike.phys.reset(spot.x + Math.cos(spot.yaw) * 1.6, spot.y, spot.z - Math.sin(spot.yaw) * 1.6, spot.yaw);
-    this.hud.showToast(bike ? 'Ướt sũng! Tín dắt xe lên bờ…' : 'Ướt sũng! Tín bò lên bờ…', 2.4);
+    const beside = bike?.kind === 'car' ? 2.3 : 1.6;
+    if (bike) bike.phys.reset(spot.x + Math.cos(spot.yaw) * beside, spot.y, spot.z - Math.sin(spot.yaw) * beside, spot.yaw);
+    this.hud.showToast(bike?.kind === 'car' ? 'Ướt sũng! Xe được kéo lên bờ…' : bike ? 'Ướt sũng! Tín dắt xe lên bờ…' : 'Ướt sũng! Tín bò lên bờ…', 2.4);
   }
 
   /** Tiếng máy xe, tiếng phố, âm báo tiền vào / ra và bị truy đuổi. */
@@ -1009,6 +1035,17 @@ export class Game {
       const t = b.phys.body.translation();
       out.push({ x: t.x, z: t.z, radius: 0.9 });
     }
+    // Ô tô dài hơn rộng nhiều: báo bằng hai vòng tròn ở đầu và đuôi xe.
+    for (const c of this.cars) {
+      const t = c.phys.curr;
+      const fx = Math.sin(t.yaw) * 1.1;
+      const fz = Math.cos(t.yaw) * 1.1;
+      c.obstacles[0].x = t.x + fx;
+      c.obstacles[0].z = t.z + fz;
+      c.obstacles[1].x = t.x - fx;
+      c.obstacles[1].z = t.z - fz;
+      out.push(c.obstacles[0], c.obstacles[1]);
+    }
     return out;
   }
 
@@ -1016,12 +1053,23 @@ export class Game {
     const phys = new MotorbikePhysics(this.physics.RAPIER, this.physics.world, x, PAD_HEIGHT, z, yaw);
     const view = new MotorbikeView(color);
     this.scene.add(view.root);
-    this.bikes.push({ phys, view });
+    this.bikes.push({ kind: 'bike', phys, view });
   }
 
-  private nearestBike(): { bike: Bike; dist: number } | null {
+  /** Đặt một ô tô đậu ven đường (lòng đường ở cao độ 0). */
+  private addCar(spot: CarSpot): void {
+    const phys = new CarPhysics(this.physics.RAPIER, this.physics.world, spot.x, 0, spot.z, spot.yaw);
+    const color = CAR_BODY_COLORS[spot.colorIndex % CAR_BODY_COLORS.length] as string;
+    const view = spot.kind === 'taxi' ? new CarView('taxi', TAXI_COLORS.body, TAXI_COLORS.trim) : new CarView(spot.kind, color);
+    view.sync(phys);
+    this.scene.add(view.root);
+    this.cars.push({ kind: 'car', phys, view, obstacles: [{ x: spot.x, z: spot.z, radius: 1.05 }, { x: spot.x, z: spot.z, radius: 1.05 }] });
+  }
+
+  /** Xe gần Tín nhất (xe máy hoặc ô tô); với ô tô, khoảng cách tính từ hông xe. */
+  private nearestVehicle(): { vehicle: Vehicle; dist: number } | null {
     const p = this.character.feet();
-    let best: Bike | null = null;
+    let best: Vehicle | null = null;
     let bestD = Infinity;
     for (const b of this.bikes) {
       const t = b.phys.body.translation();
@@ -1031,23 +1079,37 @@ export class Game {
         best = b;
       }
     }
-    return best ? { bike: best, dist: bestD } : null;
+    for (const c of this.cars) {
+      const d = Math.hypot(c.phys.curr.x - p.x, c.phys.curr.z - p.z) - CAR_DOOR_REACH;
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best ? { vehicle: best, dist: bestD } : null;
   }
 
-  mount(bike: Bike): void {
+  mount(vehicle: Vehicle): void {
     this.mode = 'ride';
-    this.riding = bike;
+    this.riding = vehicle;
     this.character.setEnabled(false);
-    bike.view.seat.add(this.model.root);
-    bike.view.model.add(this.headlamp);
+    vehicle.view.seat.add(this.model.root);
+    vehicle.view.model.add(this.headlamp);
     this.model.root.position.set(0, 0, 0);
     this.model.root.rotation.set(0, 0, 0);
-    this.model.setHelmet(true);
+    if (vehicle.kind === 'car') {
+      // Ngồi trong khoang kín, kính tối: ẩn Tín đi; đèn pha dời ra mũi xe.
+      this.model.root.visible = false;
+      this.headlamp.position.set(0, 0.7, CAR.length / 2);
+    } else {
+      this.model.setHelmet(true);
+      this.headlamp.position.set(0, 0.98, 0.62);
+    }
     this.camera.zoom = Math.max(this.camera.zoom, 1);
-    bike.phys.body.wakeUp();
+    vehicle.phys.body.wakeUp();
   }
 
-  /** Xuống xe: đặt Tín đứng cạnh xe (ưu tiên bên trái), kiểm tra chỗ trống. */
+  /** Xuống xe: đặt Tín đứng cạnh xe (ưu tiên bên trái — cửa người lái), kiểm tra chỗ trống. */
   private dismount(thrown = false): void {
     const bike = this.riding;
     if (!bike) return;
@@ -1055,10 +1117,12 @@ export class Game {
     const h = bike.phys.heading();
     const { RAPIER, world } = this.physics;
     const shape = new RAPIER.Capsule(CHARACTER.halfHeight, CHARACTER.radius);
+    const sideOut = bike.kind === 'car' ? CAR.width / 2 + 0.55 : 0.85;
+    const backOut = bike.kind === 'car' ? CAR.length / 2 + 0.7 : 1.4;
     let spot: { x: number; y: number; z: number } | null = null;
     for (const side of [1, -1, 0]) {
-      const ox = side === 0 ? -Math.sin(h) * 1.4 : Math.cos(h) * 0.85 * side;
-      const oz = side === 0 ? -Math.cos(h) * 1.4 : -Math.sin(h) * 0.85 * side;
+      const ox = side === 0 ? -Math.sin(h) * backOut : Math.cos(h) * sideOut * side;
+      const oz = side === 0 ? -Math.cos(h) * backOut : -Math.sin(h) * sideOut * side;
       const x = t.x + ox;
       const z = t.z + oz;
       // Tìm mặt đất bằng tia bắn xuống.
@@ -1085,6 +1149,7 @@ export class Game {
 
     this.scene.add(this.model.root);
     this.scene.add(this.headlamp);
+    this.model.root.visible = true;
     this.model.setHelmet(false);
     this.character.setEnabled(true);
     this.character.teleport(spot.x, spot.y + 0.02, spot.z, h);
@@ -1201,6 +1266,7 @@ export class Game {
     // Trời tối thì xe đang chạy tự bật đèn; phím L bật/tắt đèn pha thủ công.
     const lightsOn = this.headlight || light.night > 0.35;
     for (const b of this.bikes) b.view.setLights(b === this.riding && lightsOn, light.night);
+    for (const c of this.cars) c.view.setLights(c === this.riding && lightsOn, light.night);
     this.headlamp.intensity = this.riding && lightsOn ? 6 + 34 * light.night : 0;
 
     // Lên / xuống xe.
@@ -1208,10 +1274,10 @@ export class Game {
     if (locked) {
       // Đang ở màn hình kết cục: không lên xe / nhặt đồ.
     } else if (this.mode === 'foot') {
-      const near = this.nearestBike();
+      const near = this.nearestVehicle();
       if (near && near.dist < MOUNT_RANGE) {
-        prompt = '<kbd>F</kbd> Lên xe';
-        if (input.wasPressed('KeyF')) this.mount(near.bike);
+        prompt = near.vehicle.kind === 'car' ? '<kbd>F</kbd> Vào xe' : '<kbd>F</kbd> Lên xe';
+        if (input.wasPressed('KeyF')) this.mount(near.vehicle);
       }
       // Cửa hàng: đứng trong tiệm thì E mở bảng mua bán.
       this.updateShop(input);
@@ -1225,16 +1291,19 @@ export class Game {
         if (input.wasPressed('KeyG')) this.pickUp(spot);
       }
     } else if (this.riding) {
-      const speed = Math.abs(this.riding.phys.speed);
+      // Giữ lại xe đang lái: `dismount()` bên dưới đặt `this.riding` về null.
+      const vehicle = this.riding;
+      const car = vehicle.kind === 'car';
+      const speed = Math.abs(vehicle.phys.speed);
       if (input.wasPressed('KeyF')) {
         if (speed < DISMOUNT_MAX_SPEED) this.dismount();
-        else this.hud.showToast('Chạy chậm lại rồi mới xuống xe!', 1.6);
+        else this.hud.showToast(car ? 'Chạy chậm lại rồi mới ra khỏi xe!' : 'Chạy chậm lại rồi mới xuống xe!', 1.6);
       }
-      if (input.wasPressed('KeyR')) {
-        const t = this.riding.phys.body.translation();
-        this.riding.phys.reset(t.x, t.y - 0.3, t.z, this.riding.phys.heading());
+      if (this.riding && input.wasPressed('KeyR')) {
+        const t = vehicle.phys.body.translation();
+        vehicle.phys.reset(t.x, t.y - (car ? 0.45 : 0.3), t.z, vehicle.phys.heading());
       }
-      if (speed < 0.5) prompt = '<kbd>F</kbd> Xuống xe';
+      if (this.riding && speed < 0.5) prompt = car ? '<kbd>F</kbd> Ra khỏi xe' : '<kbd>F</kbd> Xuống xe';
     }
     this.hud.setPrompt(prompt);
 
@@ -1300,16 +1369,37 @@ export class Game {
           b.phys.update(STEP, PARKED);
         }
       }
+      for (const c of this.cars) {
+        if (c === this.riding) {
+          const controls = this.controls;
+          controls.throttle = this.autopilot?.throttle ?? fwd;
+          controls.steer = this.autopilot?.steer ?? -strafe;
+          controls.handbrake = this.autopilot?.handbrake ?? (locked || input.isDown('Space'));
+          this.throttle = Math.max(0, controls.throttle);
+          c.phys.update(STEP, controls);
+        } else if (!c.phys.body.isSleeping()) {
+          // Xe đậu đã nằm yên (thân Rapier ngủ) thì khỏi tính giảm xóc; bị húc thì thân thức dậy và tính lại.
+          c.phys.update(STEP, PARKED);
+        }
+      }
       this.physics.step();
       this.physicsSteps++;
       this.character.snapshot();
       for (const b of this.bikes) b.phys.snapshot();
+      for (const c of this.cars) if (c === this.riding || !c.phys.body.isSleeping()) c.phys.snapshot();
 
-      // Đâm xe: tốc độ tụt đột ngột ⇒ văng khỏi xe.
+      // Đâm xe: tốc độ tụt đột ngột ⇒ văng khỏi xe máy; ngồi ô tô thì chỉ nghe "rầm".
+      this.crashCooldown -= STEP;
       if (this.riding && this.riding.phys.impact > 7) {
-        this.hud.showToast('Ui da! Té xe rồi…');
-        playSfx('crash');
-        this.dismount(true);
+        if (this.riding.kind === 'bike') {
+          this.hud.showToast('Ui da! Té xe rồi…');
+          playSfx('crash');
+          this.dismount(true);
+        } else if (this.crashCooldown <= 0) {
+          this.crashCooldown = 0.8;
+          this.hud.showToast('Rầm! Móp đầu xe rồi…', 1.6);
+          playSfx('crash');
+        }
       }
     }
 
@@ -1326,6 +1416,12 @@ export class Game {
     // Đồng bộ hình ảnh.
     const alpha = this.stepper.alpha;
     for (const b of this.bikes) b.view.sync(b.phys, alpha);
+    for (const c of this.cars) {
+      // Xe đang lái luôn vẽ + đồng bộ: camera bám theo vị trí hình của nó.
+      const far = c !== this.riding && (c.phys.curr.x - this.view.position.x) ** 2 + (c.phys.curr.z - this.view.position.z) ** 2 > CAR_DRAW_DISTANCE ** 2;
+      c.view.root.visible = !far;
+      if (!far) c.view.sync(c.phys, alpha);
+    }
     this.traffic.render(alpha);
     this.chase.render(alpha);
     this.police.render(alpha, dt);
@@ -1388,16 +1484,17 @@ export class Game {
     if (this.mode === 'ride' && this.riding) {
       const p = this.riding.phys;
       const t = this.riding.view.root.position;
-      this.tmp.set(t.x, t.y + 1.25, t.z);
+      const car = this.riding.kind === 'car';
+      this.tmp.set(t.x, t.y + (car ? 1.2 : 1.25), t.z);
       const v = Math.abs(p.speed);
       this.camera.update(
         dt,
         {
           target: this.tmp,
-          distance: 4.6 + Math.min(2.2, v * 0.1),
+          distance: (car ? 6.6 : 4.6) + Math.min(2.2, v * 0.1),
           followYaw: v > 1.5 ? p.heading() + Math.PI : null,
           followRate: 2.4,
-          fovBoost: (v / BIKE_TUNING.maxSpeed) * 14,
+          fovBoost: (v / (car ? CAR_TUNING.maxSpeed : BIKE_TUNING.maxSpeed)) * 14,
         },
         looking,
       );

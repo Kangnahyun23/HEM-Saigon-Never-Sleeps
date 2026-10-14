@@ -100,6 +100,10 @@ src/
                      mũ bảo hiểm / thùng hàng gắn vào xương; lùi về characterModel khối hộp nếu tải lỗi),
                      locomotion (trộn đứng/đi/chạy theo tốc độ — có unit test), followCamera (góc nhìn 3, chống xuyên tường)
   vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
+                     carModel (sedan / taxi / bán tải từ khối), carPhysics (bốn bánh, khoá nghiêng như xe máy — có unit test),
+                     carView (thân gộp theo vật liệu, màu trong đỉnh; chúi / nghiêng là hiệu ứng hình).
+                     Trong game.ts xe là `Vehicle = Bike | Car` (trường `kind`); ô tô đậu: `game.cars`, chỗ đậu world/city/carSpots.ts.
+                     Ô tô không vào hẻm nhờ trụ chắn miệng hẻm (hemDetails.hemBollards, nhóm va chạm CAR_BLOCK ⇄ CAR)
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
                      trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
                      pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /
@@ -136,7 +140,7 @@ src/
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
 scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
-tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops
+tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops, car
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).
