@@ -4,10 +4,10 @@ import { GROUP, interaction } from '@/physics/groups';
 import type { PhysicsWorld } from '@/physics/physics';
 import type { CityLayout } from '@/world/city/layout';
 import { TrafficSim, type Focus, type Obstacle, type TrafficOptions } from './traffic';
+import { TrafficFleetView } from './trafficFleetView';
+import { bodyHalfExtents } from './trafficKinds';
 import { buildTrafficNetwork } from './trafficNetwork';
 import { TrafficView } from './trafficView';
-
-const BODY_HALF = { x: 0.32, y: 0.6, z: 0.95 } as const;
 
 /**
  * Giao thông NPC gắn vào game: mô phỏng (logic) + thân va chạm kinematic trong Rapier + hình instanced.
@@ -15,8 +15,13 @@ const BODY_HALF = { x: 0.32, y: 0.6, z: 0.95 } as const;
  */
 export class TrafficSystem {
   readonly sim: TrafficSim;
+  /** Hình xe máy + người lái. */
   readonly view: TrafficView;
+  /** Hình các loại xe khác (null nếu đàn xe chỉ có xe máy). */
+  readonly fleet: TrafficFleetView | null;
   private readonly bodies: RAPIER.RigidBody[] = [];
+  /** Độ cao tâm thân va chạm của từng xe. */
+  private readonly heights: number[] = [];
   private readonly generations: number[] = [];
   /** Vector / quaternion tạm dùng lại mỗi bước (Rapier chỉ đọc giá trị). */
   private readonly pos = { x: 0, y: 0, z: 0 };
@@ -24,17 +29,19 @@ export class TrafficSystem {
 
   constructor(scene: THREE.Scene, private readonly physics: PhysicsWorld, layout: CityLayout, focus: Focus, options: Partial<TrafficOptions> = {}) {
     this.sim = new TrafficSim(buildTrafficNetwork(layout), focus, options);
-    this.view = new TrafficView(this.sim.agents.length);
+    const agents = this.sim.agents;
+    this.view = new TrafficView(this.sim.bikes);
     scene.add(this.view.root);
+    this.fleet = agents.length > this.sim.bikes ? new TrafficFleetView(agents.slice(this.sim.bikes).map((a) => a.kind)) : null;
+    if (this.fleet) scene.add(this.fleet.root);
 
     const { RAPIER, world } = physics;
-    for (const a of this.sim.agents) {
-      const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(a.x, BODY_HALF.y, a.z));
-      world.createCollider(
-        RAPIER.ColliderDesc.cuboid(BODY_HALF.x, BODY_HALF.y, BODY_HALF.z).setCollisionGroups(interaction(GROUP.VEHICLE, GROUP.ALL)),
-        body,
-      );
+    for (const a of agents) {
+      const half = bodyHalfExtents(a.kind);
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(a.x, half.y, a.z));
+      world.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setCollisionGroups(interaction(GROUP.VEHICLE, GROUP.ALL)), body);
       this.bodies.push(body);
+      this.heights.push(half.y);
       this.generations.push(a.generation);
     }
   }
@@ -44,10 +51,12 @@ export class TrafficSystem {
     this.sim.step(dt, focus, obstacles);
     const pos = this.pos;
     const rot = this.rot;
-    this.sim.agents.forEach((a, i) => {
+    const agents = this.sim.agents;
+    for (let i = 0; i < agents.length; i++) {
+      const a = agents[i] as (typeof agents)[number];
       const body = this.bodies[i] as RAPIER.RigidBody;
       pos.x = a.x;
-      pos.y = BODY_HALF.y;
+      pos.y = this.heights[i] as number;
       pos.z = a.z;
       rot.y = Math.sin(a.yaw / 2);
       rot.w = Math.cos(a.yaw / 2);
@@ -60,16 +69,18 @@ export class TrafficSystem {
         body.setNextKinematicTranslation(pos);
         body.setNextKinematicRotation(rot);
       }
-    });
+    }
   }
 
   /** Cập nhật hình mỗi khung hình. */
   render(alpha: number): void {
-    this.view.update(this.sim.agents, alpha);
+    this.view.update(this.sim.agents, alpha, this.sim.bikes);
+    this.fleet?.update(this.sim.agents, this.sim.bikes, alpha);
   }
 
   dispose(): void {
     for (const b of this.bodies) this.physics.world.removeRigidBody(b);
     this.view.root.removeFromParent();
+    this.fleet?.root.removeFromParent();
   }
 }

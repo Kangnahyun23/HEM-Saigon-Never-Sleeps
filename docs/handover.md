@@ -135,13 +135,39 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
   `this.riding` là null — đừng đọc lại trong cùng khối lệnh.
 - **Chưa làm**: người lái hiện trong xe (đang ẩn Tín vì kính tối), tiếng máy ô tô riêng, hư hỏng xe, mẫu xe CC0, cướp xe.
 
+### N7.2 — giao thông đa dạng (nhánh `n7.2-giao-thong-da-dang`, tách từ nhánh N7.1)
+- **Loại xe**: `ai/trafficKinds.ts` (`VEHICLE_SPECS`: kích thước, sức máy, `position` inner / curb / spread, `big`, `avenueOnly`).
+  `TrafficSim.agents` xếp xe máy trước (`sim.bikes` chiếc), rồi ô tô, rồi xe thô sơ — loại xe của mỗi chỗ cố định suốt đời
+  nên thân Rapier và chỗ trong InstancedMesh chia sẵn một lần. Số lượng: `SCENE_BUDGETS.trafficCars` / `trafficSlow`.
+- **Luật mới trong `traffic.ts`** (xe máy với nhau vẫn như cũ):
+  - xe có vệt cố định chỉ lách vật cản đứng yên và loại xe vốn chậm hơn (`worthPassing`), giữ vệt lách tới khi đuôi xe
+    qua hẳn (`agent.hold`, tính bằng mét) rồi về `home()`;
+  - xe lớn (`big`) xin lượt qua giao lộ (`nodeMode` / `nodeCount`): đi thẳng + rẽ phải cùng trục đi chung, rẽ trái / quay đầu
+    cần giao lộ riêng; chỉ xe đứng đầu hàng mới được xin (`firstInLine`); giữ tới khi đuôi xe ra khỏi giao lộ (`agent.leaving`);
+  - xe lớn đang có lượt chỉ phanh cho xe nhỏ ngay trước mũi (`NOSE_REACH`), xe nhỏ thì bên nào cũng nhường xe lớn;
+  - "nhích" khỏi chỗ kẹt (`creep`) bỏ qua xe nhỏ nhưng KHÔNG bỏ qua xe lớn.
+- **Hình**: `vehicles/npcVehicleModels.ts` (khối + vai màu), `ai/trafficFleetView.ts` (hộp / trụ / đèn / vệt đèn pha).
+- **Bẫy đã gặp** (mất nhiều thời gian nhất của bước này):
+  - cho xe máy "nhích" xuyên qua ô tô đang chờ ở vạch ⇒ ô tô có xe nằm trong thân, không bao giờ đi được ⇒ kẹt cả phố;
+  - xe đứng sau giữ lượt qua giao lộ trong khi xe trước nó (rẽ hướng khác) chưa có lượt ⇒ kẹt vĩnh viễn (vì vậy có `firstInLine`);
+  - ô tô lách cả hàng xe máy đang chờ ngã tư ⇒ ô tô nằm ngang khắp lòng đường (vì vậy có `worthPassing`);
+  - thử cho xe nhỏ né "khoảng trước mũi" xe lớn: xe máy rẽ trái xếp hàng ngay trước mũi ô tô, hai bên chờ nhau ⇒ tệ hơn, đã bỏ;
+  - điều kiện kẹt cũ (khoảng hở phải lớn hơn 0,6 m) làm hai xe chồng sát nhau không bao giờ được nhích — lỗi có từ M2, nay đã sửa;
+  - test e2e cho xe người chơi BĂNG NGANG làn xe: giao thông thả quanh người chơi nên vài giây sau khi Tín tới nơi là luôn có
+    xe chạy qua, xe máy NPC 30–40 km/h không kịp phanh ⇒ xe bị tông lệch, test hỏng theo nhịp giao thông (`car.spec.ts` đã
+    dính). Chờ "đường trống" không ăn thua (60 giây vẫn không có lúc nào trống 35 m) — cho xe xuất phát từ vỉa hè.
+- **Số đo** (80 xe máy + 10 ô tô + 6 xe thô sơ, người chơi đứng yên giữa khu): xe máy ~29 km/h, đứng yên ~3 %; ô tô chờ ở
+  ngã tư 15–30 % thời gian, lần chờ dài nhất ~35 giây. Tăng số ô tô quá ~14 là ngã tư hai đại lộ quá tải.
+- **Chưa làm**: cướp xe NPC (N7.1 phần 2); xe buýt dừng trạm đón khách; ô tô rẽ còn "quay quanh tâm" (buýt dài nên thấy rõ);
+  đèn giao thông; xe NPC chưa né người đi bộ băng qua đường.
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
 2. **N7 xe cộ**:
    - N7.1 phần 1 (ô tô đậu ven đường lái được, trụ chắn miệng hẻm) — xong, nhánh `n7.1-o-to-lai-duoc`;
-     còn phần 2: cướp xe (kéo tài xế ra, tăng sao) làm cùng N7.2 vì cần ô tô NPC; thay khối hộp bằng mẫu xe CC0;
-   - N7.2 giao thông đa dạng (ô tô, taxi, buýt, ba gác, xích lô);
+     còn phần 2: cướp xe (kéo tài xế ra, tăng sao) — ô tô NPC đã có từ N7.2; thay khối hộp bằng mẫu xe CC0;
+   - N7.2 giao thông đa dạng (ô tô, taxi, buýt, ba gác, xích lô, xe đẩy) — xong, nhánh `n7.2-giao-thong-da-dang`;
    - N7.3 xe tuần tra công an: phần xe máy đã có ở N5.4, còn ô tô công an + ô tô chặn đường từ 3 sao;
    - N7.4 độ xe ở tiệm của Vy.
 3. **N8 bản đồ 3 khu**:
@@ -198,7 +224,11 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 ## 6. Trạng thái lúc kết thúc phiên
 - PR #27 đã merge vào `main` (2026-10-12). N6.4 nằm trên nhánh `n6.4-can-bang-kinh-te` (PR #28, CI xanh).
 - N7.1 phần 1 nằm trên nhánh `n7.1-o-to-lai-duoc`, tách từ nhánh N6.4 ⇒ merge PR #28 trước rồi mới tới PR của N7.1.
-  Unit test: 225. E2E thêm `car` (2 test, 4 ảnh `car-*`).
+  Unit test: 225. E2E thêm `car` (2 test, 4 ảnh `car-*`). PR #29, CI xanh.
+- N7.2 nằm trên nhánh `n7.2-giao-thong-da-dang`, tách từ nhánh N7.1 ⇒ thứ tự merge: #28 → #29 → PR của N7.2.
+  Unit test: 245. E2E `traffic` thêm 1 test (8 ảnh `fleet-*`).
 - N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
   test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.
+  `npm run e2e` ở máy này tự chạy 8 tiến trình: mỗi lượt đỏ 2–3 test KHÁC NHAU (`missions`, `gameplay`, `phone`, `shops` —
+  toàn chỗ chờ HUD / đồng hồ thật), chạy lại riêng với `--workers=2` thì xanh. Muốn lượt đầy đủ sạch ở máy: `npx playwright test --workers=2`.

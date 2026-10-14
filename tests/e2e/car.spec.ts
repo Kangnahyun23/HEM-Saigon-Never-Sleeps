@@ -132,10 +132,14 @@ test('trụ chắn miệng hẻm: ô tô không vào được, xe máy lọt qua
   await page.goto('/?moi=1&gio=10');
   await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
 
-  /** Đặt xe cách miệng hẻm 9 m phía ngoài đường, đầu quay vào hẻm, ga 6 giây; trả về xe đã vào sâu bao nhiêu mét (âm = còn ở ngoài). */
-  const driveIn = (which: 'car' | 'bike') =>
+  /**
+   * Đặt xe cách miệng hẻm `from` mét phía ngoài, đầu quay vào hẻm, ga 6 giây; trả về xe đã vào sâu bao nhiêu mét (âm = còn ở ngoài).
+   * Ô tô lấy đà từ giữa đường (lúc đó Tín còn ở xa nên chưa có xe NPC quanh đây); tới lượt xe máy thì giao thông đã kéo về
+   * quanh người chơi — băng ngang làn là bị tông lệch — nên xe máy xuất phát ngay trên vỉa hè (rộng 3,5 m).
+   */
+  const driveIn = (which: 'car' | 'bike', from: number) =>
     page.evaluate(
-      ({ m, which }) => {
+      ({ m, which, from }) => {
         const h = window.__HEM__!;
         h.paused = true;
         const g = h.game as G;
@@ -143,7 +147,7 @@ test('trụ chắn miệng hẻm: ô tô không vào được, xe máy lọt qua
         const v = which === 'car' ? g.cars[0]! : g.bikes[0]!;
         const ox = Math.sin(m.yaw);
         const oz = Math.cos(m.yaw);
-        v.phys.reset(m.x + ox * 9, 0, m.z + oz * 9, m.yaw + Math.PI);
+        v.phys.reset(m.x + ox * from, 0, m.z + oz * from, m.yaw + Math.PI);
         sim(0.3);
         g.mount(v);
         g.autopilot = { throttle: 0.5, steer: 0 };
@@ -155,11 +159,11 @@ test('trụ chắn miệng hẻm: ô tô không vào được, xe máy lọt qua
         if (which === 'car') h.setCamera(m.x + ox * 7 + oz * 3, 3.2, m.z + oz * 7 - ox * 3, m.x - ox * 2, 0.6, m.z - oz * 2);
         return depth;
       },
-      { m: mouth, which },
+      { m: mouth, which, from },
     );
 
   const home = await page.evaluate(() => ({ ...(window.__HEM__!.game as G).cars[0]!.phys.curr }));
-  const car = await driveIn('car');
+  const car = await driveIn('car', 9);
   // Mũi xe (cách tâm 2,15 m) dừng ở hàng trụ (lùi vào hẻm 0,6 m) ⇒ tâm xe còn ở ngoài miệng hẻm.
   expect(car).toBeLessThan(-1);
   await shot(page, 'car-4-hem-blocked');
@@ -176,6 +180,6 @@ test('trụ chắn miệng hẻm: ô tô không vào được, xe máy lọt qua
     // Trả ô tô về chỗ đậu cũ để xe máy có lối vào.
     g.cars[0]!.phys.reset(home.x, 0, home.z, home.yaw);
   }, home);
-  const bike = await driveIn('bike');
+  const bike = await driveIn('bike', 2.4);
   expect(bike).toBeGreaterThan(8);
 });

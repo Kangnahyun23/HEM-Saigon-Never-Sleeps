@@ -46,11 +46,11 @@ interface Part {
   lamp?: boolean;
 }
 
-const SHIRTS = ['#f2efe6', '#2b5fa8', '#c8402e', '#3b8a52', '#e0b43a', '#7a4fa0', '#2a2a2a', '#e98aa6', '#4ab0c2', '#d9d4c5'];
-const PANTS = ['#2b2f3a', '#3d4b6b', '#5a4632', '#1f1f1f', '#6e6e6e', '#7c6a55'];
-const SKINS = ['#c88d62', '#e0ac7f', '#a66d45', '#d9a07a'];
-const HELMETS = ['#ff8c1a', '#1f8a3c', '#d22b2b', '#f2f2f2', '#2050c0', '#e6c220', '#222222', '#8a5a2b'];
-const CARGO = ['#c9a26b', '#2e9b4f', '#e86a1c', '#b8b2a6'];
+export const SHIRTS = ['#f2efe6', '#2b5fa8', '#c8402e', '#3b8a52', '#e0b43a', '#7a4fa0', '#2a2a2a', '#e98aa6', '#4ab0c2', '#d9d4c5'];
+export const PANTS = ['#2b2f3a', '#3d4b6b', '#5a4632', '#1f1f1f', '#6e6e6e', '#7c6a55'];
+export const SKINS = ['#c88d62', '#e0ac7f', '#a66d45', '#d9a07a'];
+export const HELMETS = ['#ff8c1a', '#1f8a3c', '#d22b2b', '#f2f2f2', '#2050c0', '#e6c220', '#222222', '#8a5a2b'];
+export const CARGO = ['#c9a26b', '#2e9b4f', '#e86a1c', '#b8b2a6'];
 const CARGO_CHANCE = 0.22;
 
 /** Người lái ngồi trên yên (toạ độ xe: đầu xe +Z, gốc ở mặt đất). Góc rx > 0 = đỉnh ngả về trước. */
@@ -105,6 +105,23 @@ interface AgentLook {
   colors: Record<Look | 'body', string>;
 }
 
+/** Vật liệu đèn xe: không chịu ánh sáng, màu theo instance (trắng ngà / đỏ), sáng gấp mấy lần khi tối. */
+export function lampMaterial(): THREE.MeshBasicNodeMaterial {
+  const mat = new THREE.MeshBasicNodeMaterial();
+  mat.colorNode = vec3(1, 1, 1).mul(mix(float(0.9), float(4), nightUniform));
+  return mat;
+}
+
+/** Vật liệu vệt đèn pha in trên mặt đường phía trước xe (cộng sáng, chỉ hiện khi tối). uv.y = 1 ở sát xe, 0 ở xa. */
+export function beamMaterial(): THREE.MeshBasicNodeMaterial {
+  const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  const far = float(1).sub(uv().y);
+  const side = abs(uv().x.sub(0.5)).mul(2);
+  const shape = float(1).sub(smoothstep(far.mul(0.5).add(0.25), float(1), side)).mul(float(1).sub(far).pow(1.4)).mul(smoothstep(0, 0.12, far));
+  mat.colorNode = vec3(1.0, 0.93, 0.78).mul(shape).mul(nightUniform.mul(0.3));
+  return mat;
+}
+
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const _m = new THREE.Matrix4();
 const _w = new THREE.Matrix4();
@@ -137,9 +154,7 @@ export class TrafficView {
     this.cylParts = this.parts.filter((p) => p.shape === 'cyl' && !p.lamp);
     this.lampParts = this.parts.filter((p) => p.lamp);
     const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.55, metalness: 0.1 });
-    // Đèn: không chịu ánh sáng, màu theo instance (trắng ngà / đỏ), sáng gấp mấy lần khi tối.
-    const lampMat = new THREE.MeshBasicNodeMaterial();
-    lampMat.colorNode = vec3(1, 1, 1).mul(mix(float(0.9), float(4), nightUniform));
+    const lampMat = lampMaterial();
     const mesh = (geo: THREE.BufferGeometry, perAgent: number, name: string, material: THREE.Material = mat): THREE.InstancedMesh => {
       const m = new THREE.InstancedMesh(geo, material, capacity * perAgent);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -156,12 +171,7 @@ export class TrafficView {
     this.lamps = mesh(new THREE.BoxGeometry(1, 1, 1), this.lampParts.length, 'traffic-lamps', lampMat);
     this.lamps.castShadow = false;
 
-    // Vệt đèn pha in trên mặt đường phía trước xe (cộng sáng, chỉ hiện khi tối). uv.y = 1 ở sát xe, 0 ở xa.
-    const beamMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-    const far = float(1).sub(uv().y);
-    const side = abs(uv().x.sub(0.5)).mul(2);
-    const shape = float(1).sub(smoothstep(far.mul(0.5).add(0.25), float(1), side)).mul(float(1).sub(far).pow(1.4)).mul(smoothstep(0, 0.12, far));
-    beamMat.colorNode = vec3(1.0, 0.93, 0.78).mul(shape).mul(nightUniform.mul(0.3));
+    const beamMat = beamMaterial();
     this.beams = mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), 1, 'traffic-beams', beamMat);
     // Vệt đèn không dùng màu theo instance (bộ đệm màu khởi tạo bằng 0 sẽ làm tắt vệt sáng).
     this.beams.instanceColor = null;

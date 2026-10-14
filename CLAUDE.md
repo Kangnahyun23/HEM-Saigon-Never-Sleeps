@@ -105,7 +105,12 @@ src/
                      Trong game.ts xe là `Vehicle = Bike | Car` (trường `kind`); ô tô đậu: `game.cars`, chỗ đậu world/city/carSpots.ts.
                      Ô tô không vào hẻm nhờ trụ chắn miệng hẻm (hemDetails.hemBollards, nhóm va chạm CAR_BLOCK ⇄ CAR)
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
-                     trafficView (2 InstancedMesh cho cả đàn xe + người lái), trafficSystem (gắn Rapier kinematic + hình)
+                     trafficKinds (bảng loại xe: xe máy, sedan, taxi, bán tải, buýt, ba gác, xích lô, xe đẩy — kích thước,
+                     sức máy, chạy sát tim đường / sát lề; xe "big" qua giao lộ theo lượt, xe nhỏ nhường),
+                     trafficView (InstancedMesh cho đàn xe máy + người lái), trafficFleetView (các loại xe còn lại, 4 lệnh vẽ;
+                     mẫu ở vehicles/npcVehicleModels.ts), trafficSystem (gắn Rapier kinematic + hình).
+                     Thêm loại xe: một dòng trong VEHICLE_SPECS + mẫu khối trong npcVehicleModels + chỗ trong CAR_MIX / SLOW_MIX.
+                     Đổi luật giao thông thì chạy trafficFleet.test.ts — nó đo cả đàn 150 giây (tốc độ trung bình, xe đứng ì, chồng xe)
                      pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /
                      gọi báo / đánh trả — có unit test), civilians (mẫu người dùng chung cho mô phỏng + hình), pedestrianView (khối hộp instanced),
                      nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test),
@@ -139,7 +144,7 @@ src/
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
 scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
-tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC)
+tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC: traffic + trafficFleet)
 tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops, car
 ```
 
