@@ -3,6 +3,7 @@ import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
 import { ChaseSystem } from '@/ai/chaseSystem';
 import { POLICE_CHASE } from '@/ai/chase';
+import { patrolWitness } from '@/ai/patrol';
 import { Siren } from '@/audio/siren';
 import type { Blip } from '@/ui/minimap';
 import { buildTrafficNetwork } from '@/ai/trafficNetwork';
@@ -170,6 +171,8 @@ export class Game {
   readonly story: StoryRunner;
   readonly chase: ChaseSystem;
   readonly police: ChaseSystem;
+  /** Lưới che tầm nhìn (nhà cửa) — xe tuần tra có thấy chỗ Tín gây án không. */
+  private readonly sight: SightGrid;
   private readonly siren = new Siren();
   /** Chấm xe đàn em trên bản đồ nhỏ (dùng lại, không tạo mảng mỗi khung hình). */
   private readonly gangBlips: Blip[] = [];
@@ -248,6 +251,7 @@ export class Game {
     this.missions = new MissionDirector(scene, city.layout, hud, this.wallet, this.inbox, () => this.clock.hour, (lvl) => this.heat.set(lvl));
     this.story = new StoryRunner(scene, city.layout, this.missions, hud, this.inbox, this.wallet, () => this.clock.hour, (s, run) => this.schedule(s, run));
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
+    this.sight = sight;
     const network = buildTrafficNetwork(city.layout);
     this.chase = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 11);
     // Công an: cùng cách bám theo đường lớn như đàn em Phát, số xe theo sao truy nã, có đèn chớp + còi hú.
@@ -472,6 +476,7 @@ export class Game {
         // thì nhiều người thấy hơn và báo nặng hơn.
         this.pedestrians.witness(p.x, p.z, kills > 0 ? 22 : 16);
         if (kills > 0) this.murderT = 90;
+        this.patrolSees(kills > 0 ? 2 : 1, p.x, p.z);
         this.wearWeapon(hits);
       } else playSfx('swing');
     }
@@ -504,6 +509,23 @@ export class Game {
     }
     this.murderT = Math.max(0, this.murderT - dt);
     this.carjackT = Math.max(0, this.carjackT - dt);
+  }
+
+  /**
+   * Gây án (đánh người, cướp xe) ngay trước mặt xe công an đi tuần: lên sao liền, khỏi chờ dân gọi báo, và chính chiếc xe
+   * đó rời dòng xe quay sang truy đuổi (chỗ của nó trong dòng xe hiện lại ở xa như một xe tuần tra khác).
+   */
+  private patrolSees(severity: 1 | 2, x: number, z: number): void {
+    const sim = this.traffic.sim;
+    const i = patrolWitness(sim.agents, sim.bikes, x, z, this.sight);
+    if (i < 0) return;
+    const a = sim.agents[i]!;
+    this.wanted.report(severity, x, z);
+    this.police.sim.spawnAt(a.x, a.z, a.yaw, 'car', a.speed);
+    const cam = this.camera.forward();
+    sim.respawn(i, { x, z, dirX: cam.x, dirZ: cam.z });
+    this.hud.showToast('Công an tuần tra thấy hết rồi!', 2.4);
+    playSfx('alert');
   }
 
   /** Tín trúng đòn (người đi đường đánh trả): mất máu, khựng nhẹ, rung camera; hết máu thì GỤC. */
@@ -1062,6 +1084,8 @@ export class Game {
       c.obstacles[1].z = t.z - fz;
       out.push(c.obstacles[0], c.obstacles[1]);
     }
+    // Chốt chặn của công an: xe NPC dừng / lách quanh.
+    this.police.addObstacles(out);
     return out;
   }
 
@@ -1130,6 +1154,7 @@ export class Game {
     this.traffic.sim.respawn(index, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z });
     this.mount(car);
     this.carjackT = CARJACK.crimeMemory;
+    this.patrolSees(1, me.x, me.z);
     this.hud.showToast(kind === 'taxi' ? 'Cướp taxi! Tài xế bị lôi ra đường…' : 'Cướp xe! Tài xế bị lôi ra đường…', 2.2);
     playSfx('scream');
   }
@@ -1409,7 +1434,10 @@ export class Game {
       const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
       if (this.chase.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.heat.level)) this.caughtThisStep = true;
       // Truy nã: xe công an theo sao; công an thấy thì vùng tìm kiếm đi theo Tín, khuất mặt đủ lâu thì thoát.
-      if (this.police.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.wanted.level) && !this.outcome) this.bustedThisStep = true;
+      // Hướng chạy để đặt chốt chặn phía trước (lùi xe thì hướng ngược đầu xe).
+      const heading = this.riding ? this.riding.phys.heading() + (this.riding.phys.speed < 0 ? Math.PI : 0) : this.character.yaw;
+      const runner = { x: me.x, z: me.z, speed: mySpeed, dirX: Math.sin(heading), dirZ: Math.cos(heading) };
+      if (this.police.step(STEP, runner, this.wanted.level) && !this.outcome) this.bustedThisStep = true;
       if (this.wanted.update(STEP, this.police.sim.seen, me.x, me.z, this.wanted.level > 0 && this.inHem(me.x, me.z)) === 'escaped') {
         this.police.sim.disperse();
         this.hud.showToast('Đã thoát khỏi truy nã!', 2.4);

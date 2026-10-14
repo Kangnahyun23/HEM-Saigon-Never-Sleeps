@@ -8,10 +8,22 @@ import { lanePoint, type TrafficLane, type TrafficNetwork } from './trafficNetwo
  * Xe truy đuổi bám theo mạng đường lớn (tìm đường ngắn nhất giữa các giao lộ); khi thấy Tín trong tầm nhìn và
  * đủ gần thì lao thẳng tới. Chúng KHÔNG vào hẻm ⇒ chui hẻm, khuất tầm nhìn là cách cắt đuôi.
  * Bị một xe áp sát khi đang đứng / chạy chậm thì "bị chặn đầu" (game trừ tiền, theo kiểu hoạt hình).
+ *
+ * Công an (N7.3) dùng chung bộ máy này, thêm: ô tô công an từ 3 sao (to, nhanh trên đường thẳng, cua kém xe máy) và
+ * CHỐT CHẶN — ô tô đỗ chắn ngang đường phía trước khi Tín đang phóng xe; Tín qua khỏi chốt thì chúng rút đi.
  */
+
+export type ChaserKind = 'bike' | 'car';
 
 export interface Chaser {
   id: number;
+  kind: ChaserKind;
+  /** 'chase' = bám theo Tín; 'block' = ô tô đỗ chắn ngang đường (chốt chặn), đứng yên tới khi Tín qua khỏi. */
+  mode: 'chase' | 'block';
+  /** Chốt chặn: còn đứng bao lâu (s), và hướng con đường lúc đặt chốt (để biết Tín đã vượt qua chưa). */
+  life: number;
+  roadX: number;
+  roadZ: number;
   x: number;
   z: number;
   yaw: number;
@@ -34,6 +46,34 @@ export interface ChasePlayer {
   z: number;
   /** Tốc độ hiện tại (m/s). */
   speed: number;
+  /** Hướng đang chạy (vector đơn vị) — để đặt chốt chặn phía trước. Không có thì không đặt chốt. */
+  dirX?: number;
+  dirZ?: number;
+}
+
+/** Thông số riêng của ô tô truy đuổi (xe máy dùng các trường chung của ChaseConfig). */
+export interface ChaseCarConfig {
+  readonly maxSpeed: number;
+  readonly accel: number;
+  readonly turnRate: number;
+  readonly catchRange: number;
+  /** Dừng cách Tín ngần này (m, tâm tới tâm). */
+  readonly stopGap: number;
+  /** Bán kính chiếm chỗ khi tách khỏi xe khác (m). */
+  readonly radius: number;
+}
+
+/** Chốt chặn đường: từ `level` sao, Tín chạy nhanh hơn `minSpeed` thì đặt chốt cách phía trước `distance` m. */
+export interface RoadblockConfig {
+  readonly level: number;
+  readonly distance: number;
+  readonly minSpeed: number;
+  /** Nghỉ giữa hai lần đặt chốt (s). */
+  readonly cooldown: number;
+  /** Chốt đứng tối đa bao lâu (s). */
+  readonly life: number;
+  /** Tín vượt qua chốt ngần này (m) thì chốt rút. */
+  readonly passed: number;
 }
 
 /** Thông số một phe truy đuổi (đàn em của Phát, công an). */
@@ -51,6 +91,10 @@ export interface ChaseConfig {
   /** Xuất hiện cách Tín trong khoảng này (m). */
   readonly spawnMin: number;
   readonly spawnMax: number;
+  /** Số ô tô trong tổng số xe theo cấp (thiếu = chỉ có xe máy). */
+  readonly carsPerLevel?: readonly number[];
+  readonly car?: ChaseCarConfig;
+  readonly roadblock?: RoadblockConfig;
 }
 
 /**
@@ -68,6 +112,10 @@ export const POLICE_CHASE: ChaseConfig = {
   catchTime: 2,
   spawnMin: 60,
   spawnMax: 110,
+  // Từ 3 sao có ô tô: nhanh hơn xe máy của Tín trên đường thẳng (Tín lái ô tô hết ga vẫn nhanh hơn), cua kém hơn.
+  carsPerLevel: [0, 0, 0, 1, 2, 3],
+  car: { maxSpeed: 23, accel: 5.5, turnRate: 1.7, catchRange: 3.8, stopGap: 3.3, radius: 2.3 },
+  roadblock: { level: 3, distance: 140, minSpeed: 8, cooldown: 30, life: 45, passed: 25 },
 };
 
 /** Số xe truy đuổi theo cấp Độ Nóng. */
@@ -88,6 +136,10 @@ export const CHASE: ChaseConfig = {
 
 /** Xe truy đuổi dừng cách Tín ngần này (m, tâm tới tâm): đầu xe 0,95 m + thân người 0,3 m + khoảng chừa — vẫn trong tầm bắt. */
 const STOP_GAP = 2;
+/** Bán kính chiếm chỗ của xe máy truy đuổi khi tách khỏi xe khác. */
+const BIKE_RADIUS = 1;
+/** Đặt chốt không được (không có đường phía trước) thì thử lại sau ngần này giây. */
+const BLOCK_RETRY = 2;
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -97,6 +149,7 @@ export class ChaseSim {
   private readonly rng: Rng;
   private nextId = 0;
   private closeTime = 0;
+  private blockTimer = 0;
   /** Lần cuối xe truy đuổi thấy Tín (để HUD báo "đang bị bám"). */
   seen = false;
 
@@ -153,7 +206,87 @@ export class ChaseSim {
     return path[0] === from ? path : [to];
   }
 
-  private spawn(player: ChasePlayer): void {
+  /** Thêm một xe truy đuổi ở (x, z) hướng `yaw` — ví dụ xe tuần tra vừa thấy Tín gây án quay sang đuổi. */
+  spawnAt(x: number, z: number, yaw: number, kind: ChaserKind, speed = 6): Chaser {
+    const c: Chaser = {
+      id: this.nextId++,
+      kind,
+      mode: 'chase',
+      life: 0,
+      roadX: 0,
+      roadZ: 0,
+      x,
+      z,
+      yaw,
+      lean: 0,
+      speed,
+      prevX: x,
+      prevZ: z,
+      prevYaw: yaw,
+      prevLean: 0,
+      generation: 0,
+      path: [],
+      repath: 0,
+      leaving: false,
+    };
+    this.chasers.push(c);
+    return c;
+  }
+
+  /** Đang có chốt chặn (chưa rút)? */
+  get blocking(): boolean {
+    for (const c of this.chasers) if (c.mode === 'block' && !c.leaving) return true;
+    return false;
+  }
+
+  /**
+   * Đặt chốt chặn trên đoạn đường thẳng chừng `distance` m phía trước Tín (cùng chiều Tín đang chạy): ô tô đỗ ngang,
+   * nối đuôi nhau lấp gần hết nửa đường đại lộ (dải phân cách chắn nửa kia) hoặc cả lòng đường thường — chừa khe sát
+   * lề đủ cho xe máy lách. Trả false nếu phía trước không có đoạn đường nào hợp.
+   */
+  placeRoadblock(player: ChasePlayer): boolean {
+    const rb = this.config.roadblock;
+    const dx = player.dirX ?? 0;
+    const dz = player.dirZ ?? 0;
+    if (!rb || Math.hypot(dx, dz) < 0.5) return false;
+    const ax = player.x + dx * rb.distance;
+    const az = player.z + dz * rb.distance;
+    let best: TrafficLane | null = null;
+    let bestS = 0;
+    let bestErr = Infinity;
+    for (const lane of this.network.lanes) {
+      if (lane.dx * dx + lane.dz * dz < 0.8) continue;
+      const s = (ax - lane.x0) * lane.dx + (az - lane.z0) * lane.dz;
+      // Không đặt trong lòng giao lộ: chừa hai đầu đoạn thẳng.
+      if (s < 12 || s > lane.length - 12) continue;
+      const lateral = (ax - lane.x0) * lane.rx + (az - lane.z0) * lane.rz;
+      const err = Math.abs(lateral - (lane.minOffset + lane.maxOffset) / 2);
+      if (err < bestErr && err < lane.road.width / 2 + 6) {
+        bestErr = err;
+        best = lane;
+        bestS = s;
+      }
+    }
+    if (!best) return false;
+    const half = best.road.width / 2 - 0.3;
+    // Đại lộ có dải phân cách (dải làn bắt đầu xa tim đường): chắn nửa của chiều Tín đi; đường thường chắn cả lòng.
+    const divided = best.minOffset > 1.2;
+    const inner = divided ? best.minOffset - 0.8 : -half;
+    const span = half - inner;
+    const n = Math.max(1, Math.round(span / 4.4));
+    const yaw = Math.atan2(best.dx, best.dz) + Math.PI / 2;
+    for (let k = 0; k < n; k++) {
+      const p = lanePoint(best, bestS, inner + (span * (k + 0.5)) / n);
+      const c = this.spawnAt(p.x, p.z, k % 2 === 0 ? yaw : yaw + Math.PI, 'car', 0);
+      c.mode = 'block';
+      c.life = rb.life;
+      c.roadX = best.dx;
+      c.roadZ = best.dz;
+    }
+    return true;
+  }
+
+  private spawn(player: ChasePlayer, kind: ChaserKind): void {
     const lanes = this.network.lanes;
     let best: { x: number; z: number; yaw: number } | null = null;
     for (let i = 0; i < 40; i++) {
@@ -166,30 +299,29 @@ export class ChaseSim {
       if (!this.sight.clear(p.x, p.z, player.x, player.z)) break;
     }
     best ??= { x: player.x + 70, z: player.z, yaw: -Math.PI / 2 };
-    this.chasers.push({
-      id: this.nextId++,
-      ...best,
-      lean: 0,
-      speed: 6,
-      prevX: best.x,
-      prevZ: best.z,
-      prevYaw: best.yaw,
-      prevLean: 0,
-      generation: 0,
-      path: [],
-      repath: 0,
-      leaving: false,
-    });
+    this.spawnAt(best.x, best.z, best.yaw, kind);
   }
 
   /** Một bước. `level`: Độ Nóng / sao truy nã hiện tại. Trả về true nếu Tín vừa bị chặn đầu / bị bắt. */
   update(dt: number, player: ChasePlayer, level: number): boolean {
     const cfg = this.config;
-    const want = cfg.perLevel[clamp(level, 0, cfg.perLevel.length - 1)] as number;
-    const active = this.chasers.filter((c) => !c.leaving);
-    for (let i = active.length; i < want; i++) this.spawn(player);
+    const lvl = clamp(level, 0, cfg.perLevel.length - 1);
+    const want = cfg.perLevel[lvl] as number;
+    const wantCars = Math.min(want, cfg.carsPerLevel?.[lvl] ?? 0);
+    // Xe chốt chặn không tính vào số xe đuổi theo cấp.
+    const active = this.chasers.filter((c) => !c.leaving && c.mode === 'chase');
+    let cars = 0;
+    for (const c of active) if (c.kind === 'car') cars++;
+    for (let i = active.length; i < want; i++) this.spawn(player, cars++ < wantCars ? 'car' : 'bike');
     // Hạ cấp / hết truy đuổi: các xe thừa rút lui.
     active.slice(want).forEach((c) => (c.leaving = true));
+
+    // Chốt chặn: đủ sao, Tín đang phóng xe, chưa có chốt nào ⇒ đặt chốt phía trước.
+    const rb = cfg.roadblock;
+    if (rb && lvl >= rb.level) {
+      this.blockTimer -= dt;
+      if (this.blockTimer <= 0 && player.speed >= rb.minSpeed && !this.blocking) this.blockTimer = this.placeRoadblock(player) ? rb.cooldown : BLOCK_RETRY;
+    }
 
     this.seen = false;
     let close = false;
@@ -198,10 +330,23 @@ export class ChaseSim {
       c.prevZ = c.z;
       c.prevYaw = c.yaw;
       c.prevLean = c.lean;
+      const car = c.kind === 'car' ? cfg.car : undefined;
       const d = Math.hypot(player.x - c.x, player.z - c.z);
       const visible = d < cfg.sightRange && this.sight.clear(c.x, c.z, player.x, player.z);
       if (!c.leaving && visible) this.seen = true;
-      if (!c.leaving && d < cfg.catchRange) close = true;
+      if (!c.leaving && d < (car?.catchRange ?? cfg.catchRange)) close = true;
+
+      if (c.mode === 'block') {
+        // Chốt chặn đứng yên; hết giờ, hạ sao, hoặc Tín đã vượt qua chốt thì rút đi (thành xe thường, chạy xa rồi biến mất).
+        c.speed = 0;
+        c.life -= dt;
+        const past = (player.x - c.x) * c.roadX + (player.z - c.z) * c.roadZ;
+        if (c.life <= 0 || !rb || lvl < rb.level || past > rb.passed) {
+          c.mode = 'chase';
+          c.leaving = true;
+        }
+        continue;
+      }
 
       // Chọn điểm hướng tới: thấy & gần ⇒ lao thẳng; không thì theo đường lớn.
       let tx: number;
@@ -240,33 +385,37 @@ export class ChaseSim {
       // Lái: quay đầu có giới hạn, cua gắt thì giảm tốc.
       const want = Math.atan2(tx - c.x, tz - c.z);
       const diff = wrap(want - c.yaw);
-      const turn = clamp(diff, -cfg.turnRate * dt, cfg.turnRate * dt);
+      const turnRate = car?.turnRate ?? cfg.turnRate;
+      const accel = car?.accel ?? cfg.accel;
+      const turn = clamp(diff, -turnRate * dt, turnRate * dt);
       c.yaw = wrap(c.yaw + turn);
       const distT = Math.hypot(tx - c.x, tz - c.z);
-      let target = cfg.maxSpeed * Math.max(0.3, Math.cos(diff));
+      let target = (car?.maxSpeed ?? cfg.maxSpeed) * Math.max(0.3, Math.cos(diff));
       // Áp sát rồi dừng cách STOP_GAP (không đâm xuyên, không hất người đi bộ): tốc độ không quá mức còn phanh kịp.
       // Không cộng tốc độ của Tín vào đây — bị xe đẩy thì Tín "nhanh" lên, cộng vào sẽ thành vòng lặp càng đẩy càng nhanh;
       // Tín chạy thật thì xe vẫn bám theo ở khoảng cách mà đường phanh cho phép.
-      if (!c.leaving && visible) target = Math.min(target, Math.sqrt(2 * cfg.accel * 1.5 * Math.max(0, d - STOP_GAP)));
+      if (!c.leaving && visible) target = Math.min(target, Math.sqrt(2 * accel * 1.5 * Math.max(0, d - (car?.stopGap ?? STOP_GAP))));
       if (distT < 3 && !visible) target = Math.min(target, 6);
-      c.speed += clamp(target - c.speed, -cfg.accel * 1.5 * dt, cfg.accel * dt);
+      c.speed += clamp(target - c.speed, -accel * 1.5 * dt, accel * dt);
 
       // Tách nhau ra, không chồng lên xe khác.
       let px = 0;
       let pz = 0;
+      const own = car?.radius ?? BIKE_RADIUS;
       for (const o of this.chasers) {
         if (o === c) continue;
         const ox = c.x - o.x;
         const oz = c.z - o.z;
         const od = Math.hypot(ox, oz);
-        if (od > 0.01 && od < 2) {
-          px += (ox / od) * (2 - od);
-          pz += (oz / od) * (2 - od);
+        const room = own + (o.kind === 'car' ? (cfg.car?.radius ?? BIKE_RADIUS) : BIKE_RADIUS);
+        if (od > 0.01 && od < room) {
+          px += (ox / od) * (room - od);
+          pz += (oz / od) * (room - od);
         }
       }
       c.x += Math.sin(c.yaw) * c.speed * dt + px * dt * 2;
       c.z += Math.cos(c.yaw) * c.speed * dt + pz * dt * 2;
-      const leanGoal = clamp(Math.atan((c.speed * (turn / dt)) / 9.81), -0.5, 0.5);
+      const leanGoal = car ? 0 : clamp(Math.atan((c.speed * (turn / dt)) / 9.81), -0.5, 0.5);
       c.lean += (leanGoal - c.lean) * (1 - Math.exp(-5 * dt));
     }
     // Xe rút lui đi đủ xa thì biến mất.

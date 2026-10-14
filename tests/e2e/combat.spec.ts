@@ -19,6 +19,11 @@ const victim = (page: Page, id: number) =>
     const w = (window.__HEM__!.game as Game).pedestrians.walkers[i]!;
     return { health: w.health, down: w.down, dead: w.dead, flee: w.flee };
   }, id);
+/**
+ * Tắt xe tuần tra: nó thấy Tín đánh người thì quay sang bắt ngay tại chỗ (màn hình BỊ BẮT khoá điều khiển) — test này
+ * chỉ kiểm tra vũ khí / máu, phần xe tuần tra có test riêng (patrol.spec.ts).
+ */
+const noPatrol = (page: Page) => page.evaluate(() => ((window.__HEM__!.game as { patrolSees: () => void }).patrolSees = () => undefined));
 /** Bấm chuột trái một khung (đòn nhẹ). */
 const swing = (page: Page) =>
   page.evaluate(() => {
@@ -33,6 +38,7 @@ test('cận chiến: combo mã tấu đánh ngã rồi gục, người xung quan
   test.setTimeout(300_000);
   await page.goto('/?moi=1&gio=10');
   await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  await noPatrol(page);
 
   const id = await page.evaluate(() => {
     const h = window.__HEM__!;
@@ -115,6 +121,7 @@ test('vũ khí nhặt được: lấy ghế nhựa ở quán cóc, đập tới 
   test.setTimeout(300_000);
   await page.goto('/?moi=1&gio=10');
   await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+  await noPatrol(page);
 
   // Tới chồng ghế gần chỗ xuất phát nhất.
   await page.evaluate(() => {
