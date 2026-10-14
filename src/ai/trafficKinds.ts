@@ -3,7 +3,7 @@
  * Mô phỏng (traffic.ts), thân va chạm (trafficSystem.ts) và hình (trafficFleetView.ts) đều đọc bảng này.
  */
 
-export type TrafficKind = 'bike' | 'sedan' | 'taxi' | 'pickup' | 'bus' | 'baGac' | 'xichLo' | 'cart';
+export type TrafficKind = 'bike' | 'sedan' | 'taxi' | 'pickup' | 'police' | 'bus' | 'baGac' | 'xichLo' | 'cart';
 
 export interface VehicleSpec {
   /** Chiều dài, nửa bề ngang (tính cả khoảng hở khi xét va chạm), chiều cao (m). */
@@ -77,6 +77,8 @@ export const VEHICLE_SPECS: Record<TrafficKind, VehicleSpec> = {
   // Xích lô: khách ngồi trước, người đạp ngồi sau.
   xichLo: { ...CAR, length: 2.6, halfWidth: 0.6, height: 2.2, accel: 0.8, brake: 3.5, speedScale: 0.4, maxSpeed: 3.4, lateralSpeed: 0.5, turnScale: 0.7, position: 'curb', horn: false, big: false },
   // Xe đẩy bán hàng rong: người bán đi bộ đẩy xe.
+  // Ô tô công an đi tuần: chạy như ô tô thường, thấy Tín gây án là quay sang truy đuổi (ai/patrol.ts).
+  police: CAR,
   cart: { ...CAR, length: 2.3, halfWidth: 0.5, height: 1.95, accel: 0.6, brake: 2.5, speedScale: 0.2, maxSpeed: 1.25, lateralSpeed: 0.4, turnScale: 0.5, position: 'curb', horn: false, big: false },
 };
 
@@ -90,8 +92,8 @@ export function bodyHalfExtents(kind: TrafficKind): { x: number; y: number; z: n
   return { x: spec.halfWidth - 0.05, y: spec.height / 2, z: spec.length / 2 };
 }
 
-/** Thứ tự loại xe khi chia `cars` ô tô: lần lượt theo vòng này (3 xe trở lên là có một xe buýt). */
-export const CAR_MIX: readonly TrafficKind[] = ['sedan', 'taxi', 'bus', 'sedan', 'pickup', 'taxi', 'sedan'];
+/** Thứ tự loại xe khi chia `cars` ô tô: lần lượt theo vòng này (3 xe trở lên là có một xe buýt, 4 xe có một xe tuần tra). */
+export const CAR_MIX: readonly TrafficKind[] = ['sedan', 'taxi', 'bus', 'police', 'pickup', 'taxi', 'sedan'];
 /** Thứ tự loại xe thô sơ. */
 export const SLOW_MIX: readonly TrafficKind[] = ['baGac', 'xichLo', 'cart'];
 

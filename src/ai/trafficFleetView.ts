@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { createRng, pick } from '@/core/random';
-import { NPC_PAINT, npcCarPaint, npcVehicleParts, WALKER_HIP, type NpcLook, type NpcPart, type NpcVehicleKind } from '@/vehicles/npcVehicleModels';
+import { NPC_PAINT, npcCarPaint, POLICE_PAINT, npcVehicleParts, WALKER_HIP, type NpcLook, type NpcPart, type NpcVehicleKind } from '@/vehicles/npcVehicleModels';
 import { addNightOnly } from '@/world/nightGlow';
 import type { TrafficAgent } from './traffic';
 import { VEHICLE_SPECS, type TrafficKind } from './trafficKinds';
@@ -37,6 +37,8 @@ interface Slot {
   generation: number;
   /** Xe này có phần "tuỳ xe" không (hàng trên thùng, khách ngồi). */
   optional: boolean;
+  /** Đang ẩn (chỗ chưa dùng — xe truy đuổi có lúc ít lúc nhiều). */
+  hidden: boolean;
 }
 
 const HATS = ['#d9c48a', '#d9c48a', '#e8dcb0', '#3a5a8a', '#5a5a5a'];
@@ -91,7 +93,7 @@ export class TrafficFleetView {
   private readonly beams: THREE.InstancedMesh;
 
   /** `kinds`: loại xe của từng chỗ, theo đúng thứ tự các xe sẽ đưa vào `update`. */
-  constructor(kinds: readonly TrafficKind[]) {
+  constructor(kinds: readonly (TrafficKind | NpcVehicleKind)[]) {
     const cache = new Map<TrafficKind, KindPieces>();
     let box = 0;
     let cyl = 0;
@@ -100,7 +102,7 @@ export class TrafficFleetView {
       if (kind === 'bike') throw new Error('TrafficFleetView không vẽ xe máy (đã có TrafficView)');
       let pieces = cache.get(kind);
       if (!pieces) cache.set(kind, (pieces = buildPieces(kind)));
-      this.slots.push({ pieces, box, cyl, lamp, generation: -1, optional: false });
+      this.slots.push({ pieces, box, cyl, lamp, generation: -1, optional: false, hidden: false });
       box += pieces.boxes.length;
       cyl += pieces.cyls.length;
       lamp += pieces.lamps.length;
@@ -139,6 +141,9 @@ export class TrafficFleetView {
     if (kind === 'bus' || kind === 'baGac' || kind === 'xichLo' || kind === 'cart') {
       _colors.body = pick(rng, NPC_PAINT[kind].body);
       _colors.trim = pick(rng, NPC_PAINT[kind].trim);
+    } else if (kind === 'police') {
+      _colors.body = POLICE_PAINT.body;
+      _colors.trim = POLICE_PAINT.trim;
     } else if (kind !== 'bike') {
       const paint = npcCarPaint(kind, agent.id, agent.generation);
       _colors.body = paint.body;
@@ -183,15 +188,29 @@ export class TrafficFleetView {
     }
   }
 
+  /** Giấu mọi khối của chỗ `i` (thu về điểm 0). */
+  private hide(i: number): void {
+    const slot = this.slots[i] as Slot;
+    if (slot.hidden) return;
+    slot.hidden = true;
+    const { pieces } = slot;
+    for (let k = 0; k < pieces.boxes.length; k++) this.boxes.setMatrixAt(slot.box + k, ZERO);
+    for (let k = 0; k < pieces.cyls.length; k++) this.cyls.setMatrixAt(slot.cyl + k, ZERO);
+    for (let k = 0; k < pieces.lamps.length; k++) this.lamps.setMatrixAt(slot.lamp + k, ZERO);
+    this.beams.setMatrixAt(i, ZERO);
+  }
+
   /**
    * Ghi ma trận cho các xe `agents[first]`, `agents[first + 1]`… (đúng thứ tự `kinds` lúc tạo);
-   * `alpha` nội suy giữa bước mô phỏng trước và sau.
+   * `alpha` nội suy giữa bước mô phỏng trước và sau. `count`: chỉ vẽ ngần ấy chỗ đầu, các chỗ sau ẩn đi.
    */
-  update(agents: readonly FleetPose[], first: number, alpha: number): void {
-    const n = Math.min(this.slots.length, agents.length - first);
+  update(agents: readonly FleetPose[], first: number, alpha: number, count = Infinity): void {
+    const n = Math.min(this.slots.length, agents.length - first, count);
+    for (let i = n; i < this.slots.length; i++) this.hide(i);
     for (let i = 0; i < n; i++) {
       const a = agents[first + i] as FleetPose;
       const slot = this.slots[i] as Slot;
+      slot.hidden = false;
       if (slot.generation !== a.generation) this.paint(a, slot);
       const dyaw = Math.atan2(Math.sin(a.yaw - a.prevYaw), Math.cos(a.yaw - a.prevYaw));
       _p.set(a.prevX + (a.x - a.prevX) * alpha, 0, a.prevZ + (a.z - a.prevZ) * alpha);

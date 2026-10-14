@@ -73,7 +73,14 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   thành ô tô lái được cùng kiểu cùng màu (`npcCarPaint`), chỗ của nó trong dòng xe hiện lại ở xa; giữ tối đa 2 xe cướp
   được ngoài xe đậu sẵn (quá thì chiếc xa nhất nhường chỗ);
 - [ ] N7.1 (phần 3) mẫu xe CC0 thay khối hộp (cả xe đậu lẫn đàn xe NPC — phải cùng một mẫu thì xe bị cướp mới không đổi hình);
-- [ ] N7.3–N10.
+- [x] N7.3 xe tuần tra: một ô tô công an (trắng – xanh rêu, đèn đỏ / xanh trên mui) chạy lẫn trong dòng xe NPC (loại
+  `police` trong `CAR_MIX`). Đánh người / cướp xe ngay trong tầm nhìn của nó (45 m, nhà không che — `ai/patrol.ts`) thì
+  **lên sao liền** khỏi chờ dân gọi, và chính chiếc đó rời dòng xe quay sang đuổi. Đoàn truy đuổi có **ô tô công an từ 3 sao**
+  (`POLICE_CHASE.carsPerLevel` 1 / 2 / 3 ở 3 / 4 / 5 sao — nhanh hơn xe máy, cua rộng hơn, không nghiêng) và **chốt chặn**:
+  Tín đang phóng ≥ 8 m/s thì 2–3 ô tô đỗ ngang đường ~140 m phía trước (đường có dải phân cách chỉ chặn nửa chiều đi; chừa
+  khe ở lề cho xe máy lách), vượt qua 25 m hoặc 45 giây thì giải tán, xe trong chốt chuyển sang đuổi. Xe NPC dừng / lách
+  quanh chốt như vật cản. Hình ô tô công an dùng chung `TrafficFleetView`;
+- [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
 

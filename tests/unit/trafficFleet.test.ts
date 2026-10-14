@@ -16,7 +16,7 @@ const city = generateCity();
 const net = buildTrafficNetwork(city);
 const STEP = 1 / 60;
 const center: Focus = { x: city.spawn.x, z: city.spawn.z };
-const NON_BIKES = ['sedan', 'taxi', 'pickup', 'bus', 'baGac', 'xichLo', 'cart'] as const satisfies readonly NpcVehicleKind[];
+const NON_BIKES = ['sedan', 'taxi', 'pickup', 'police', 'bus', 'baGac', 'xichLo', 'cart'] as const satisfies readonly NpcVehicleKind[];
 
 const lane = (id: number): TrafficLane => net.lanes[id] as TrafficLane;
 const longest = (kind?: 'avenue' | 'street'): TrafficLane =>
@@ -67,8 +67,10 @@ describe('loại xe', () => {
     expect(kinds.slice(5, 12)).toContain('taxi');
     expect(kinds.slice(5, 12)).toContain('pickup');
     expect(kinds.slice(12)).toEqual(['baGac', 'xichLo', 'cart']);
-    // Ba ô tô đầu tiên đã có một xe buýt (máy yếu chỉ có vài chiếc).
+    // Ba ô tô đầu tiên đã có một xe buýt, bốn chiếc có một xe công an đi tuần (máy yếu chỉ có 4 ô tô).
     expect(fleetKinds(0, 3, 0)).toContain('bus');
+    expect(fleetKinds(0, 4, 0).filter((k) => k === 'police')).toHaveLength(1);
+    expect(fleetKinds(0, 10, 0).filter((k) => k === 'police')).toHaveLength(1);
   });
 
   it('mô phỏng tạo đúng số xe, xe máy nằm đầu mảng', () => {

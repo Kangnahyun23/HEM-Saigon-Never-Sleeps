@@ -118,7 +118,10 @@ src/
                      nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test),
                      seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương)
                      chase (xe truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test; cấu hình CHASE cho đàn em
-                     Phát, POLICE_CHASE cho công an), chaseSystem (thân Rapier + hình; công an có đèn chớp đỏ – xanh)
+                     Phát, POLICE_CHASE cho công an: từ 3 sao có ô tô (`carsPerLevel`) và chốt chặn ô tô đỗ ngang đường phía
+                     trước — `placeRoadblock`, chaser `mode: 'block'`), chaseSystem (thân Rapier + hình theo loại xe máy / ô tô;
+                     công an có đèn chớp đỏ – xanh; chốt chặn là vật cản cho xe NPC qua `addObstacles`),
+                     patrol (xe tuần tra 'police' trong dòng xe NPC thấy Tín gây án ⇒ lên sao ngay, chính nó quay sang đuổi — có unit test)
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker
                      story (5 nhiệm vụ Hồi 1: điểm hẹn, lời thoại, trả nợ — có unit test), storyRunner
@@ -149,7 +152,7 @@ src/
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
 scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC: traffic + trafficFleet)
-tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops, car
+tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops, car, patrol
 ```
 
 Quy ước hướng: yaw = 0 nhìn về +Z; hướng (sin yaw, cos yaw); bên TRÁI là (cos yaw, −sin yaw).

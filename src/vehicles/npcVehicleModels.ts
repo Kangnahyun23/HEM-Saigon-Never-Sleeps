@@ -7,7 +7,7 @@ import { CAR_BODY_COLORS, CAR_ROLE_COLORS, carParts, TAXI_COLORS, type CarKind }
  * Toạ độ cục bộ: đầu xe hướng +Z, Y hướng lên, gốc ở mặt đất giữa xe; bên trái của xe là +X. Đơn vị mét.
  */
 
-export type NpcVehicleKind = CarKind | 'bus' | 'baGac' | 'xichLo' | 'cart';
+export type NpcVehicleKind = CarKind | 'police' | 'bus' | 'baGac' | 'xichLo' | 'cart';
 
 /** Màu lấy theo "diện mạo" từng xe (lớp hình chọn có seed): sơn thân, màu phụ, áo quần người lái, hàng chở, khách. */
 export type NpcLook = 'body' | 'trim' | 'shirt' | 'pants' | 'skin' | 'hat' | 'cargo' | 'guest';
@@ -56,6 +56,20 @@ function car(kind: CarKind): NpcPart[] {
     color: p.role === 'body' || p.role === 'trim' ? p.role : CAR_ROLE_COLORS[p.role],
     ...(p.role === 'light' || p.role === 'tail' || p.role === 'sign' ? { lamp: true } : {}),
   }));
+}
+
+/** Màu xe công an (hư cấu): thân trắng, nóc + hông dưới xanh ô-liu như quân phục. */
+export const POLICE_PAINT = { body: '#eef0ec', trim: '#4f6030' } as const;
+
+/** Ô tô công an: dáng sedan (nóc + hông dưới màu phụ như taxi) và giàn đèn đỏ – xanh trên nóc thay cho hộp đèn taxi. */
+function police(): NpcPart[] {
+  // Mẫu taxi = sedan sơn hai màu + hộp đèn nóc (khối cuối cùng) ⇒ bỏ hộp đèn, thay bằng giàn đèn.
+  return [
+    ...car('taxi').slice(0, -1),
+    { shape: 'box', size: [1.1, 0.07, 0.26], pos: [0, 1.4, -0.15], color: DARK },
+    { shape: 'box', size: [0.46, 0.1, 0.22], pos: [0.27, 1.48, -0.15], color: '#ff2a2a', lamp: true },
+    { shape: 'box', size: [0.46, 0.1, 0.22], pos: [-0.27, 1.48, -0.15], color: '#2a6bff', lamp: true },
+  ];
 }
 
 /** Xe buýt nội thành: thân sơn màu, băng kính tối chạy suốt, nóc trắng có cục máy lạnh, hai cửa bên phải. */
@@ -224,6 +238,8 @@ export function npcVehicleParts(kind: NpcVehicleKind): NpcPart[] {
       return xichLo();
     case 'cart':
       return cart();
+    case 'police':
+      return police();
     default:
       return car(kind);
   }

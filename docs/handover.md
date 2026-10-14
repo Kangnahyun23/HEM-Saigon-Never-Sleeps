@@ -174,6 +174,20 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 - **Chưa làm**: động tác mở cửa / lôi tài xế (hiện đổi chỗ tức thì); cướp xe máy NPC; người đi đường chứng kiến chưa phản
   ứng (chỉ tài xế gọi báo); xe cướp được không lưu vào bản lưu.
 
+### N7.3 — xe tuần tra (nhánh `n7.3-xe-tuan-tra`, tách từ nhánh `n7.1b-cuop-xe`)
+- **Xe tuần tra trong dòng xe**: loại `police` trong `trafficKinds.ts` (một chỗ trong `CAR_MIX`, mẫu khối taxi + đèn trên mui
+  ở `npcVehicleModels.ts`). `ai/patrol.ts` → `patrolWitness()` tìm xe tuần tra gần nhất thấy chỗ gây án (45 m, `SightGrid`).
+  `game.patrolSees()` gọi sau `pedestrians.witness` (đánh người) và trong `carjack()`: `wanted.report` ngay, rồi
+  `police.sim.spawnAt(...)` đúng chỗ chiếc đó và `traffic.sim.respawn(i)` cho chỗ của nó trong dòng xe.
+- **Ô tô trong đoàn truy đuổi**: `Chaser.kind` ('bike' | 'car'), `POLICE_CHASE.car` (tốc độ, tăng tốc, góc cua, bán kính),
+  `carsPerLevel`. `perLevel` vẫn là TỔNG số xe đuổi; xe chốt chặn không tính vào đó.
+- **Chốt chặn**: `ChaseSim.placeRoadblock(player)` cần `dirX/dirZ` (game truyền hướng đầu xe, lùi thì ngược lại). Chọn làn
+  thẳng hàng hướng chạy ở ~140 m phía trước, xe đỗ vuông góc, `mode: 'block'` đứng yên tới khi Tín vượt 25 m / hết 45 giây /
+  tụt dưới 3 sao. `chaseSystem.addObstacles()` đưa chốt vào vật cản của xe NPC.
+- **Hình**: ô tô công an vẽ bằng `TrafficFleetView` (kind 'police'); `update(..., count)` ẩn chỗ thừa. Đèn chớp dùng `LIGHT_BAR` theo loại.
+- **Chưa làm**: còi hú riêng cho ô tô (dùng chung `siren`); công an xuống xe đi bộ; ô tô công an húc / ép xe Tín;
+  xe tuần tra chỉ "thấy" lúc gây án (chưa nhận ra Tín đang bị truy nã khi chạy ngang).
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -182,7 +196,7 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
      phần 2 (cướp ô tô NPC) — xong, nhánh `n7.1b-cuop-xe`; còn phần 3: thay khối hộp bằng mẫu xe CC0
      (phải thay cả xe đậu lẫn đàn xe NPC cùng lúc, không thì xe bị cướp đổi hình);
    - N7.2 giao thông đa dạng (ô tô, taxi, buýt, ba gác, xích lô, xe đẩy) — xong, nhánh `n7.2-giao-thong-da-dang`;
-   - N7.3 xe tuần tra công an: phần xe máy đã có ở N5.4, còn ô tô công an + ô tô chặn đường từ 3 sao;
+   - N7.3 xe tuần tra công an (xe tuần tra trong dòng xe, ô tô đuổi + chốt chặn từ 3 sao) — xong, nhánh `n7.3-xe-tuan-tra`;
    - N7.4 độ xe ở tiệm của Vy.
 3. **N8 bản đồ 3 khu**:
    - N8.1 chia vùng + tải theo vùng (việc khó nhất);
@@ -242,9 +256,11 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 - N7.2 nằm trên nhánh `n7.2-giao-thong-da-dang`, tách từ nhánh N7.1 ⇒ thứ tự merge: #28 → #29 → PR của N7.2.
   Unit test: 245. E2E `traffic` thêm 1 test (8 ảnh `fleet-*`). PR #30, CI xanh.
 - N7.1 phần 2 nằm trên nhánh `n7.1b-cuop-xe`, tách từ nhánh N7.2 ⇒ thứ tự merge: #28 → #29 → #30 → PR cướp xe.
-  Unit test: 257 (thêm `carjack.test.ts`, 12 test). E2E `car` thêm 1 test (ảnh `car-5-jack-stop`, `car-6-jacked`).
+  Unit test: 257 (thêm `carjack.test.ts`, 12 test). E2E `car` thêm 1 test (ảnh `car-5-jack-stop`, `car-6-jacked`). PR #31.
+- N7.3 nằm trên nhánh `n7.3-xe-tuan-tra`, tách từ nhánh `n7.1b-cuop-xe` ⇒ thứ tự merge: #28 → #29 → #30 → #31 → PR xe tuần tra.
+  Unit test: 267 (thêm `police.test.ts`). E2E mới `patrol` (2 test, ảnh `patrol-1-car` … `patrol-4-police-car-night`).
 - N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
   test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.
-  `npm run e2e` ở máy này tự chạy 8 tiến trình: mỗi lượt đỏ 2–3 test KHÁC NHAU (`missions`, `gameplay`, `phone`, `shops` —
+  `npm run e2e` ở máy này tự chạy 8 tiến trình: mỗi lượt đỏ 2–3 test KHÁC NHAU (`missions`, `gameplay`, `phone`, `shops`, `story` —
   toàn chỗ chờ HUD / đồng hồ thật), chạy lại riêng với `--workers=2` thì xanh. Muốn lượt đầy đủ sạch ở máy: `npx playwright test --workers=2`.
