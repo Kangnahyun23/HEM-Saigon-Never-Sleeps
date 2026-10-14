@@ -17,6 +17,8 @@ const MAP = {
 
 const PX_PER_M = 1.4;
 const SIZE = 196;
+/** Khoảng cách tối thiểu (s) giữa hai lần vẽ lại bản đồ nhỏ. */
+const REDRAW_INTERVAL = 1 / 30;
 
 export interface Blip {
   x: number;
@@ -61,6 +63,8 @@ export class Minimap {
   private blips: Blip[] = [];
   private blipCount = 0;
   private zoom = 1.8;
+  /** Còn bao lâu (s) mới vẽ lại. */
+  private redrawIn = 0;
   private police: readonly PoliceBlip[] = [];
   private policeCount = 0;
   /** Vùng tìm kiếm của công an (r = 0: không có). */
@@ -236,6 +240,11 @@ export class Minimap {
   update(dt: number, px: number, pz: number, fx: number, fz: number, yaw: number, riding: boolean): void {
     const goal = riding ? 1.15 : 1.8;
     this.zoom += (goal - this.zoom) * (1 - Math.exp(-2.5 * dt));
+    // Vẽ lại tối đa ~30 lần / giây: mỗi lần là cả canvas + đổi transform ảnh nền (tính lại style) — màn 144–165 Hz
+    // vẽ theo từng khung hình là phí, mà bản đồ nhỏ ở 30 Hz vẫn trôi mượt.
+    this.redrawIn -= dt;
+    if (this.redrawIn > 0) return;
+    this.redrawIn = Math.max(0, this.redrawIn + REDRAW_INTERVAL);
     const c = this.ctx;
     const half = SIZE / 2;
     const radius = half - 6;

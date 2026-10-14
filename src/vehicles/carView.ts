@@ -76,7 +76,8 @@ export class CarView {
       const steer = new THREE.Group();
       const spin = new THREE.Group();
       steer.add(spin);
-      add(spin, geos, rubber);
+      // Bánh không đổ bóng: nằm gọn dưới thân (bóng thân đã che), mà mỗi bánh là một lệnh vẽ riêng trong lượt bóng.
+      add(spin, geos, rubber, false);
       this.root.add(steer);
       this.wheelSteer.push(steer);
       this.wheelSpin.push(spin);

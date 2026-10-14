@@ -496,7 +496,10 @@ export class TrafficSim {
     r.ahead = 0;
     r.blockTop = 0;
 
-    for (const o of this.agents) {
+    // Vòng chỉ số (không for…of): hàm này chạy cho mọi xe × mọi xe, 60 lần / giây.
+    const agents = this.agents;
+    for (let i = 0; i < agents.length; i++) {
+      const o = agents[i] as TrafficAgent;
       if (o === agent) continue;
       const other = VEHICLE_SPECS[o.kind];
       const span = (spec.length + other.length) / 2;
@@ -533,7 +536,8 @@ export class TrafficSim {
       }
       this.consider(agent, spec.halfWidth, o.x, o.z, half, ahead, Math.max(0, o.speed * align), Math.min(other.maxSpeed, 99));
     }
-    for (const ob of obstacles) {
+    for (let i = 0; i < obstacles.length; i++) {
+      const ob = obstacles[i] as Obstacle;
       const box = look + spec.length / 2;
       if (Math.abs(ob.x - agent.x) > box || Math.abs(ob.z - agent.z) > box) continue;
       this.consider(agent, spec.halfWidth, ob.x, ob.z, ob.radius, ob.radius + spec.length / 2, 0, 0, ob.person === true);

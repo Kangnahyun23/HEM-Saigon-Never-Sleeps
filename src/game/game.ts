@@ -113,8 +113,11 @@ interface Car {
 
 type Vehicle = Bike | Car;
 
-/** Ô tô đậu xa hơn ngần này thì khỏi vẽ (đã chìm trong sương). */
-const CAR_DRAW_DISTANCE = 170;
+/**
+ * Ô tô đậu xa hơn ngần này thì khỏi vẽ: ở 110 m một chiếc chỉ còn vài điểm ảnh chìm trong sương, mà mỗi xe tốn ~8 lệnh
+ * vẽ (+ 2 trong lượt bóng) — 7 xe từng chiếm một phần ba số lệnh vẽ của cả cảnh.
+ */
+const CAR_DRAW_DISTANCE = 110;
 /** Ô tô cướp được giữ thêm tối đa ngần này chiếc ngoài số xe đậu sẵn; quá thì chiếc xa Tín nhất nhường chỗ. */
 const STOLEN_CARS = 2;
 /** Đứng cách hông / đầu xe trong khoảng này thì vào xe được (tính từ tâm xe, đã trừ nửa bề ngang). */

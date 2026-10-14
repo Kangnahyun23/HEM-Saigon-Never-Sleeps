@@ -131,6 +131,15 @@ const _p = new THREE.Vector3();
 const _one = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color();
 const _up = new THREE.Vector3(0, 1, 0);
+
+/** Ghi ma trận các khối của xe thứ `i` (khung `_w` đã đặt sẵn). Hàm thường, không tạo closure mỗi khung hình. */
+function writeParts(mesh: THREE.InstancedMesh, parts: readonly Part[], i: number, cargo: boolean): void {
+  for (let k = 0; k < parts.length; k++) {
+    const part = parts[k] as Part;
+    if (part.cargo && !cargo) mesh.setMatrixAt(i * parts.length + k, ZERO);
+    else mesh.setMatrixAt(i * parts.length + k, _m.multiplyMatrices(_w, part.local));
+  }
+}
 /** Vệt đèn pha: rộng 2.6 m, dài 7 m, bắt đầu ngay trước đầu xe, sát mặt đường. */
 const BEAM_LOCAL = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.04, 4.3), new THREE.Quaternion(), new THREE.Vector3(2.6, 1, 7));
 
@@ -234,29 +243,20 @@ export class TrafficView {
       _p.set(a.prevX + (a.x - a.prevX) * alpha, 0, a.prevZ + (a.z - a.prevZ) * alpha);
       _q.setFromEuler(_e.set(0, yaw, -lean, 'YXZ'));
       _w.compose(_p, _q, _one);
-      const write = (mesh: THREE.InstancedMesh, parts: Part[]): void => {
-        for (let k = 0; k < parts.length; k++) {
-          const part = parts[k] as Part;
-          if (part.cargo && !look.cargo) mesh.setMatrixAt(i * parts.length + k, ZERO);
-          else mesh.setMatrixAt(i * parts.length + k, _m.multiplyMatrices(_w, part.local));
-        }
-      };
-      write(this.boxes, this.boxParts);
-      write(this.cyls, this.cylParts);
-      write(this.lamps, this.lampParts);
+      writeParts(this.boxes, this.boxParts, i, look.cargo);
+      writeParts(this.cyls, this.cylParts, i, look.cargo);
+      writeParts(this.lamps, this.lampParts, i, look.cargo);
       // Vệt đèn: theo hướng xe nhưng nằm phẳng trên đường (không nghiêng theo xe).
       _q.setFromAxisAngle(_up, yaw);
       _w.compose(_p, _q, _one);
       this.beams.setMatrixAt(i, _m.multiplyMatrices(_w, BEAM_LOCAL));
     }
-    for (const [mesh, parts] of [
-      [this.boxes, this.boxParts],
-      [this.cyls, this.cylParts],
-      [this.lamps, this.lampParts],
-    ] as const) {
-      mesh.count = n * parts.length;
-      mesh.instanceMatrix.needsUpdate = true;
-    }
+    this.boxes.count = n * this.boxParts.length;
+    this.cyls.count = n * this.cylParts.length;
+    this.lamps.count = n * this.lampParts.length;
+    this.boxes.instanceMatrix.needsUpdate = true;
+    this.cyls.instanceMatrix.needsUpdate = true;
+    this.lamps.instanceMatrix.needsUpdate = true;
     this.beams.count = n;
     this.beams.instanceMatrix.needsUpdate = true;
   }

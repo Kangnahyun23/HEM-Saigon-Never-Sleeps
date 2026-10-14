@@ -3,7 +3,8 @@ import type { AnimationName } from '@/assets/manifest';
 import { createRng, pick } from '@/core/random';
 import { lookSeed } from './civilians';
 import { PAD_HEIGHT } from '@/world/city/layout';
-import { buildNpc, CIVILIANS, civiliansAvailable, stepNpc, type NpcBody } from './npcBody';
+import { KeyedPool } from '@/core/keyedPool';
+import { buildNpc, CIVILIANS, civiliansAvailable, showNpc, stepNpc, type NpcBody } from './npcBody';
 import { PedestrianLod } from './pedestrianLod';
 import type { Walker } from './pedestrians';
 
@@ -37,8 +38,6 @@ interface Slot {
   /** Trạng thái lần trước (đổi trạng thái ⇒ phát lại động tác một lần từ đầu). */
   state: PedState;
   npc: NpcBody | null;
-  /** Mỗi chỗ giữ sẵn hình của từng mẫu đã dùng (đổi người khỏi phải nhân bản lại). */
-  readonly cache: Map<string, NpcBody>;
   /** Chiều cao người đang vẽ (đặt biểu tượng gọi điện trên đầu). */
   height: number;
   /** Lần trước đang vung tay đấm (bắt đầu cú mới ⇒ phát lại động tác đấm). */
@@ -87,6 +86,14 @@ export class NearPedestrianView {
   readonly lod: PedestrianLod;
   private readonly slots: Slot[] = [];
   private readonly targets = new Array<number>(ACTION_COUNT).fill(0);
+  /**
+   * Hình nhân vật dùng chung cho mọi ô, theo khoá mẫu người + kiểu đứng: đổi người khỏi phải nhân bản lại, và số hình
+   * chỉ bằng số người hiện cùng lúc (bộ đệm riêng từng ô trước đây phình theo thời gian chơi — hàng nghìn xương ẩn).
+   */
+  readonly pool = new KeyedPool<NpcBody>(
+    (npc) => showNpc(npc, true),
+    (npc) => showNpc(npc, false),
+  );
   private time = 0;
 
   constructor(capacity: number) {
@@ -97,7 +104,7 @@ export class NearPedestrianView {
       callIcon.visible = false;
       callIcon.scale.setScalar(0.4);
       this.root.add(callIcon);
-      this.slots.push({ walker: -1, generation: -1, state: 'calm', npc: null, cache: new Map(), height: 1.65, punching: false, callIcon });
+      this.slots.push({ walker: -1, generation: -1, state: 'calm', npc: null, height: 1.65, punching: false, callIcon });
     }
     this.root.name = 'near-pedestrians';
   }
@@ -107,8 +114,15 @@ export class NearPedestrianView {
     return civiliansAvailable();
   }
 
+  /** Trả hình của ô về kho (ẩn, thôi cập nhật xương). */
+  private release(slot: Slot): void {
+    if (!slot.npc) return;
+    this.pool.give(slot.npc);
+    slot.npc = null;
+  }
+
   private assign(slot: Slot, w: Walker): void {
-    if (slot.npc) slot.npc.body.visible = false;
+    this.release(slot);
     slot.walker = w.id;
     slot.generation = w.generation;
     const rng = createRng(lookSeed(w.id, w.generation));
@@ -117,34 +131,34 @@ export class NearPedestrianView {
     rng();
     const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
     const idle = pick(rng, IDLES);
-    const key = `${look.id}:${idle}`;
-    let npc = slot.cache.get(key) ?? null;
-    if (!npc) {
-      npc = buildNpc(this.root, look.id, height, [
-        ...[idle, look.female ? 'walkFemale' : 'walk', 'dodge', 'hitChest', 'knockback', w.id % 2 ? 'deathA' : 'deathB', look.female ? 'runFemale' : 'jog'],
+    // Kiểu ngã theo mẫu người (không theo từng người) ⇒ ít khoá hơn trong kho hình dùng chung.
+    const death = w.look % 2 ? 'deathA' : 'deathB';
+    const key = `${look.id}:${idle}:${death}`;
+    const npc = this.pool.take(key, () => {
+      const built = buildNpc(this.root, look.id, height, [
+        ...[idle, look.female ? 'walkFemale' : 'walk', 'dodge', 'hitChest', 'knockback', death, look.female ? 'runFemale' : 'jog'],
         ...['angry', 'phone', 'interact', 'fightIdle', 'jab'],
       ] as AnimationName[]);
-      if (npc) {
+      if (built) {
         // Trúng đòn / ngã / gục / cú đấm chỉ phát một lần rồi giữ tư thế cuối.
-        const punch = npc.actions[PUNCH]!;
+        const punch = built.actions[PUNCH]!;
         punch.timeScale = punch.getClip().duration / 0.5;
         for (const i of [HIT, KNOCK, DEATH, PUNCH]) {
-          npc.actions[i]!.setLoop(THREE.LoopOnce, 1);
-          npc.actions[i]!.clampWhenFinished = true;
+          built.actions[i]!.setLoop(THREE.LoopOnce, 1);
+          built.actions[i]!.clampWhenFinished = true;
         }
         // Clip gục dài khác nhau (deathA 4,5 s, deathB 1,9 s) — chỉnh cho cùng ngã trong ~1,9 s.
-        const death = npc.actions[DEATH]!;
-        death.timeScale = Math.max(1, death.getClip().duration / DEATH_SECONDS);
-        slot.cache.set(key, npc);
+        const fall = built.actions[DEATH]!;
+        fall.timeScale = Math.max(1, fall.getClip().duration / DEATH_SECONDS);
       }
-    }
+      return built;
+    });
     slot.state = 'calm';
     slot.npc = npc;
     slot.height = height;
     slot.punching = false;
     if (npc) {
       npc.body.scale.setScalar(npc.perMeter * height);
-      npc.body.visible = true;
       npc.weights.fill(0);
       // Lệch pha (có seed) để những người cạnh nhau không bước đều như duyệt binh.
       npc.mixer.setTime(rng() * 3);
@@ -171,7 +185,7 @@ export class NearPedestrianView {
       const slot = this.slots[k]!;
       const id = this.lod.slots[k]!;
       if (id < 0) {
-        if (slot.npc) slot.npc.body.visible = false;
+        this.release(slot);
         slot.callIcon.visible = false;
         slot.walker = -1;
         continue;

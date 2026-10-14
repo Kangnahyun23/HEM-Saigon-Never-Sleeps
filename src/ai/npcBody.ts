@@ -50,6 +50,15 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, height: number
 }
 
 /**
+ * Hiện / ẩn NPC. Ẩn thì tắt luôn cập nhật ma trận cả cây (~66 xương): three.js vẫn tính ma trận cho vật đang ẩn, mà
+ * mỗi ô LOD giữ sẵn nhiều hình ẩn (bộ đệm theo kiểu người) ⇒ hàng nghìn xương bị tính vô ích mỗi khung hình.
+ */
+export function showNpc(npc: NpcBody, on: boolean): void {
+  npc.body.visible = on;
+  npc.body.matrixWorldAutoUpdate = on;
+}
+
+/**
  * Độ cao hông (m, so với gốc nhân vật) trong tư thế đầu của action thứ `index` — rồi trả mọi xương về như cũ.
  * Không dùng skeleton.pose() (lưới lượng tử hoá ⇒ xương gốc lệch chỗ).
  */

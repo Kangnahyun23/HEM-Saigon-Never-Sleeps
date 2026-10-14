@@ -188,6 +188,25 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
 - **Chưa làm**: còi hú riêng cho ô tô (dùng chung `siren`); công an xuống xe đi bộ; ô tô công an húc / ép xe Tín;
   xe tuần tra chỉ "thấy" lúc gây án (chưa nhận ra Tín đang bị truy nã khi chạy ngang).
 
+### P1 — tối ưu hiệu năng (nhánh `perf-1-toi-uu`, tách từ nhánh `n7.3-xe-tuan-tra`)
+Chủ dự án báo máy RTX 3060 Laptop vẫn lag (2026-10-14). Đo bằng Chrome thật (WebGPU), 2560×1600, không khoá vsync
+(`npm run perf`, scripts/perf.mjs). Game nghẽn **CPU** (luồng JS), không phải GPU: hạ độ phân giải còn nửa mà fps không đổi.
+- **Nguyên nhân chính — game chậm dần theo thời gian chơi**: mỗi ô LOD (người đi bộ gần, người ngồi quán) giữ bộ đệm hình
+  riêng theo kiểu người + động tác, không bao giờ giải phóng; hình ẩn vẫn bị three.js tính ma trận xương mỗi khung. Sau 90 giây
+  chạy xe: 228 nhân vật có xương (213 ẩn), 15 048 xương, 16 318 vật thể — còn tăng mãi. Sửa: kho dùng chung `KeyedPool`
+  + `showNpc()` (ẩn thì tắt `matrixWorldAutoUpdate`) ⇒ có trần (~100 hình, hình ẩn không tốn CPU).
+- **Bóng lan can (alphaTest)**: three.js tính lại khoá vật liệu của ~87 vật / khung trong lượt bóng (16 % CPU, hơn nửa rác
+  bộ nhớ — xem bẫy trong CLAUDE.md). Lan can / lồng sắt thôi đổ bóng (song sắt nhỏ hơn texel bóng, chỉ là nhiễu).
+- **Rác do code game mỗi khung**: closure trong `pedestrianView.update` / `trafficView.update`, `subarray` +
+  `computeBoundingSphere` trong `DetailCuller` (thay bằng khối cầu bao tính sẵn), `for…of` trong `traffic.safeSpeed`.
+- **Lệnh vẽ**: 7 ô tô đậu chiếm ~1/3 lệnh vẽ ⇒ bánh xe thôi đổ bóng, tầm vẽ xe đậu 170 → 110 m. Bản đồ nhỏ vẽ lại tối đa 30 lần / giây.
+- **Kết quả** (fps / khung hình ms, trước → sau): chạy xe ngày 118 / 8,5 → 155 / 6,5; đêm 106 / 9,4 → 130 / 7,7; mưa đêm
+  ~107 → 147; truy đuổi ~114 → 141. Rác bộ nhớ ~105 → ~40 MB/s (dọn rác 36 → 10 lần / 8 s). Khựng lớn nhất 221 → ~90 ms.
+- **Còn lại (ứng viên P2)**: ~40 MB/s rác còn lại phần lớn trong three.js (`needsRefresh`/`equals`, sắp xếp danh sách vẽ) và
+  `pedestrians.step` / `traffic.step`; mỗi ô tô vẫn ~8 lệnh vẽ (gộp 4 bánh thành 1 InstancedMesh); lượt bóng vẽ lại mọi khung
+  (có thể cách khung khi fps cao); khựng lúc vật / nhân vật mới xuất hiện lần đầu (biên dịch pipeline — thử
+  `renderer.compileAsync` lúc tải với mọi mẫu NPC / xe công an / vật ban đêm).
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -220,7 +239,8 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
   - `character.feet()` (Rapier `translation()`);
   - mảng `threats` mỗi bước vật lý;
   - chuỗi khoá trong `hud.setHeat` / `setVitals`;
-  - `markerOnMap` trên bản đồ nhỏ.
+  - `markerOnMap` trên bản đồ nhỏ (nay chỉ vẽ lại 30 lần / giây);
+  - xem thêm "Còn lại (ứng viên P2)" ở mục P1 phía trên.
 
 ## 5. Bẫy đã gặp (đọc trước khi sửa)
 
@@ -261,6 +281,8 @@ Ban đầu chỉ là N5.3; cuối phiên toàn bộ phần đã làm được đ
   Unit test: 257 (thêm `carjack.test.ts`, 12 test). E2E `car` thêm 1 test (ảnh `car-5-jack-stop`, `car-6-jacked`). PR #31.
 - N7.3 nằm trên nhánh `n7.3-xe-tuan-tra`, tách từ nhánh `n7.1b-cuop-xe` ⇒ thứ tự merge: #28 → #29 → #30 → #31 → PR xe tuần tra.
   Unit test: 267 (thêm `police.test.ts`). E2E mới `patrol` (2 test, ảnh `patrol-1-car` … `patrol-4-police-car-night`).
+- P1 tối ưu hiệu năng nằm trên nhánh `perf-1-toi-uu`, tách từ nhánh N7.3 ⇒ merge sau PR xe tuần tra.
+  Unit test: 271 (thêm `keyedPool.test.ts`, 1 test khối cầu bao của `DetailCuller`). Lệnh mới: `npm run perf`.
 - N6.4 không đổi hình ảnh nên chỉ chạy e2e liên quan ở máy (`police`, `shops`, `chase`: xanh); lượt đầy đủ để CI chạy.
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,
   test `shops` "đi bộ vào tiệm" từng đỏ một lần (HUD chưa kịp ghi tên tiệm), chạy riêng thì xanh cả trên `main`.
