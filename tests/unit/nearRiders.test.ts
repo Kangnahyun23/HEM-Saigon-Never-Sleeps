@@ -81,7 +81,7 @@ const pose = (id: number, x: number, z: number, yaw = 0, lean = 0, generation = 
 describe('người lái xe máy NPC gần camera vẽ bằng nhân vật có xương', () => {
   it('chọn tối đa `capacity` xe gần nhất trong bán kính, chỉ xét `count` xe đầu (xe máy)', () => {
     const pool = new FakePool();
-    const riders = new NearRiderView(2, pool, 'civilian', CAST);
+    const riders = new NearRiderView(2, pool, { cast: CAST });
     // Xe 3 gần nhất nhưng nằm ngoài `count` (là ô tô trong mảng xe NPC) ⇒ bỏ qua.
     const poses = [pose(0, 20, 0), pose(1, 5, 0), pose(2, 9, 0), pose(3, 1, 0)];
     riders.update(poses, 3, 1, 1 / 60, 0, 0);
@@ -94,7 +94,7 @@ describe('người lái xe máy NPC gần camera vẽ bằng nhân vật có xư
 
   it('ngồi đúng yên: hông ở RIDER_POSE.hip trên khung xe (theo hướng + độ nghiêng của xe)', () => {
     const pool = new FakePool();
-    const riders = new NearRiderView(1, pool, 'civilian', CAST);
+    const riders = new NearRiderView(1, pool, { cast: CAST });
     const yaw = 0.8;
     const lean = 0.3;
     riders.update([pose(0, 10, -4, yaw, lean)], 1, 1, 1 / 60, 0, 0);
@@ -115,7 +115,7 @@ describe('người lái xe máy NPC gần camera vẽ bằng nhân vật có xư
 
   it('đội mũ bảo hiểm cùng màu mũ khối hộp lúc ở xa (bikeLook)', () => {
     const pool = new FakePool();
-    const riders = new NearRiderView(1, pool, 'civilian', CAST);
+    const riders = new NearRiderView(1, pool, { cast: CAST });
     riders.update([pose(0, 3, 0, 0, 0, 7)], 1, 1, 1 / 60, 0, 0);
     const npc = riders.riderOf(0)!;
     expect(npc.helmet.visible).toBe(true);
@@ -124,7 +124,7 @@ describe('người lái xe máy NPC gần camera vẽ bằng nhân vật có xư
 
   it('xe ra khỏi bán kính thì trả hình về kho; xe được thả lại (lượt mới) thì đổi người lái', () => {
     const pool = new FakePool();
-    const riders = new NearRiderView(1, pool, 'civilian', CAST);
+    const riders = new NearRiderView(1, pool, { cast: CAST });
     const poses = [pose(0, 3, 0)];
     riders.update(poses, 1, 1, 1 / 60, 0, 0);
     expect(pool.taken).toBe(1);
@@ -142,6 +142,24 @@ describe('người lái xe máy NPC gần camera vẽ bằng nhân vật có xư
     expect(pool.given).toBe(2);
     expect(riders.has(0)).toBe(false);
     expect(pool.free.every((b) => !b.body.visible && !b.helmet.visible)).toBe(true);
+  });
+
+  it('xe truy đuổi (id = chỗ trong mảng): chọn người lái theo `generation` — xe đổi chỗ vẫn giữ người lái; mũ theo phe', () => {
+    const pool = new FakePool();
+    const cast: readonly RiderCast[] = [
+      { id: 'police-m', height: [1.66, 1.76] },
+      { id: 'police-f', height: [1.58, 1.68] },
+    ];
+    const riders = new NearRiderView(2, pool, { style: 'police', cast, byGeneration: true });
+    riders.update([pose(0, 3, 0, 0, 0, 12)], 1, 1, 1 / 60, 0, 0);
+    const before = riders.riderOf(0)!;
+    const look = { id: before.id, height: before.body.scale.y };
+    // Một xe khác chen lên đầu mảng ⇒ xe cũ sang chỗ 1 (cùng `generation`): cùng mẫu người, cùng chiều cao.
+    riders.update([pose(0, 200, 0, 0, 0, 30), pose(1, 3, 0, 0, 0, 12)], 2, 1, 1 / 60, 0, 0);
+    const after = riders.riderOf(1)!;
+    expect(after.id).toBe(look.id);
+    expect(after.body.scale.y).toBeCloseTo(look.height, 6);
+    expect(after.helmet.material.color.getHexString()).toBe(new THREE.Color(bikeLook(1, 12, 'police').colors.helmet).getHexString());
   });
 
   it('TrafficView bỏ khối người lái (giữ xe, đèn, thùng hàng) của xe đang có người lái có xương', () => {

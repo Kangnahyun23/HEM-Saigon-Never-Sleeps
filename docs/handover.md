@@ -1,6 +1,6 @@
 # Bàn giao dự án — HẺM: Sài Gòn Không Ngủ
 
-Cập nhật: 2026-10-15, sau R1 — người lái xe máy NPC có xương (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
+Cập nhật: 2026-10-15, sau R2 — người lái xe máy NPC, công an, đàn em có xương (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
 `docs/plan-v0.2.md` (kế hoạch v0.2 chi tiết + tiến độ) và `docs/gdd.md` (thiết kế đầy đủ).
 
 ## 1. Dự án là gì
@@ -266,6 +266,21 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   +11 lệnh vẽ, +0,2 ms logic mỗi khung (mixer + IK), fps / thời gian vẽ CPU không đổi trong sai số. Lúc đo máy đang chạy
   một game khác nên chưa đo lại bảng `npm run perf` — đo lại khi máy rảnh.
 
+### R2 — công an / đàn em lái xe truy đuổi là nhân vật có xương (nhánh `r2-cong-an-co-xuong`, tách từ `r1-nguoi-lai-xe`)
+- `ChaseSystem.riders` = một `NearRiderView` (như R1) cho các xe máy truy đuổi gần camera: công an dùng mẫu `police-m` /
+  `police-f` (`POLICE_RIDERS`, kho chung `npcPool`), đàn em dùng `man-shirt` / `man-polo` (`GANG_RIDERS`) từ kho riêng
+  `game.gangPool` mặc đồ đen. Mũ theo phe (công an xanh rêu, đàn em đỏ — `bikeLook`). Ngân sách mỗi phe
+  `SCENE_BUDGETS.chaseRiders` (yếu 0, vừa 2, mạnh 3); dựng sẵn mỗi mẫu đủ `chaseRiders` thân.
+- Xe truy đuổi đánh số theo chỗ trong mảng `chasers` (đổi khi có xe biến mất) ⇒ `byGeneration`: chọn người lái chỉ theo
+  `generation` (= id xe + 1, duy nhất) — xe đổi chỗ không đổi mặt người lái.
+- **Trang phục** (`assets/outfits.ts`): mẫu công an CC0 mặc đồng phục xanh đen kiểu Mỹ ⇒ đổi sang quân phục ô-liu bằng cách
+  nướng thẳng vào ảnh màu lúc tải (canvas → `recolor` → `CanvasTexture`; không thêm shader nên không thêm pipeline). Đổi mọi
+  chỗ "không phải da" (đỏ trội hơn hẳn xanh dương ⇒ da / tóc nâu giữ), độ sáng lấy căn bậc hai cho nếp vải dịu. Bẫy: mặt nạ
+  "xanh dương trội" làm quân phục loang lổ như áo rằn ri — ảnh gốc nén thành ô 8×8 lệch sắc chút ít, mặt nạ hẹp bật / tắt
+  theo từng ô. Đàn em: cùng cách, màu đen, chỉ mẫu không có áo đỏ / quần kaki (gần màu da, không nhuộm được).
+  Thử nhanh trên ảnh: `recolorlab.mjs` (thư mục tạm của phiên) đọc ảnh màu đã xuất, ghi ảnh đã đổi màu.
+- Kiểm tra: ngày / đêm, công an 2 sao + đàn em Độ Nóng 2 áp sát — 0 pipeline mới lúc chơi.
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -289,8 +304,8 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   - công an đi bộ xuống xe đuổi / còng tay;
   - đánh được công an (`Wanted.raise` đã sẵn cho 4–5 sao).
 - **Nhân vật**:
-  - người lái xe công an / đàn em vẫn là khối hộp (chưa dùng mẫu `police-m` / `police-f` có xương) — việc R2;
   - người lái xe máy NPC có xương chưa nghiêng tay lái / chống chân khi dừng đèn đỏ;
+  - công an quân phục ô-liu nhưng giày, thắt lưng cũng thành ô-liu (mặt nạ trang phục chỉ phân biệt da / không phải da);
   - thay đồ (`doiDo`) chưa đổi màu áo của Tín.
 - **Thế giới**:
   - tiệm vào được mở 24/24, chưa có cửa cuốn đóng ban đêm;
@@ -332,10 +347,11 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
 
 ## 6. Trạng thái lúc kết thúc phiên
 - PR #28–#34 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1, P2) đã merge vào `main`, `main` đã deploy. P3 là PR #35.
-- R1 nằm trên nhánh `r1-nguoi-lai-xe` (tách từ `perf-3-toi-uu`). Unit test: 288 (thêm `nearRiders.test.ts`, `armIk.test.ts`).
+- R1 là PR #36 (nhánh `r1-nguoi-lai-xe`, tách từ `perf-3-toi-uu`); R2 nằm trên nhánh `r2-cong-an-co-xuong` (tách từ R1).
+  Unit test: 294 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`).
 - Việc tiếp theo chủ dự án đã giao (2026-10-15), mỗi việc một PR (danh sách R1–R4 trong plan-v0.2.md): ~~người lái xe NPC
-  thành nhân vật có xương~~ (R1) → công an là nhân vật có xương (`police-m` / `police-f`, R2) → đánh được công an (R3) →
-  công an truy đuổi chậm lại trong hẻm (R4). `NearRiderView` đã nhận `style` + `cast` (mẫu người) để R2 dùng lại cho xe truy đuổi.
+  thành nhân vật có xương~~ (R1) → ~~công an là nhân vật có xương~~ (R2) → đánh được công an (R3: công an xuống xe đuổi
+  bộ — mẫu `police-m` / `police-f` đã mặc quân phục ô-liu sẵn trong kho chung) → công an truy đuổi chậm lại trong hẻm (R4).
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

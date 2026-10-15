@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { ANIMATIONS, CHARACTERS, type AnimationName, type CharacterId } from './manifest';
+import { POLICE_UNIFORM, recolor, type Outfit } from './outfits';
 import { slimClip, slimSkeleton } from './slimRig';
 
 /**
@@ -23,6 +24,8 @@ const clips = new Map<AnimationName, THREE.AnimationClip>();
 const npcClips = new Map<AnimationName, THREE.AnimationClip>();
 /** Mẫu giữ đủ xương (Tín: cận cảnh, nắm đấm, cầm đồ); mọi mẫu NPC gộp bớt xương ngón tay (slimRig). */
 const FULL_RIG: ReadonlySet<CharacterId> = new Set<CharacterId>(['tin']);
+/** Mẫu luôn mặc trang phục riêng (đổi ngay trên mẫu gốc lúc tải): công an mặc quân phục ô-liu. */
+const BASE_OUTFIT: Partial<Record<CharacterId, Outfit>> = { 'police-m': POLICE_UNIFORM, 'police-f': POLICE_UNIFORM };
 
 /** Vật liệu nhân vật: chỉ ảnh màu, không kim loại — thay vật liệu Physical của GLB (đắt hơn, không cần cho người). */
 function simplifyMaterial(mesh: THREE.Mesh): void {
@@ -32,6 +35,56 @@ function simplifyMaterial(mesh: THREE.Mesh): void {
   if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
   mesh.material = mat;
   src.dispose();
+}
+
+/** Vật liệu đã đổi trang phục theo (vật liệu gốc, trang phục) — mọi hình cùng mẫu + trang phục dùng chung một vật liệu. */
+const outfitMaterials = new Map<string, THREE.MeshStandardNodeMaterial>();
+
+/** Ảnh màu `src` đã đổi trang phục (vẽ ra canvas, đổi từng điểm ảnh); null nếu không đọc được ảnh. */
+function recolorTexture(src: THREE.Texture, outfit: Outfit): THREE.Texture | null {
+  const img = src.image as (CanvasImageSource & { width: number; height: number }) | null | undefined;
+  if (!img?.width || typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  recolor(pixels.data, outfit);
+  ctx.putImageData(pixels, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.flipY = src.flipY;
+  tex.colorSpace = src.colorSpace;
+  tex.wrapS = src.wrapS;
+  tex.wrapT = src.wrapT;
+  tex.magFilter = src.magFilter;
+  tex.minFilter = src.minFilter;
+  tex.anisotropy = src.anisotropy;
+  tex.channel = src.channel;
+  return tex;
+}
+
+/** Vật liệu của `mesh` mặc trang phục `outfit` (tạo một lần, dùng chung). Đọc ảnh lỗi thì giữ vật liệu gốc. */
+function dressMesh(mesh: THREE.Mesh, outfit: Outfit): void {
+  const src = mesh.material as THREE.MeshStandardNodeMaterial;
+  const key = `${src.uuid}:${outfit.name}`;
+  let mat = outfitMaterials.get(key);
+  if (!mat) {
+    const map = src.map ? recolorTexture(src.map, outfit) : null;
+    if (!map) return;
+    mat = src.clone();
+    mat.map = map;
+    outfitMaterials.set(key, mat);
+  }
+  mesh.material = mat;
+}
+
+/** Đổi trang phục cho mọi lưới của một nhân vật. */
+function dress(root: THREE.Object3D, outfit: Outfit): void {
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) dressMesh(o as THREE.Mesh, outfit);
+  });
 }
 
 export async function loadCharacters(onProgress?: (done: number, total: number) => void): Promise<void> {
@@ -58,6 +111,8 @@ export async function loadCharacters(onProgress?: (done: number, total: number) 
             mesh.frustumCulled = false;
           });
           if (!FULL_RIG.has(id)) slimSkeleton(gltf.scene);
+          const outfit = BASE_OUTFIT[id];
+          if (outfit) dress(gltf.scene, outfit);
           templates.set(id, { scene: gltf.scene, height: CHARACTERS[id].height });
         })
         .catch((err: unknown) => console.warn(`[HẺM] không tải được nhân vật ${id}`, err))
@@ -82,13 +137,14 @@ export function hasCharacter(id: CharacterId): boolean {
 
 /**
  * Nhân bản một mẫu người, co về chiều cao `height` (m). Gốc toạ độ ở giữa hai bàn chân, mặt hướng +Z
- * (giống nhân vật khối hộp cũ). Trả null nếu mẫu chưa tải được.
+ * (giống nhân vật khối hộp cũ). `outfit`: mặc trang phục riêng (đàn em: đồ đen). Trả null nếu mẫu chưa tải được.
  */
-export function createCharacter(id: CharacterId, height: number): THREE.Object3D | null {
+export function createCharacter(id: CharacterId, height: number, outfit: Outfit | null = null): THREE.Object3D | null {
   const t = templates.get(id);
   if (!t) return null;
   const obj = cloneSkinned(t.scene);
   obj.scale.setScalar(height / t.height);
+  if (outfit) dress(obj, outfit);
   return obj;
 }
 
