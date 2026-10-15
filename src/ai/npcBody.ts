@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { attachToBone, createCharacter, getNpcClip, hasCharacter } from '@/assets/characters';
 import { CHARACTERS, type AnimationName, type CharacterId } from '@/assets/manifest';
 import { KeyedPool } from '@/core/keyedPool';
@@ -34,6 +35,7 @@ export const NPC_CLIPS = [
   'jab',
   'sit',
   'sitTalk',
+  'drive',
 ] as const satisfies readonly AnimationName[];
 export type NpcClip = (typeof NPC_CLIPS)[number];
 
@@ -61,10 +63,42 @@ export interface NpcBody {
   readonly pelvis: THREE.Object3D | null;
   /** Điện thoại trong tay phải (ẩn; hiện khi gọi báo / quay video). */
   readonly handset: THREE.Object3D;
+  /** Mũ bảo hiểm trên đầu (ẩn; hiện khi lái xe). Vật liệu riêng từng hình: màu mũ đặt qua `material.color`. */
+  readonly helmet: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardNodeMaterial>;
+  /** Xương tay trái / phải (cánh tay trên, cẳng tay, cổ tay) cho IK đặt tay lên ghi-đông; null nếu mẫu thiếu xương. */
+  readonly arms: { readonly left: ArmChain; readonly right: ArmChain } | null;
+}
+
+/** Ba xương một cánh tay: cánh tay trên, cẳng tay, cổ tay. */
+export type ArmChain = readonly [upper: THREE.Object3D, lower: THREE.Object3D, hand: THREE.Object3D];
+
+function armChain(body: THREE.Object3D, side: 'l' | 'r'): ArmChain | null {
+  const upper = body.getObjectByName(`upperarm_${side}`);
+  const lower = body.getObjectByName(`lowerarm_${side}`);
+  const hand = body.getObjectByName(`hand_${side}`);
+  return upper && lower && hand ? [upper, lower, hand] : null;
+}
+
+/** Nguồn hình NPC (NpcPool; unit test thay bằng kho giả). */
+export interface NpcSource {
+  take(id: CharacterId): NpcBody | null;
+  give(npc: NpcBody): void;
 }
 
 const PHONE_GEO = new THREE.BoxGeometry(0.07, 0.14, 0.01);
 const PHONE_MAT = new THREE.MeshStandardNodeMaterial({ color: '#15171c', roughness: 0.3 });
+
+/** Mũ bảo hiểm (cỡ như mũ của Tín): vỏ nửa cầu trắng (nhân màu vật liệu) + kính tối, gộp một khối — một lệnh vẽ. */
+function helmetGeometry(): THREE.BufferGeometry {
+  const shell = new THREE.SphereGeometry(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.02, 1.12);
+  const visor = new THREE.BoxGeometry(0.2, 0.06, 0.03).translate(0, 0.03, 0.16);
+  const paint = (g: THREE.BufferGeometry, shade: number): THREE.BufferGeometry => {
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Array<number>(g.getAttribute('position').count * 3).fill(shade), 3));
+    return g;
+  };
+  return mergeGeometries([paint(shell, 1), paint(visor, 0.12)], false);
+}
+const HELMET_GEO = helmetGeometry();
 
 /** Dựng một NPC mẫu `id` (chiều cao gốc của mẫu) với đủ action trong NPC_CLIPS. Trả null nếu mẫu chưa tải được. */
 export function buildNpc(parent: THREE.Object3D, id: CharacterId): NpcBody | null {
@@ -91,6 +125,15 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId): NpcBody | nul
   const hand = body.getObjectByName('hand_r');
   // Trong lòng bàn tay phải (tư thế gốc chữ T: tay phải duỗi về phía −X), như điện thoại của Tín.
   if (hand) attachToBone(body, hand, handset, new THREE.Vector3(-0.08, -0.02, 0.03));
+  const helmet = new THREE.Mesh(HELMET_GEO, new THREE.MeshStandardNodeMaterial({ vertexColors: true, roughness: 0.35 }));
+  helmet.name = 'npc-helmet';
+  helmet.visible = false;
+  // Mũ nhỏ nằm trên đầu: bóng của đầu đã đủ, khỏi tốn thêm lệnh vẽ ở lượt bóng.
+  helmet.castShadow = false;
+  const head = body.getObjectByName('head');
+  if (head) attachToBone(body, head, helmet, new THREE.Vector3(0, 0.07, 0.01));
+  const left = armChain(body, 'l');
+  const right = armChain(body, 'r');
   return {
     id,
     body,
@@ -101,10 +144,12 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId): NpcBody | nul
     timeScales: actions.map((a) => a.timeScale),
     pelvis: body.getObjectByName('pelvis') ?? null,
     handset,
+    helmet,
+    arms: left && right ? { left, right } : null,
   };
 }
 
-/** Đưa hình về trạng thái mới tinh trước khi dùng lại: mọi động tác tắt, tốc độ phát gốc, cất điện thoại. */
+/** Đưa hình về trạng thái mới tinh trước khi dùng lại: mọi động tác tắt, tốc độ phát gốc, cất điện thoại và mũ. */
 function resetNpc(npc: NpcBody): void {
   npc.weights.fill(0);
   for (let i = 0; i < npc.actions.length; i++) {
@@ -113,6 +158,7 @@ function resetNpc(npc: NpcBody): void {
     a.timeScale = npc.timeScales[i]!;
   }
   npc.handset.visible = false;
+  npc.helmet.visible = false;
   npc.body.rotation.set(0, 0, 0);
 }
 
@@ -130,7 +176,7 @@ export function showNpc(npc: NpcBody, on: boolean): void {
  * Dựng sẵn vài hình mỗi mẫu lúc tải (`prebuild`) — nhân bản một nhân vật giữa lúc chơi tốn ~10 ms (khựng).
  * Hình ẩn trong cảnh cũng được làm nóng pipeline lúc tải (render/warmup.ts tạm hiện mọi vật).
  */
-export class NpcPool {
+export class NpcPool implements NpcSource {
   readonly root = new THREE.Group();
   private readonly pool = new KeyedPool<NpcBody>(
     (npc) => showNpc(npc, true),
@@ -171,25 +217,23 @@ export class NpcPool {
 }
 
 /**
- * Độ cao hông (m, so với gốc nhân vật) trong tư thế đầu của action thứ `index` — rồi trả mọi xương về như cũ.
- * Không dùng skeleton.pose() (lưới lượng tử hoá ⇒ xương gốc lệch chỗ).
+ * Vị trí hông trong tư thế đầu của action thứ `index`, theo toạ độ của hình (trên 1 đơn vị co giãn: nhân `body.scale`
+ * ra mét) — rồi trả trọng số cũ và để bộ trộn tự đặt lại xương. KHÔNG ghi tay vị trí / góc xương để khôi phục:
+ * PropertyMixer chỉ ghi xương khi kết quả trộn khác khung trước ⇒ rãnh không đổi theo thời gian (chân trong động tác lái
+ * xe, ngồi) sẽ không được ghi lại, xương kẹt ở giá trị ghi tay (người lái "đứng" trên yên). Không dùng skeleton.pose()
+ * (lưới lượng tử hoá ⇒ xương gốc lệch chỗ). Mẫu thiếu xương hông: coi hông cao 0,9 m.
  */
-export function hipHeightIn(npc: NpcBody, index: number): number {
-  const saved: Array<[THREE.Object3D, THREE.Vector3, THREE.Quaternion]> = [];
-  npc.body.traverse((o) => saved.push([o, o.position.clone(), o.quaternion.clone()]));
+export function hipIn(npc: NpcBody, index: number, out = new THREE.Vector3()): THREE.Vector3 {
   const before = npc.actions.map((a) => a.getEffectiveWeight());
   npc.actions.forEach((a, i) => a.setEffectiveWeight(i === index ? 1 : 0));
   npc.mixer.update(0);
   npc.body.updateMatrixWorld(true);
   const pelvis = npc.body.getObjectByName('pelvis');
-  const base = new THREE.Vector3().setFromMatrixPosition(npc.body.matrixWorld).y;
-  const hip = pelvis ? new THREE.Vector3().setFromMatrixPosition(pelvis.matrixWorld).y - base : 0.9;
-  for (const [o, p, q] of saved) {
-    o.position.copy(p);
-    o.quaternion.copy(q);
-  }
+  if (pelvis) npc.body.worldToLocal(out.setFromMatrixPosition(pelvis.matrixWorld));
+  else out.set(0, 0.9 / npc.body.scale.y, 0);
   npc.actions.forEach((a, i) => a.setEffectiveWeight(before[i]!));
-  return hip;
+  npc.mixer.update(0);
+  return out;
 }
 
 const damp = (current: number, target: number, rate: number, dt: number): number => current + (target - current) * (1 - Math.exp(-rate * dt));

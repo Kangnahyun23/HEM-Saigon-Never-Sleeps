@@ -29,6 +29,24 @@ export const BIKE = {
   steerPivot: [0, 0.95, 0.5] as const,
 };
 
+/**
+ * Tư thế người lái trên xe (toạ độ xe như trên), dùng chung cho Tín và người lái NPC có xương:
+ * - `hip`: hông ngay trên mặt yên (0,88 m), ngồi nửa trước yên (yên từ −0,63 tới 0,11 m) — gối nằm sau tấm chắn chân;
+ * - `wrist`: cổ tay trái (tay phải đối xứng qua X = 0), sau và trên tay nắm ghi-đông (thanh ngang cao 1,04 m, rộng
+ *   0,7 m, cách tâm xe 0,44 m về trước) — lòng bàn tay ôm tay nắm;
+ * - `elbowPole`: điểm cực cho khuỷu tay trái (IK): khuỷu chĩa ra ngoài, xuống dưới, hơi lùi về sau;
+ * - `leanForward`: ngả người về trước quanh hông (rad) — động tác lái gốc ngồi thẳng lưng như lái ô tô.
+ */
+export const RIDER_POSE = {
+  hip: [0, 0.92, -0.15],
+  wrist: [0.29, 1.07, 0.32],
+  elbowPole: [0.55, 0.85, -0.25],
+  leanForward: 0.18,
+} as const;
+
+/** Chỗ gắn người chơi trên xe (nhóm `seat` của MotorbikeView, toạ độ xe) — mẫu khối hộp dự phòng canh hông theo mốc này. */
+export const SEAT_ANCHOR = [0, -0.03, -0.27] as const;
+
 const F = BIKE.wheelBase / 2;
 const R = BIKE.wheelRadius;
 

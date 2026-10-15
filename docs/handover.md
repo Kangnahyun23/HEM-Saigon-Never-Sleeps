@@ -1,6 +1,6 @@
 # Bàn giao dự án — HẺM: Sài Gòn Không Ngủ
 
-Cập nhật: 2026-10-12, sau N6.4 (phiên trước: N4.2 → N6.3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
+Cập nhật: 2026-10-15, sau R1 — người lái xe máy NPC có xương (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
 `docs/plan-v0.2.md` (kế hoạch v0.2 chi tiết + tiến độ) và `docs/gdd.md` (thiết kế đầy đủ).
 
 ## 1. Dự án là gì
@@ -245,6 +245,27 @@ hình) còn 1–1,8 ms / khung, nhân vật có xương chiếm phần lớn (`u
 - **Còn lại**: rác ~35 MB/s phần lớn nằm trong three.js (danh sách vẽ, cập nhật uniform, `writeBuffer`); `traffic.step` /
   `safeSpeed` / `pedestrians.step` còn ~4,7 MB/s (số thực bị đóng hộp). Chưa đáng sửa — dọn rác không còn gây khựng.
 
+### R1 — người lái xe máy NPC là nhân vật có xương (nhánh `r1-nguoi-lai-xe`, tách từ `perf-3-toi-uu`)
+Chủ dự án muốn người lái xe trông giống người đi đường (trước đây cả đàn xe máy NPC chở người khối hộp).
+- **LOD như người đi bộ** (`ai/nearRiders.ts` — `NearRiderView`): K xe máy gần camera nhất trong 35 m (`PedestrianLod`, giữ
+  chỗ 3 m; chỉ xét `sim.bikes` xe đầu của mảng — xe máy) chở người lái có xương lấy từ `NpcPool` (cùng mẫu người dân, cùng kho
+  với người đi bộ / người ngồi quán; kho dựng sẵn thêm cho đủ). `TrafficView.update(…, skinned)` bỏ phần người lái khối hộp
+  của đúng các xe đó (cờ `rider` trên từng phần; hàng chở vẫn vẽ). Số người theo sức máy `SCENE_BUDGETS.nearRiders`
+  (yếu 0, vừa 3, mạnh 5). Mẫu người chọn theo seed `id` + `generation` của xe; màu mũ = màu mũ khối hộp (`bikeLook`) nên
+  xe chạy ra xa đổi sang khối hộp không đổi màu mũ.
+- **Mũ bảo hiểm NPC**: mỗi thân trong kho có sẵn một mũ (nửa cầu + kính, một lệnh vẽ, không đổ bóng, vật liệu riêng để đổi
+  màu) gắn xương đầu, mặc định ẩn — `revealAll` hâm nóng cùng thân nên lúc chơi không tạo pipeline.
+- **Tư thế ngồi chung cho Tín và NPC** (`RIDER_POSE` trong vehicles/bikeModel.ts): động tác 'drive' (Mesh2Motion) là tư thế
+  lái ô tô — hông lùi ~0,35 m sau gốc nhân vật, tay ôm vô-lăng trước ngực ⇒ đo vị trí hông thật trong động tác (`hipIn`),
+  ghim hông lên nửa trước yên, ngả người 0,18 rad quanh hông, rồi **IK hai đoạn** (`player/armIk.ts` — `reachArm`: định lý
+  cos + điểm cực cho khuỷu, ghi góc tuyệt đối) đặt cổ tay lên tay nắm ghi-đông. Tín: tay nắm là `MotorbikeView.grips` (xoay
+  theo cụm lái), trước IK trả 6 xương tay về tư thế lái; NPC: tay nắm tính từ khung xe (xe NPC không bẻ lái), clip 'drive'
+  có track tay đổi theo thời gian nên bộ trộn tự ghi lại tay mỗi khung (IK không cộng dồn).
+- Kiểm tra: lúc chơi 0 pipeline mới; e2e gameplay / traffic / pedestrians xanh, ảnh chụp người lái gần và Tín trên xe
+  đúng chỗ ngồi, hai tay trên ghi-đông. Chi phí 5 người lái (bật / tắt xen kẽ 16 lượt trong cùng trang, lấy trung vị):
+  +11 lệnh vẽ, +0,2 ms logic mỗi khung (mixer + IK), fps / thời gian vẽ CPU không đổi trong sai số. Lúc đo máy đang chạy
+  một game khác nên chưa đo lại bảng `npm run perf` — đo lại khi máy rảnh.
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -268,7 +289,8 @@ hình) còn 1–1,8 ms / khung, nhân vật có xương chiếm phần lớn (`u
   - công an đi bộ xuống xe đuổi / còng tay;
   - đánh được công an (`Wanted.raise` đã sẵn cho 4–5 sao).
 - **Nhân vật**:
-  - người lái xe công an / đàn em vẫn là khối hộp (chưa dùng mẫu `police-m` / `police-f` có xương);
+  - người lái xe công an / đàn em vẫn là khối hộp (chưa dùng mẫu `police-m` / `police-f` có xương) — việc R2;
+  - người lái xe máy NPC có xương chưa nghiêng tay lái / chống chân khi dừng đèn đỏ;
   - thay đồ (`doiDo`) chưa đổi màu áo của Tín.
 - **Thế giới**:
   - tiệm vào được mở 24/24, chưa có cửa cuốn đóng ban đêm;
@@ -298,6 +320,10 @@ hình) còn 1–1,8 ms / khung, nhân vật có xương chiếm phần lớn (`u
 - Khi thêm nhiều action cho một NPC, clip trùng tên phải nhân bản (`buildNpc` đã xử lý). Không thì trọng số các action
   ghi đè nhau.
 - Đèn thật trong phòng rất tốn (ảnh hưởng mọi vật liệu): nội thất dùng `emissive` + `nightUniform` thay đèn.
+- PropertyMixer của three.js chỉ ghi xương khi kết quả trộn khung này KHÁC khung trước. Ghi tay vào xương (đo tư thế, IK)
+  rồi tự trả lại ⇒ track không đổi theo thời gian (clip nén một khoá: chân trong 'drive' / 'sit') kẹt ở giá trị ghi tay —
+  từng làm người lái NPC "đứng" trên yên. Đo tư thế thì dùng `hipIn` (trả trọng số rồi `mixer.update(0)`); IK chạy SAU
+  `mixer.update` mỗi khung và chỉ đúng nếu điểm xuất phát là tư thế của clip (Tín: trả xương về `armRest` trước IK).
 
 **Vật lý và truy đuổi**
 - Xe truy đuổi là thân Rapier kinematic: lao vào người đi bộ sẽ **hất Tín đi** (tốc độ của Tín tăng vọt) ⇒ không bao giờ
@@ -305,11 +331,11 @@ hình) còn 1–1,8 ms / khung, nhân vật có xương chiếm phần lớn (`u
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- PR #28–#34 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1, P2) đã merge vào `main`, `main` đã deploy.
-- P3 nằm trên nhánh `perf-3-toi-uu`, tách từ `main`. Unit test: 278 (thêm `slimRig.test.ts` + 2 test so ma trận instance
-  ghi tay với Matrix4 trong `performance.test.ts`).
-- Việc tiếp theo chủ dự án đã giao (2026-10-15), mỗi việc một PR: người lái xe NPC thành nhân vật có xương như người đi bộ →
-  công an là nhân vật có xương (`police-m` / `police-f`) → đánh được công an → công an truy đuổi chậm lại trong hẻm.
+- PR #28–#34 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1, P2) đã merge vào `main`, `main` đã deploy. P3 là PR #35.
+- R1 nằm trên nhánh `r1-nguoi-lai-xe` (tách từ `perf-3-toi-uu`). Unit test: 288 (thêm `nearRiders.test.ts`, `armIk.test.ts`).
+- Việc tiếp theo chủ dự án đã giao (2026-10-15), mỗi việc một PR (danh sách R1–R4 trong plan-v0.2.md): ~~người lái xe NPC
+  thành nhân vật có xương~~ (R1) → công an là nhân vật có xương (`police-m` / `police-f`, R2) → đánh được công an (R3) →
+  công an truy đuổi chậm lại trong hẻm (R4). `NearRiderView` đã nhận `style` + `cast` (mẫu người) để R2 dùng lại cho xe truy đuổi.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

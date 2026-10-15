@@ -44,6 +44,13 @@ export interface Part {
   cargo?: boolean;
   /** Đèn pha / đèn hậu: vẽ bằng vật liệu tự phát sáng, rực hơn khi tối. */
   lamp?: boolean;
+  /** Khối của người lái: ẩn khi xe đó đang có người lái vẽ bằng nhân vật có xương (NearRiderView). */
+  rider?: boolean;
+}
+
+/** Tập xe đang có người lái vẽ bằng nhân vật có xương (theo id xe). */
+export interface RiderSet {
+  has(id: number): boolean;
 }
 
 export const SHIRTS = ['#f2efe6', '#2b5fa8', '#c8402e', '#3b8a52', '#e0b43a', '#7a4fa0', '#2a2a2a', '#e98aa6', '#4ab0c2', '#d9d4c5'];
@@ -95,15 +102,38 @@ export function buildParts(): Part[] {
     v.set(...r.pos);
     q.setFromEuler(e.set(r.rx ?? 0, 0, 0));
     s.set(...r.size);
-    parts.push({ shape: 'box', local: new THREE.Matrix4().compose(v, q, s), color: r.color, ...(r.cargo ? { cargo: true } : {}) });
+    parts.push({ shape: 'box', local: new THREE.Matrix4().compose(v, q, s), color: r.color, ...(r.cargo ? { cargo: true } : { rider: true }) });
   }
   return parts;
 }
 
-interface AgentLook {
+export interface AgentLook {
   generation: number;
   cargo: boolean;
   colors: Record<Look | 'body', string>;
+}
+
+/**
+ * Diện mạo xe `id` ở lượt thả `generation` (màu xe, áo, mũ, có chở hàng không) — suy ra từ seed nên ổn định, không cần
+ * lưu; người lái có xương (NearRiderView) lấy đúng màu mũ này.
+ */
+export function bikeLook(id: number, generation: number, style: RiderStyle): AgentLook {
+  const rng = createRng(id * 7919 + generation * 104729);
+  const fixed = style === 'civilian' ? null : STYLE_COLORS[style];
+  return {
+    generation,
+    cargo: !fixed && rng() < CARGO_CHANCE,
+    colors: {
+      body: fixed ? fixed.body : pick(rng, BIKE_BODY_COLORS),
+      shirt: fixed ? fixed.shirt : pick(rng, SHIRTS),
+      pants: fixed ? fixed.pants : pick(rng, PANTS),
+      skin: pick(rng, SKINS),
+      helmet: fixed ? fixed.helmet : pick(rng, HELMETS),
+      shoe: '#24211e',
+      visor: '#1b2229',
+      cargo: pick(rng, CARGO),
+    },
+  };
 }
 
 /** Vật liệu đèn xe: không chịu ánh sáng, màu theo instance (trắng ngà / đỏ), sáng gấp mấy lần khi tối. */
@@ -176,13 +206,16 @@ function writeHidden(out: Float32Array, o: number): void {
   out[o + 15] = 1;
 }
 
-/** Ghi ma trận các khối của xe thứ `i` (khung trong _r đã đặt sẵn). Hàm thường, không tạo closure mỗi khung hình. */
-function writeParts(mesh: THREE.InstancedMesh, parts: readonly Part[], i: number, cargo: boolean): void {
+/**
+ * Ghi ma trận các khối của xe thứ `i` (khung trong _r đã đặt sẵn); `bare` = người lái vẽ riêng bằng nhân vật có xương
+ * ⇒ ẩn các khối người lái. Hàm thường, không tạo closure mỗi khung hình.
+ */
+function writeParts(mesh: THREE.InstancedMesh, parts: readonly Part[], i: number, cargo: boolean, bare: boolean): void {
   const out = mesh.instanceMatrix.array as Float32Array;
   const base = i * parts.length * 16;
   for (let k = 0; k < parts.length; k++) {
     const part = parts[k] as Part;
-    if (part.cargo && !cargo) writeHidden(out, base + k * 16);
+    if ((part.cargo && !cargo) || (part.rider && bare)) writeHidden(out, base + k * 16);
     else writeFramed(out, base + k * 16, part.local.elements);
   }
 }
@@ -237,26 +270,11 @@ export class TrafficView {
     this.root.name = 'traffic';
   }
 
-  /** Diện mạo (màu xe, áo, mũ, có chở hàng không) suy ra từ id + lượt thả ⇒ ổn định, không cần lưu. */
+  /** Diện mạo của xe (bikeLook), tính lại khi xe được thả lại. */
   private lookFor(agent: BikePose): AgentLook {
     let look = this.looks[agent.id];
     if (look && look.generation === agent.generation) return look;
-    const rng = createRng(agent.id * 7919 + agent.generation * 104729);
-    const fixed = this.style === 'civilian' ? null : STYLE_COLORS[this.style];
-    look = {
-      generation: agent.generation,
-      cargo: !fixed && rng() < CARGO_CHANCE,
-      colors: {
-        body: fixed ? fixed.body : pick(rng, BIKE_BODY_COLORS),
-        shirt: fixed ? fixed.shirt : pick(rng, SHIRTS),
-        pants: fixed ? fixed.pants : pick(rng, PANTS),
-        skin: pick(rng, SKINS),
-        helmet: fixed ? fixed.helmet : pick(rng, HELMETS),
-        shoe: '#24211e',
-        visor: '#1b2229',
-        cargo: pick(rng, CARGO),
-      },
-    };
+    look = bikeLook(agent.id, agent.generation, this.style);
     this.looks[agent.id] = look;
     this.paint(agent.id, look);
     return look;
@@ -276,9 +294,11 @@ export class TrafficView {
     write(this.lamps, this.lampParts);
   }
 
-  /** Ghi ma trận cho mọi xe; `alpha` nội suy giữa bước mô phỏng trước và sau. */
-  /** `count`: chỉ vẽ `count` xe đầu của `agents` (mảng dùng lại có thể dài hơn số xe thật). */
-  update(agents: readonly BikePose[], alpha: number, count = agents.length): void {
+  /**
+   * Ghi ma trận cho mọi xe; `alpha` nội suy giữa bước mô phỏng trước và sau. `count`: chỉ vẽ `count` xe đầu của `agents`
+   * (mảng dùng lại có thể dài hơn số xe thật). `skinned`: xe có người lái vẽ bằng nhân vật có xương (bỏ khối người lái).
+   */
+  update(agents: readonly BikePose[], alpha: number, count = agents.length, skinned: RiderSet | null = null): void {
     const n = Math.min(count, agents.length, this.capacity);
     // Không có xe (đàn em / công an lúc không truy đuổi): ẩn cả nhóm — InstancedMesh 0 bản vẫn tốn lệnh vẽ ở mọi lượt.
     this.root.visible = n > 0;
@@ -294,9 +314,10 @@ export class TrafficView {
       r[12] = a.prevYaw + dyaw * alpha;
       r[13] = a.prevLean + (a.lean - a.prevLean) * alpha;
       setFrame();
-      writeParts(this.boxes, this.boxParts, i, look.cargo);
-      writeParts(this.cyls, this.cylParts, i, look.cargo);
-      writeParts(this.lamps, this.lampParts, i, look.cargo);
+      const bare = skinned !== null && skinned.has(a.id);
+      writeParts(this.boxes, this.boxParts, i, look.cargo, bare);
+      writeParts(this.cyls, this.cylParts, i, look.cargo, bare);
+      writeParts(this.lamps, this.lampParts, i, look.cargo, bare);
       // Vệt đèn: theo hướng xe nhưng nằm phẳng trên đường (không nghiêng theo xe).
       r[13] = 0;
       setFrame();

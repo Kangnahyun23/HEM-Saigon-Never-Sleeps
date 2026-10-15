@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mergeStaticMeshes } from '@/render/merge';
 import { reflective } from '@/world/reflections';
-import { BIKE, BIKE_PARTS, BIKE_ROLE_COLORS, type BikePart } from './bikeModel';
+import { BIKE, BIKE_PARTS, BIKE_ROLE_COLORS, RIDER_POSE, SEAT_ANCHOR, type BikePart } from './bikeModel';
 import { BIKE_TUNING, type MotorbikePhysics } from './motorbikePhysics';
 
 const RAKE = 0.32;
@@ -13,6 +13,8 @@ export class MotorbikeView {
   readonly model = new THREE.Group();
   /** Chỗ gắn người lái (ngồi trên yên). */
   readonly seat = new THREE.Group();
+  /** Chỗ đặt cổ tay trái / phải trên tay nắm ghi-đông (xoay theo cụm lái) — IK tay của người lái. */
+  readonly grips: readonly [THREE.Object3D, THREE.Object3D] = [new THREE.Object3D(), new THREE.Object3D()];
   private readonly steerGroup = new THREE.Group();
   private readonly frontSpin = new THREE.Group();
   private readonly rearSpin = new THREE.Group();
@@ -95,8 +97,13 @@ export class MotorbikeView {
       }
     }
 
-    this.seat.position.set(0, -0.03, -0.27);
+    this.seat.position.set(SEAT_ANCHOR[0], SEAT_ANCHOR[1], SEAT_ANCHOR[2]);
     this.model.add(this.seat);
+    // Tay nắm nằm trong cụm lái (toạ độ cụm lái trùng toạ độ xe khi chưa bẻ lái).
+    const [wx, wy, wz] = RIDER_POSE.wrist;
+    this.grips[0].position.set(wx, wy, wz);
+    this.grips[1].position.set(-wx, wy, wz);
+    content.add(this.grips[0], this.grips[1]);
     mergeStaticMeshes(this.model);
   }
 

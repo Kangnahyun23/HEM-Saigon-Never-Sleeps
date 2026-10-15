@@ -11,6 +11,7 @@ import { PedestrianSim, type Threat } from '@/ai/pedestrians';
 import { Heat, SightGrid } from '@/systems/heat';
 import type { SaveSlot } from '@/systems/save';
 import { NearPedestrianView } from '@/ai/nearPedestrians';
+import { NearRiderView } from '@/ai/nearRiders';
 import { SeatedPeopleView } from '@/ai/seatedPeople';
 import { CIVILIANS, NpcPool } from '@/ai/npcBody';
 import { PedestrianView } from '@/ai/pedestrianView';
@@ -304,8 +305,13 @@ export class Game {
     this.nearPedestrians = near > 0 ? new NearPedestrianView(near, this.npcPool) : null;
     if (this.nearPedestrians) scene.add(this.nearPedestrians.root);
     this.seated = seated > 0 ? new SeatedPeopleView(city.seats, seated, this.npcPool) : null;
-    // Dựng sẵn hình lúc tải (gặp người mới giữa phố khỏi nhân bản xương ⇒ khựng): đủ cho số người hiện cùng lúc chia đều các mẫu.
-    if (near > 0) this.npcPool.prebuild(CIVILIANS.map((c) => c.id), Math.ceil((near + seated) / CIVILIANS.length));
+    // Người lái xe máy NPC gần camera: cùng mẫu người đi đường, lấy hình từ cùng kho.
+    const riders = NearRiderView.available() ? budget.nearRiders : 0;
+    if (riders > 0) this.traffic.riders = new NearRiderView(riders, this.npcPool);
+    // Dựng sẵn hình lúc tải (gặp người mới giữa phố khỏi nhân bản xương ⇒ khựng): đủ cho số người hiện cùng lúc chia đều
+    // các mẫu, dư một hình mỗi mẫu (mẫu chọn ngẫu nhiên nên có lúc một mẫu xuất hiện nhiều hơn mức chia đều).
+    const shown = near + seated + riders;
+    if (shown > 0) this.npcPool.prebuild(CIVILIANS.map((c) => c.id), Math.ceil(shown / CIVILIANS.length) + 1);
     this.places = city.places;
     this.shopRng = createRng(city.layout.seed + 41);
     this.hud.shop.onConfirm = (key, mode) => (mode === 'buy' ? this.buyOffer(key) : this.sellSlot(Number(key)));
@@ -1218,6 +1224,9 @@ export class Game {
       this.headlamp.position.set(0, 0.7, CAR.length / 2);
     } else {
       this.model.setHelmet(true);
+      // Hai tay nắm ghi-đông (xoay theo cụm lái).
+      const [left, right] = vehicle.view.grips;
+      this.model.setGrips?.({ left, right, frame: vehicle.view.model });
       this.headlamp.position.set(0, 0.98, 0.62);
     }
     this.camera.zoom = Math.max(this.camera.zoom, 1);
@@ -1266,6 +1275,7 @@ export class Game {
     this.scene.add(this.headlamp);
     this.model.root.visible = true;
     this.model.setHelmet(false);
+    this.model.setGrips?.(null);
     this.character.setEnabled(true);
     this.character.teleport(spot.x, spot.y + 0.02, spot.z, h);
     if (thrown) {
@@ -1569,7 +1579,7 @@ export class Game {
       c.view.root.visible = !far;
       if (!far) c.view.sync(c.phys, alpha);
     }
-    this.traffic.render(alpha);
+    this.traffic.render(alpha, dt, this.view.position.x, this.view.position.z);
     this.chase.render(alpha);
     this.police.render(alpha, dt);
     if (this.caughtThisStep) {

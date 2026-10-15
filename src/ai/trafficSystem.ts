@@ -4,6 +4,7 @@ import { GROUP, interaction } from '@/physics/groups';
 import type { PhysicsWorld } from '@/physics/physics';
 import type { CityLayout } from '@/world/city/layout';
 import { TrafficSim, type Focus, type Obstacle, type TrafficOptions } from './traffic';
+import type { NearRiderView } from './nearRiders';
 import { TrafficFleetView } from './trafficFleetView';
 import { bodyHalfExtents } from './trafficKinds';
 import { buildTrafficNetwork } from './trafficNetwork';
@@ -19,6 +20,8 @@ export class TrafficSystem {
   readonly view: TrafficView;
   /** Hình các loại xe khác (null nếu đàn xe chỉ có xe máy). */
   readonly fleet: TrafficFleetView | null;
+  /** Người lái có xương cho các xe máy gần camera (null: mọi người lái là khối hộp). */
+  riders: NearRiderView | null = null;
   private readonly bodies: RAPIER.RigidBody[] = [];
   /** Độ cao tâm thân va chạm của từng xe. */
   private readonly heights: number[] = [];
@@ -72,9 +75,11 @@ export class TrafficSystem {
     }
   }
 
-  /** Cập nhật hình mỗi khung hình. */
-  render(alpha: number): void {
-    this.view.update(this.sim.agents, alpha, this.sim.bikes);
+  /** Cập nhật hình mỗi khung hình; (cx, cz) = camera — chọn xe nào có người lái vẽ bằng nhân vật có xương. */
+  render(alpha: number, dt = 0, cx = 0, cz = 0): void {
+    const riders = this.riders;
+    if (riders) riders.update(this.sim.agents, this.sim.bikes, alpha, dt, cx, cz);
+    this.view.update(this.sim.agents, alpha, this.sim.bikes, riders);
     this.fleet?.update(this.sim.agents, this.sim.bikes, alpha);
   }
 
