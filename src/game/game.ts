@@ -11,7 +11,8 @@ import { PedestrianSim, type Threat } from '@/ai/pedestrians';
 import { Heat, SightGrid } from '@/systems/heat';
 import type { SaveSlot } from '@/systems/save';
 import { NearPedestrianView } from '@/ai/nearPedestrians';
-import { NearRiderView } from '@/ai/nearRiders';
+import { GANG_RIDERS, NearRiderView, POLICE_RIDERS } from '@/ai/nearRiders';
+import { GANG_CLOTHES } from '@/assets/outfits';
 import { SeatedPeopleView } from '@/ai/seatedPeople';
 import { CIVILIANS, NpcPool } from '@/ai/npcBody';
 import { PedestrianView } from '@/ai/pedestrianView';
@@ -146,8 +147,10 @@ export class Game {
   private readonly nearPedestrians: NearPedestrianView | null;
   /** Người ngồi quán cóc / người bán ở xe đẩy quanh camera. */
   private readonly seated: SeatedPeopleView | null;
-  /** Kho hình NPC có xương dùng chung (người đi bộ gần, người ngồi quán). */
+  /** Kho hình NPC có xương dùng chung (người đi bộ gần, người ngồi quán, người lái xe máy, công an lái xe). */
   readonly npcPool = new NpcPool();
+  /** Kho hình riêng của đàn em Phát (mặc đồ đen — không trộn với người đi đường cùng mẫu). */
+  readonly gangPool = new NpcPool(GANG_CLOTHES);
   private readonly view: THREE.PerspectiveCamera;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
@@ -312,6 +315,18 @@ export class Game {
     // các mẫu, dư một hình mỗi mẫu (mẫu chọn ngẫu nhiên nên có lúc một mẫu xuất hiện nhiều hơn mức chia đều).
     const shown = near + seated + riders;
     if (shown > 0) this.npcPool.prebuild(CIVILIANS.map((c) => c.id), Math.ceil(shown / CIVILIANS.length) + 1);
+    // Người lái xe truy đuổi gần camera: công an (mẫu công an, quân phục ô-liu — cùng kho) và đàn em (kho riêng mặc đồ
+    // đen). Dựng sẵn mỗi mẫu đủ cả `chaseRiders` người (mẫu chọn ngẫu nhiên, có lúc mọi xe cùng một mẫu).
+    const chaseRiders = budget.chaseRiders;
+    if (chaseRiders > 0 && NearRiderView.available(POLICE_RIDERS)) {
+      this.police.riders = new NearRiderView(chaseRiders, this.npcPool, { style: 'police', cast: POLICE_RIDERS, byGeneration: true });
+      this.npcPool.prebuild(POLICE_RIDERS.map((c) => c.id), chaseRiders);
+    }
+    if (chaseRiders > 0 && NearRiderView.available(GANG_RIDERS)) {
+      scene.add(this.gangPool.root);
+      this.chase.riders = new NearRiderView(chaseRiders, this.gangPool, { style: 'gang', cast: GANG_RIDERS, byGeneration: true });
+      this.gangPool.prebuild(GANG_RIDERS.map((c) => c.id), chaseRiders);
+    }
     this.places = city.places;
     this.shopRng = createRng(city.layout.seed + 41);
     this.hud.shop.onConfirm = (key, mode) => (mode === 'buy' ? this.buyOffer(key) : this.sellSlot(Number(key)));
@@ -1580,8 +1595,8 @@ export class Game {
       if (!far) c.view.sync(c.phys, alpha);
     }
     this.traffic.render(alpha, dt, this.view.position.x, this.view.position.z);
-    this.chase.render(alpha);
-    this.police.render(alpha, dt);
+    this.chase.render(alpha, dt, this.view.position.x, this.view.position.z);
+    this.police.render(alpha, dt, this.view.position.x, this.view.position.z);
     if (this.caughtThisStep) {
       this.caughtThisStep = false;
       this.caught();

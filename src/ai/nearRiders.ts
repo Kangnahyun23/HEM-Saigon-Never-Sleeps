@@ -3,7 +3,7 @@ import type { CharacterId } from '@/assets/manifest';
 import { createRng, pick } from '@/core/random';
 import { reachArm } from '@/player/armIk';
 import { RIDER_POSE } from '@/vehicles/bikeModel';
-import { CIVILIANS, civiliansAvailable, hipIn, NPC_ACTION, NPC_CLIPS, stepNpc, type ArmChain, type NpcBody, type NpcSource } from './npcBody';
+import { castAvailable, CIVILIANS, hipIn, NPC_ACTION, NPC_CLIPS, stepNpc, type ArmChain, type NpcBody, type NpcSource } from './npcBody';
 import { PedestrianLod } from './pedestrianLod';
 import { bikeLook, type BikePose, type RiderSet, type RiderStyle } from './trafficView';
 
@@ -16,6 +16,33 @@ const LEAN_FORWARD = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1
 export interface RiderCast {
   readonly id: CharacterId;
   readonly height: readonly [number, number];
+}
+
+/** Công an lái xe: nam / nữ (quân phục ô-liu nướng vào ảnh màu lúc tải — assets/outfits.ts). */
+export const POLICE_RIDERS: readonly RiderCast[] = [
+  { id: 'police-m', height: [1.66, 1.76] },
+  { id: 'police-f', height: [1.58, 1.68] },
+];
+
+/**
+ * Đàn em của Phát: thanh niên mặc đồ đen (kho hình riêng mặc GANG_CLOTHES). Không dùng mẫu áo thun đỏ / quần kaki:
+ * màu đó gần màu da nên không nhuộm đen được.
+ */
+export const GANG_RIDERS: readonly RiderCast[] = [
+  { id: 'man-shirt', height: [1.64, 1.76] },
+  { id: 'man-polo', height: [1.64, 1.76] },
+];
+
+export interface RiderOptions {
+  /** Phe của đàn xe (màu mũ theo `bikeLook`). Mặc định 'civilian'. */
+  readonly style?: RiderStyle;
+  /** Mẫu người ngồi xe. Mặc định CIVILIANS. */
+  readonly cast?: readonly RiderCast[];
+  /**
+   * Id xe không bền (xe truy đuổi đánh số theo chỗ trong mảng, đổi khi có xe biến mất) ⇒ chọn người lái chỉ theo
+   * `generation` (duy nhất mỗi xe), để người lái không đổi mặt giữa chừng.
+   */
+  readonly byGeneration?: boolean;
 }
 
 interface Slot {
@@ -55,28 +82,33 @@ function gripBar(chain: ArmChain, side: number, q: THREE.Quaternion, ox: number,
 const riderSeed = (id: number, generation: number): number => id * 6151 + generation * 92821 + 17;
 
 /**
- * Người lái xe máy gần camera: tối đa `capacity` xe gần nhất có người lái vẽ bằng nhân vật có xương (mẫu người đi đường,
- * động tác lái xe, mũ bảo hiểm cùng màu mũ khối hộp lúc ở xa); TrafficView bỏ khối người lái của đúng các xe này
- * (`has`). Hình lấy từ kho NPC dùng chung, người lái nghiêng theo xe khi cua.
+ * Người lái xe máy gần camera: tối đa `capacity` xe gần nhất có người lái vẽ bằng nhân vật có xương (mẫu người theo
+ * phe — dân thường, công an, đàn em; động tác lái xe, mũ bảo hiểm cùng màu mũ khối hộp lúc ở xa); TrafficView bỏ khối
+ * người lái của đúng các xe này (`has`). Hình lấy từ kho NPC, người lái nghiêng theo xe khi cua.
  */
 export class NearRiderView implements RiderSet {
   readonly lod: PedestrianLod;
   private readonly slots: Slot[] = [];
   private readonly targets = new Array<number>(NPC_CLIPS.length).fill(0);
+  private readonly style: RiderStyle;
+  private readonly cast: readonly RiderCast[];
+  private readonly byGeneration: boolean;
 
   constructor(
     capacity: number,
     private readonly pool: NpcSource,
-    private readonly style: RiderStyle = 'civilian',
-    private readonly cast: readonly RiderCast[] = CIVILIANS,
+    options: RiderOptions = {},
   ) {
+    this.style = options.style ?? 'civilian';
+    this.cast = options.cast ?? CIVILIANS;
+    this.byGeneration = options.byGeneration ?? false;
     this.lod = new PedestrianLod(capacity, NEAR_RADIUS);
     for (let k = 0; k < capacity; k++) this.slots.push({ pose: -1, generation: -1, npc: null, hipY: 0, hipZ: 0 });
   }
 
-  /** Có đủ mẫu người + động tác để dùng không (thiếu thì người lái vẫn là khối hộp). */
-  static available(): boolean {
-    return civiliansAvailable();
+  /** Có đủ mẫu người (`cast`) + động tác để dùng không (thiếu thì người lái vẫn là khối hộp). */
+  static available(cast: readonly RiderCast[] = CIVILIANS): boolean {
+    return castAvailable(cast);
   }
 
   /** Hình người lái của xe `id`, hoặc null nếu xe đó đang dùng khối hộp. */
@@ -110,7 +142,7 @@ export class NearRiderView implements RiderSet {
     this.release(slot);
     slot.pose = pose.id;
     slot.generation = pose.generation;
-    const rng = createRng(riderSeed(pose.id, pose.generation));
+    const rng = createRng(riderSeed(this.byGeneration ? 0 : pose.id, pose.generation));
     const look = pick(rng, this.cast);
     const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
     const npc = this.pool.take(look.id);

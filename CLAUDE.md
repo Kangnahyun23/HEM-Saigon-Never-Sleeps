@@ -37,7 +37,8 @@ Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `
 Vật đổ bóng KHÔNG dùng `alphaTest` (để `castShadow: false`): lượt vẽ bóng dùng chung một vật liệu bóng, vật có / không
 alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (từng ăn ~16 % CPU + nửa rác bộ nhớ).
 NPC có xương lấy / trả qua kho chung `NpcPool` (ai/npcBody.ts — `KeyedPool` theo mẫu người, dựng sẵn lúc tải bằng
-`prebuild`; người đi bộ gần, người ngồi quán và người lái xe máy NPC gần dùng chung) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
+`prebuild`; người đi bộ gần, người ngồi quán, người lái xe máy NPC gần và công an lái xe dùng chung; đàn em Phát có kho
+riêng mặc đồ đen — `new NpcPool(GANG_CLOTHES)`) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
 three.js vẫn tính ma trận xương của vật đang ẩn; bộ đệm hình riêng từng ô từng phình tới hàng chục nghìn xương sau vài phút chơi.
 NPC dùng bộ xương rút gọn 23 xương (assets/slimRig.ts: bỏ xương ngón tay + xương lá; clip lấy bằng `getNpcClip`, đã lọc
 track của xương bị bỏ); chỉ Tín giữ đủ 66 xương (`FULL_RIG` trong characters.ts).
@@ -66,7 +67,7 @@ không vẽ vật đang biên dịch shader dở (số đo sẽ "nhanh" giả).
 Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`, `__HEM__.timings`
 (thời gian từng bước dựng cảnh lúc tải), `__HEM__.hardware` (card đồ hoạ, bậc máy, ngân sách cảnh).
 Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ (và số người đi bộ / người lái xe
-máy gần vẽ bằng nhân vật có xương), hạt mưa, cỡ bản đồ bóng lúc tải;
+máy / người lái xe truy đuổi gần vẽ bằng nhân vật có xương), hạt mưa, cỡ bản đồ bóng lúc tải;
 thứ gì mới tốn theo số lượng thì đưa vào ngân sách đó. Playwright (navigator.webdriver) luôn dùng bậc "mạnh".
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
@@ -89,7 +90,9 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 src/
   assets/            manifest.ts (tự sinh: texture, nhân vật, động tác), textures.ts (tải lúc vào game, getTextures),
                      characters.ts (mẫu người có xương + clip động tác Mesh2Motion CC0: createCharacter, getClip, getNpcClip),
-                     slimRig (rút bộ xương NPC 66 → 23 xương + lọc track clip — có unit test)
+                     slimRig (rút bộ xương NPC 66 → 23 xương + lọc track clip — có unit test),
+                     outfits (trang phục nướng vào ảnh màu lúc tải, không thêm shader: công an quân phục ô-liu trên mẫu
+                     `police-m` / `police-f`, đàn em đồ đen qua `createCharacter(id, h, GANG_CLOTHES)` — có unit test)
   main.ts            khởi tạo renderer, physics, khu phố, Game; vòng lặp khung hình; móc __HEM__
   game/game.ts       vòng chơi: đi bộ ⇄ lái xe, bước vật lý cố định + nội suy, camera, HUD
   core/              fixedStep, input (phím + chuột/pointer lock; khi khoá chuột, nút chuột thành mã `Mouse0` / `Mouse2`), random (seed), rect,
@@ -148,7 +151,9 @@ src/
                      chase (xe truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test; cấu hình CHASE cho đàn em
                      Phát, POLICE_CHASE cho công an: từ 3 sao có ô tô (`carsPerLevel`) và chốt chặn ô tô đỗ ngang đường phía
                      trước — `placeRoadblock`, chaser `mode: 'block'`), chaseSystem (thân Rapier + hình theo loại xe máy / ô tô;
-                     công an có đèn chớp đỏ – xanh; chốt chặn là vật cản cho xe NPC qua `addObstacles`),
+                     công an có đèn chớp đỏ – xanh; chốt chặn là vật cản cho xe NPC qua `addObstacles`; xe máy gần camera
+                     có người lái có xương — `chaseSystem.riders`: công an `POLICE_RIDERS`, đàn em `GANG_RIDERS` từ kho
+                     riêng `game.gangPool`; xe truy đuổi đánh số theo chỗ trong mảng nên chọn người theo `generation`),
                      patrol (xe tuần tra 'police' trong dòng xe NPC thấy Tín gây án ⇒ lên sao ngay, chính nó quay sang đuổi — có unit test)
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker

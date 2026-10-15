@@ -24,9 +24,9 @@ Chỉ dùng các mẫu ghi CC0 trong danh sách mẫu của Mesh2Motion (bỏ c�
 | Mã trong game | Asset | Tác giả | Nguồn | Giấy phép | Dùng cho |
 | --- | --- | --- | --- | --- | --- |
 | `tin` | [male_15](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_15.glb) | elbolilloduro | Mesh2Motion | CC0 | Tín — nhân vật chính |
-| `man-shirt` | [male_5](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_5.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (nam, sơ mi) |
+| `man-shirt` | [male_5](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_5.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (nam, sơ mi); đàn em của Phát (nhuộm đồ đen trong game) |
 | `man-tee` | [male_6](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_6.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (nam, áo thun) |
-| `man-polo` | [male_10](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_10.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (nam, áo polo) |
+| `man-polo` | [male_10](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_10.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (nam, áo polo); đàn em của Phát (nhuộm đồ đen trong game) |
 | `old-man` | [male_32](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/male_32.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (ông cụ) |
 | `woman-young` | [female_9](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/female_9.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (cô gái) |
 | `woman-style` | [female_8](https://github.com/mesh2motion/mesh2motion-app/blob/653a9698f5f315523072f1c3ff3496100401317b/static/models-variation/human/female_8.glb) | elbolilloduro | Mesh2Motion | CC0 | Người đi đường (cô gái sành điệu) |

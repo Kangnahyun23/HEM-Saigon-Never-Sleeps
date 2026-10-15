@@ -2,13 +2,19 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { attachToBone, createCharacter, getNpcClip, hasCharacter } from '@/assets/characters';
 import { CHARACTERS, type AnimationName, type CharacterId } from '@/assets/manifest';
+import type { Outfit } from '@/assets/outfits';
 import { KeyedPool } from '@/core/keyedPool';
 import { CIVILIANS } from './civilians';
 
 export { CIVILIANS } from './civilians';
 
+/** Mọi mẫu người trong `cast` đã tải được (thiếu thì nơi dùng lùi về khối hộp). */
+export function castAvailable(cast: readonly { readonly id: CharacterId }[]): boolean {
+  return cast.every((c) => hasCharacter(c.id));
+}
+
 export function civiliansAvailable(): boolean {
-  return CIVILIANS.every((c) => hasCharacter(c.id));
+  return castAvailable(CIVILIANS);
 }
 
 /**
@@ -100,10 +106,13 @@ function helmetGeometry(): THREE.BufferGeometry {
 }
 const HELMET_GEO = helmetGeometry();
 
-/** Dựng một NPC mẫu `id` (chiều cao gốc của mẫu) với đủ action trong NPC_CLIPS. Trả null nếu mẫu chưa tải được. */
-export function buildNpc(parent: THREE.Object3D, id: CharacterId): NpcBody | null {
+/**
+ * Dựng một NPC mẫu `id` (chiều cao gốc của mẫu) với đủ action trong NPC_CLIPS; `outfit`: trang phục riêng (đàn em).
+ * Trả null nếu mẫu chưa tải được.
+ */
+export function buildNpc(parent: THREE.Object3D, id: CharacterId, outfit: Outfit | null = null): NpcBody | null {
   const height = CHARACTERS[id].height;
-  const body = createCharacter(id, height);
+  const body = createCharacter(id, height, outfit);
   if (!body) return null;
   const mixer = new THREE.AnimationMixer(body);
   const actions = NPC_CLIPS.map((n) => mixer.clipAction(getNpcClip(n) ?? new THREE.AnimationClip(n, 1, [])));
@@ -175,6 +184,7 @@ export function showNpc(npc: NpcBody, on: boolean): void {
  * Kho hình NPC có xương dùng chung cho mọi hệ thống, theo mẫu người: lấy ra thì hiện, trả lại thì ẩn (KeyedPool).
  * Dựng sẵn vài hình mỗi mẫu lúc tải (`prebuild`) — nhân bản một nhân vật giữa lúc chơi tốn ~10 ms (khựng).
  * Hình ẩn trong cảnh cũng được làm nóng pipeline lúc tải (render/warmup.ts tạm hiện mọi vật).
+ * `outfit`: mọi hình trong kho mặc trang phục này (kho riêng của đàn em — người đi đường giữ quần áo của mẫu).
  */
 export class NpcPool implements NpcSource {
   readonly root = new THREE.Group();
@@ -183,13 +193,13 @@ export class NpcPool implements NpcSource {
     (npc) => showNpc(npc, false),
   );
 
-  constructor() {
-    this.root.name = 'npc-pool';
+  constructor(private readonly outfit: Outfit | null = null) {
+    this.root.name = outfit ? `npc-pool-${outfit.name}` : 'npc-pool';
   }
 
   /** Lấy một hình mẫu `id` (đã hiện, mọi động tác tắt); null nếu mẫu chưa tải được. */
   take(id: CharacterId): NpcBody | null {
-    const npc = this.pool.take(id, () => buildNpc(this.root, id));
+    const npc = this.pool.take(id, () => buildNpc(this.root, id, this.outfit));
     if (npc) resetNpc(npc);
     return npc;
   }

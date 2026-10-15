@@ -54,9 +54,9 @@ const M2M_RAW = `https://raw.githubusercontent.com/mesh2motion/mesh2motion-app/$
 const M2M_REPO = 'https://github.com/mesh2motion/mesh2motion-app';
 const CHARACTERS = [
   { id: 'tin', variant: 'male_15', author: 'elbolilloduro', texture: 1024, use: 'Tín — nhân vật chính' },
-  { id: 'man-shirt', variant: 'male_5', author: 'elbolilloduro', use: 'Người đi đường (nam, sơ mi)' },
+  { id: 'man-shirt', variant: 'male_5', author: 'elbolilloduro', use: 'Người đi đường (nam, sơ mi); đàn em của Phát (nhuộm đồ đen trong game)' },
   { id: 'man-tee', variant: 'male_6', author: 'elbolilloduro', use: 'Người đi đường (nam, áo thun)' },
-  { id: 'man-polo', variant: 'male_10', author: 'elbolilloduro', use: 'Người đi đường (nam, áo polo)' },
+  { id: 'man-polo', variant: 'male_10', author: 'elbolilloduro', use: 'Người đi đường (nam, áo polo); đàn em của Phát (nhuộm đồ đen trong game)' },
   { id: 'old-man', variant: 'male_32', author: 'elbolilloduro', use: 'Người đi đường (ông cụ)' },
   { id: 'woman-young', variant: 'female_9', author: 'elbolilloduro', use: 'Người đi đường (cô gái)' },
   { id: 'woman-style', variant: 'female_8', author: 'elbolilloduro', use: 'Người đi đường (cô gái sành điệu)' },

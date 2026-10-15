@@ -6,6 +6,7 @@ import type { PhysicsWorld } from '@/physics/physics';
 import type { SightGrid } from '@/systems/heat';
 import { nightUniform } from '@/world/nightGlow';
 import { CHASE, ChaseSim, type ChaseConfig, type Chaser, type ChaserKind, type ChasePlayer } from './chase';
+import type { NearRiderView } from './nearRiders';
 import type { Obstacle } from './traffic';
 import { TrafficFleetView, type FleetPose } from './trafficFleetView';
 import { bodyHalfExtents } from './trafficKinds';
@@ -45,6 +46,8 @@ const LIGHT_BAR: Record<ChaserKind, { x: number; y: number; z: number; size: rea
  */
 export class ChaseSystem {
   readonly sim: ChaseSim;
+  /** Người lái có xương cho các xe máy truy đuổi gần camera (null: người lái khối hộp). Chọn người theo `generation`. */
+  riders: NearRiderView | null = null;
   private readonly view: TrafficView;
   private readonly fleet: TrafficFleetView | null = null;
   private readonly pools: Record<ChaserKind, BodyPool>;
@@ -188,7 +191,8 @@ export class ChaseSystem {
     }
   }
 
-  render(alpha: number, dt = 0): void {
+  /** Cập nhật hình mỗi khung hình; (cx, cz) = camera — chọn xe nào có người lái vẽ bằng nhân vật có xương. */
+  render(alpha: number, dt = 0, cx = 0, cz = 0): void {
     const chasers = this.sim.chasers;
     let bikes = 0;
     let cars = 0;
@@ -205,7 +209,9 @@ export class ChaseSystem {
       u.z = c.prevZ + (c.z - c.prevZ) * alpha;
       u.yaw = c.yaw;
     }
-    this.view.update(this.bikePoses, alpha, bikes);
+    const riders = this.riders;
+    if (riders) riders.update(this.bikePoses, bikes, alpha, dt, cx, cz);
+    this.view.update(this.bikePoses, alpha, bikes, riders);
     this.fleet?.update(this.carPoses, 0, alpha, cars);
     if (this.lights) this.renderLights(alpha, dt);
   }

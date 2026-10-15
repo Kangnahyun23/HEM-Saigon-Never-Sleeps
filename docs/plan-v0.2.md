@@ -93,7 +93,8 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - Chen ngang theo yêu cầu chủ dự án (2026-10-15), mỗi mục một PR:
   - [x] R1 người lái xe máy NPC gần camera là nhân vật có xương như người đi đường (0 / 3 / 5 người theo sức máy, đội mũ
     bảo hiểm cùng màu người lái khối hộp); Tín và NPC ngồi nửa trước yên, ngả người, hai tay nắm ghi-đông (IK hai đoạn);
-  - [ ] R2 công an (và đàn em Phát) lái xe truy đuổi là nhân vật có xương (`police-m` / `police-f`);
+  - [x] R2 công an (và đàn em Phát) lái xe truy đuổi là nhân vật có xương: công an mẫu `police-m` / `police-f` mặc
+    quân phục ô-liu (đổi màu ảnh gốc lúc tải), đàn em đồ đen mũ đỏ; 0 / 2 / 3 người mỗi phe theo sức máy;
   - [ ] R3 đánh được công an: công an xuống xe đuổi bộ, trúng đòn như người đi đường, đánh công an lên 4–5 sao;
   - [ ] R4 vào hẻm thì xe truy đuổi (công an, đàn em) chậm lại hẳn — ngoài đường lớn vẫn nhanh như cũ;
 - [ ] N7.4–N10.
