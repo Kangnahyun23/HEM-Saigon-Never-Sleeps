@@ -1,6 +1,6 @@
 # Bàn giao dự án — HẺM: Sài Gòn Không Ngủ
 
-Cập nhật: 2026-10-15, sau R2 — người lái xe máy NPC, công an, đàn em có xương (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
+Cập nhật: 2026-10-15, sau R4 — người lái xe máy NPC, công an, đàn em có xương; xe truy đuổi chậm lại trong hẻm (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
 `docs/plan-v0.2.md` (kế hoạch v0.2 chi tiết + tiến độ) và `docs/gdd.md` (thiết kế đầy đủ).
 
 ## 1. Dự án là gì
@@ -281,6 +281,19 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   Thử nhanh trên ảnh: `recolorlab.mjs` (thư mục tạm của phiên) đọc ảnh màu đã xuất, ghi ảnh đã đổi màu.
 - Kiểm tra: ngày / đêm, công an 2 sao + đàn em Độ Nóng 2 áp sát — 0 pipeline mới lúc chơi.
 
+### R4 — xe truy đuổi chậm lại trong hẻm (nhánh `r4-hem-cham`, tách từ `r2-cong-an-co-xuong`)
+- Chủ dự án: "vào hẻm mà công an đuổi nhanh như ngoài đường thì game khó quá". `ai/hemNav.ts` (`HemMap`, dựng một lần
+  trong game.ts từ `layout.hems` + lô nhà, đưa vào cả hai `ChaseSystem`):
+  - xe máy trong hẻm không quá `ChaseConfig.hemSpeed` = 5 m/s (Tín chạy bộ 6,4 m/s) và phanh kịp trước miệng hẻm
+    (`hemCap`: quãng đường tới hẻm dọc đường đi `HemMap.entry`);
+  - ô tô dừng trước miệng hẻm (khớp trụ chắn `hemBollards`), có chốt chặn cứng: bước tới mà lọt vào hẻm thì đứng lại;
+  - xe trong hẻm mà mất dấu Tín: tới chỗ thấy Tín lần cuối (`Chaser.lastX/lastZ/lastSeen`, nhớ 4 s), rồi men theo trục
+    hẻm ra đầu thông (`HemMap.exit` — đầu cụt nhận ra bằng lô nhà ngay sau đầu hẻm). Trước đây xe đuổi theo vào hẻm rồi
+    mất dấu là lao thẳng về giao lộ gần nhất, xuyên qua nhà.
+- Xe trên đường lớn vẫn không tự tìm vào hẻm (chỉ theo vào khi thấy Tín) ⇒ chui hẻm khuất mặt vẫn là cách cắt đuôi.
+- Kiểm tra: `hemNav.test.ts` (8 test; tắt HemMap thì 5 test truy đuổi đỏ), e2e `police` thêm test "công an đuổi vào
+  hẻm" (ảnh `police-hem.png`).
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -341,17 +354,21 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   `mixer.update` mỗi khung và chỉ đúng nếu điểm xuất phát là tư thế của clip (Tín: trả xương về `armRest` trước IK).
 
 **Vật lý và truy đuổi**
+- Xe truy đuổi là thân Rapier kinematic: không gì chặn được (xuyên tường) ⇒ đường đi phải tự tránh nhà — đường lớn theo
+  nút giao lộ, trong hẻm theo `HemMap`, thấy Tín thì lao thẳng (tầm nhìn thông = không có nhà chắn).
 - Xe truy đuổi là thân Rapier kinematic: lao vào người đi bộ sẽ **hất Tín đi** (tốc độ của Tín tăng vọt) ⇒ không bao giờ
   "bị bắt". `ChaseSim` giờ phanh theo quãng đường phanh và dừng cách `STOP_GAP` = 2 m. Đừng cộng tốc độ của Tín vào tốc
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
 - PR #28–#34 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1, P2) đã merge vào `main`, `main` đã deploy. P3 là PR #35.
-- R1 là PR #36 (nhánh `r1-nguoi-lai-xe`, tách từ `perf-3-toi-uu`); R2 nằm trên nhánh `r2-cong-an-co-xuong` (tách từ R1).
-  Unit test: 294 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`).
+- R1 là PR #36 (nhánh `r1-nguoi-lai-xe`, tách từ `perf-3-toi-uu`); R2 là PR #37 (nhánh `r2-cong-an-co-xuong`, tách từ R1);
+  R4 nằm trên nhánh `r4-hem-cham` (tách từ R2). Unit test: 302 (thêm `nearRiders.test.ts`, `armIk.test.ts`,
+  `outfits.test.ts`, `hemNav.test.ts`).
 - Việc tiếp theo chủ dự án đã giao (2026-10-15), mỗi việc một PR (danh sách R1–R4 trong plan-v0.2.md): ~~người lái xe NPC
   thành nhân vật có xương~~ (R1) → ~~công an là nhân vật có xương~~ (R2) → đánh được công an (R3: công an xuống xe đuổi
-  bộ — mẫu `police-m` / `police-f` đã mặc quân phục ô-liu sẵn trong kho chung) → công an truy đuổi chậm lại trong hẻm (R4).
+  bộ — mẫu `police-m` / `police-f` đã mặc quân phục ô-liu sẵn trong kho chung) → ~~công an truy đuổi chậm lại trong hẻm~~
+  (R4, làm trước R3). Còn R3.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

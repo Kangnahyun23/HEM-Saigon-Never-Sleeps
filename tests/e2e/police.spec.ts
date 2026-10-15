@@ -175,3 +175,62 @@ test('hết máu: màn hình GỤC, tỉnh dậy ở trạm y tế, trả viện
   await page.evaluate(() => (window.__HEM__!.simulate as (s: number) => void)(1));
   await shot(page, 'clinic');
 });
+
+test('công an đuổi vào hẻm: xe máy chạy chậm hơn Tín chạy bộ, ô tô dừng ở miệng hẻm', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.goto('/?moi=1&gio=10');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+
+  type Chaser = { kind: string; x: number; z: number; yaw: number; speed: number; prevX: number; prevZ: number; prevYaw: number };
+  type Hem = { kind: string; axis: 'x' | 'z'; rect: { x0: number; z0: number; x1: number; z1: number } };
+  const result = await page.evaluate(() => {
+    const h = window.__HEM__!;
+    h.paused = true;
+    const g = h.game as Game & { police: { sim: { chasers: Chaser[]; config: { hemSpeed: number } } } };
+    const hems = (h.layout as { hems: Hem[] }).hems;
+    const len = (m: Hem) => (m.axis === 'x' ? m.rect.x1 - m.rect.x0 : m.rect.z1 - m.rect.z0);
+    const main = hems.filter((m) => m.kind === 'main').reduce((a, b) => (len(b) > len(a) ? b : a));
+    // Điểm giữa bề ngang hẻm, cách đầu phía toạ độ nhỏ `s` m vào trong (s < 0: ngoài miệng hẻm, trên đường).
+    const along = (s: number) =>
+      main.axis === 'x' ? { x: main.rect.x0 + s, z: (main.rect.z0 + main.rect.z1) / 2 } : { x: (main.rect.x0 + main.rect.x1) / 2, z: main.rect.z0 + s };
+    const inward = main.axis === 'x' ? Math.PI / 2 : 0;
+    const inHem = (x: number, z: number) => hems.some((m) => x >= m.rect.x0 && x <= m.rect.x1 && z >= m.rect.z0 && z <= m.rect.z1);
+
+    // Tín đứng sâu trong hẻm chính; 3 sao: hai xe máy + một ô tô công an.
+    const me = along(25);
+    g.character.teleport(me.x, 0.6, me.z, inward + Math.PI);
+    (h.simulate as (s: number) => void)(0.2);
+    (h.setWanted as (n: number) => void)(3);
+    (h.simulate as (s: number) => void)(1 / 60);
+    const chasers = g.police.sim.chasers;
+    const car = chasers.find((c) => c.kind === 'car')!;
+    const bike = chasers.find((c) => c.kind === 'bike')!;
+    // Cả hai đang trên đường, phóng tới miệng hẻm (thấy Tín dọc hẻm), còn đủ quãng phanh.
+    for (const [c, s, v] of [[bike, -8, 9], [car, -14, 10]] as const) {
+      const p = along(s);
+      Object.assign(c, { x: p.x, z: p.z, prevX: p.x, prevZ: p.z, yaw: inward, prevYaw: inward, speed: v });
+    }
+    let bikeEntered = false;
+    let bikeTop = 0;
+    let carEntered = false;
+    for (let i = 0; i < 40; i++) {
+      (h.simulate as (s: number) => void)(0.1);
+      if (inHem(bike.x, bike.z)) {
+        bikeEntered = true;
+        bikeTop = Math.max(bikeTop, bike.speed);
+      }
+      carEntered ||= inHem(car.x, car.z);
+    }
+    // Nhìn từ sau lưng Tín ra miệng hẻm.
+    const eye = along(29);
+    const at = along(-8);
+    (h.setCamera as (...a: number[]) => void)(eye.x, 2.2, eye.z, at.x, 1, at.z);
+    return { bikeEntered, bikeTop, carEntered, carSpeed: car.speed, hemSpeed: g.police.sim.config.hemSpeed };
+  });
+  expect(result.bikeEntered).toBe(true);
+  expect(result.bikeTop).toBeLessThanOrEqual(result.hemSpeed + 0.3);
+  expect(result.hemSpeed).toBeLessThan(6.4);
+  expect(result.carEntered).toBe(false);
+  expect(result.carSpeed).toBeLessThan(0.5);
+  await shot(page, 'police-hem');
+});

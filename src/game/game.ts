@@ -2,7 +2,8 @@ import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
 import { ChaseSystem } from '@/ai/chaseSystem';
-import { POLICE_CHASE, type ChasePlayer } from '@/ai/chase';
+import { CHASE, POLICE_CHASE, type ChasePlayer } from '@/ai/chase';
+import { HemMap } from '@/ai/hemNav';
 import { patrolWitness } from '@/ai/patrol';
 import { Siren } from '@/audio/siren';
 import type { Blip } from '@/ui/minimap';
@@ -273,9 +274,11 @@ export class Game {
     const sight = new SightGrid(city.layout.lots.map((l) => l.rect));
     this.sight = sight;
     const network = buildTrafficNetwork(city.layout);
-    this.chase = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 11);
+    // Hẻm: xe máy truy đuổi vào hẻm phải chạy chậm, ô tô dừng ở miệng hẻm, mất dấu thì men theo hẻm ra.
+    const hems = new HemMap(city.layout.hems, city.layout.lots.map((l) => l.rect));
+    this.chase = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 11, 'gang', CHASE, hems);
     // Công an: cùng cách bám theo đường lớn như đàn em Phát, số xe theo sao truy nã, có đèn chớp + còi hú.
-    this.police = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 13, 'police', POLICE_CHASE);
+    this.police = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 13, 'police', POLICE_CHASE, hems);
     const { spawn } = city.layout;
     this.fallGuard = new FallGuard({ x: spawn.x, y: PAD_HEIGHT, z: spawn.z, yaw: spawn.yaw });
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
