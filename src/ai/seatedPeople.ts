@@ -1,10 +1,7 @@
-import * as THREE from 'three/webgpu';
-import type { AnimationName } from '@/assets/manifest';
 import { createRng, pick } from '@/core/random';
 import type { Seat } from '@/world/city/build/context';
 import { eateryOccupancy } from '@/world/timeOfDay';
-import { KeyedPool } from '@/core/keyedPool';
-import { buildNpc, CIVILIANS, civiliansAvailable, hipHeightIn, showNpc, stepNpc, type NpcBody } from './npcBody';
+import { CIVILIANS, civiliansAvailable, hipHeightIn, NPC_ACTION, NPC_CLIPS, stepNpc, type NpcBody, type NpcClip, type NpcPool } from './npcBody';
 import { PedestrianLod, type LodPoint } from './pedestrianLod';
 
 /** Bán kính (m) quanh camera có người ngồi quán / người bán hàng (xa hơn thì bàn ghế trống — khó thấy). */
@@ -12,44 +9,42 @@ const RADIUS = 30;
 /** Mông cao hơn mặt ghế đẩu chút (m). Ghế đẩu nhựa thấp hơn ghế trong clip ⇒ hạ người, nhưng chân lún tối đa 8 cm. */
 const SEAT_CLEARANCE = 0.1;
 const MAX_SINK = 0.08;
-const VENDOR_IDLES: readonly AnimationName[] = ['idle', 'talk', 'foldArms'];
-const SITTING: readonly AnimationName[] = ['sit', 'sitTalk'];
+const VENDOR_IDLES: readonly NpcClip[] = ['idle', 'talk', 'foldArms'];
+const SITTING: readonly NpcClip[] = ['sit', 'sitTalk'];
 /** Giờ xe đẩy có người bán. */
 const VENDOR_HOURS: readonly [number, number] = [6, 22.5];
 
 interface Slot {
   seat: number;
   npc: NpcBody | null;
+  /** Chỉ số action đang phát (ngồi / ngồi nói chuyện / đứng bán hàng). */
+  action: number;
 }
 
-/** Hông cao bao nhiêu khi ngồi, tính trên 1 đơn vị co giãn của hình (đo một lần cho mỗi hình). */
-const sitHip = new WeakMap<NpcBody, number>();
-const _zero = [1];
+/** Hông cao bao nhiêu khi ngồi, tính trên 1 đơn vị co giãn của hình — đo một lần cho mỗi mẫu người + động tác. */
+const sitHip = new Map<string, number>();
 
 /**
  * Hoạt cảnh vỉa hè quanh camera: người ngồi ghế đẩu quán cóc (ngồi, ngồi nói chuyện) và người bán đứng cạnh xe đẩy.
  * Số ghế có người theo giờ (eateryOccupancy). Chỉ vẽ tối đa `capacity` người gần camera nhất.
  */
 export class SeatedPeopleView {
-  readonly root = new THREE.Group();
   private readonly lod: PedestrianLod;
   private readonly slots: Slot[] = [];
-  /** Hình dùng chung cho mọi ô theo mẫu người + động tác (xem NearPedestrianView.pool). */
-  readonly pool = new KeyedPool<NpcBody>(
-    (npc) => showNpc(npc, true),
-    (npc) => showNpc(npc, false),
-  );
+  /** Trọng số đích: chỉ động tác của ô đang xét bằng 1 (đặt rồi trả về 0 ngay sau khi dùng). */
+  private readonly targets = new Array<number>(NPC_CLIPS.length).fill(0);
   /** Ghế đang có người (dựng lại khi giờ đổi đủ nhiều). */
   private occupied: LodPoint[] = [];
   private occupancyHour = -1;
 
+  /** `pool`: kho hình NPC dùng chung (NpcPool). */
   constructor(
     private readonly seats: readonly Seat[],
     capacity: number,
+    private readonly pool: NpcPool,
   ) {
     this.lod = new PedestrianLod(capacity, RADIUS);
-    for (let k = 0; k < capacity; k++) this.slots.push({ seat: -1, npc: null });
-    this.root.name = 'seated-people';
+    for (let k = 0; k < capacity; k++) this.slots.push({ seat: -1, npc: null, action: 0 });
   }
 
   static available(): boolean {
@@ -84,18 +79,19 @@ export class SeatedPeopleView {
     const look = pick(rng, CIVILIANS);
     const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
     const clip = pick(rng, seat.kind === 'stool' ? SITTING : VENDOR_IDLES);
-    const key = `${look.id}:${clip}`;
-    const npc = this.pool.take(key, () => buildNpc(this.root, look.id, height, [clip]));
+    const npc = this.pool.take(look.id);
     slot.npc = npc;
+    slot.action = NPC_ACTION[clip];
     if (!npc) return;
     const scale = npc.perMeter * height;
     npc.body.scale.setScalar(scale);
     let y = seat.y;
     if (seat.kind === 'stool') {
-      let hip = sitHip.get(npc);
+      const key = `${look.id}:${clip}`;
+      let hip = sitHip.get(key);
       if (hip === undefined) {
-        hip = hipHeightIn(npc, 0) / scale;
-        sitHip.set(npc, hip);
+        hip = hipHeightIn(npc, slot.action) / scale;
+        sitHip.set(key, hip);
       }
       // Gốc nhân vật (chân) đặt sao cho hông ngay trên mặt ghế; ghế thấp ⇒ chân lún nhẹ, có giới hạn.
       const groundY = seat.y - 0.28;
@@ -103,7 +99,9 @@ export class SeatedPeopleView {
     }
     npc.body.position.set(seat.x, y, seat.z);
     npc.body.rotation.set(0, seat.yaw, 0);
-    npc.weights.fill(1);
+    // Vào ngay tư thế (không trộn dần từ tư thế gốc).
+    npc.weights[slot.action] = 1;
+    npc.actions[slot.action]!.setEffectiveWeight(1);
     npc.mixer.setTime(rng() * 4);
   }
 
@@ -119,7 +117,10 @@ export class SeatedPeopleView {
         continue;
       }
       if (slot.seat !== id) this.assign(slot, this.seats[id]!);
-      if (slot.npc) stepNpc(slot.npc, _zero, 8, dt);
+      if (!slot.npc) continue;
+      this.targets[slot.action] = 1;
+      stepNpc(slot.npc, this.targets, 8, dt);
+      this.targets[slot.action] = 0;
     }
   }
 }

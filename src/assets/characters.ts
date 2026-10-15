@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { ANIMATIONS, CHARACTERS, type AnimationName, type CharacterId } from './manifest';
+import { slimClip, slimSkeleton } from './slimRig';
 
 /**
  * Nhân vật có xương (Mesh2Motion, CC0 — xem CREDITS.md): tải mẫu người + file động tác một lần lúc vào game,
@@ -18,6 +19,10 @@ interface Template {
 
 const templates = new Map<CharacterId, Template>();
 const clips = new Map<AnimationName, THREE.AnimationClip>();
+/** Bản động tác cho NPC (không có rãnh của xương đã gộp), tạo khi cần. */
+const npcClips = new Map<AnimationName, THREE.AnimationClip>();
+/** Mẫu giữ đủ xương (Tín: cận cảnh, nắm đấm, cầm đồ); mọi mẫu NPC gộp bớt xương ngón tay (slimRig). */
+const FULL_RIG: ReadonlySet<CharacterId> = new Set<CharacterId>(['tin']);
 
 /** Vật liệu nhân vật: chỉ ảnh màu, không kim loại — thay vật liệu Physical của GLB (đắt hơn, không cần cho người). */
 function simplifyMaterial(mesh: THREE.Mesh): void {
@@ -52,6 +57,7 @@ export async function loadCharacters(onProgress?: (done: number, total: number) 
             // Khối bao của lưới có xương không theo động tác ⇒ tắt loại theo khung nhìn (nhân vật ít, gần camera).
             mesh.frustumCulled = false;
           });
+          if (!FULL_RIG.has(id)) slimSkeleton(gltf.scene);
           templates.set(id, { scene: gltf.scene, height: CHARACTERS[id].height });
         })
         .catch((err: unknown) => console.warn(`[HẺM] không tải được nhân vật ${id}`, err))
@@ -88,6 +94,18 @@ export function createCharacter(id: CharacterId, height: number): THREE.Object3D
 
 export function getClip(name: AnimationName): THREE.AnimationClip | undefined {
   return clips.get(name);
+}
+
+/** Động tác cho NPC (mẫu đã gộp xương): bỏ rãnh của xương không còn — khỏi cảnh báo "không thấy xương", khỏi nội suy thừa. */
+export function getNpcClip(name: AnimationName): THREE.AnimationClip | undefined {
+  let clip = npcClips.get(name);
+  if (!clip) {
+    const full = clips.get(name);
+    if (!full) return undefined;
+    clip = slimClip(full);
+    npcClips.set(name, clip);
+  }
+  return clip;
 }
 
 /**

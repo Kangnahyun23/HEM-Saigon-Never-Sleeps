@@ -260,7 +260,9 @@ export class TrafficSim {
 
   /** Không còn xe lớn nào đứng trước `agent` trên cùng làn — xe đứng sau mà giữ lượt thì xe trước kẹt mãi ở vạch. */
   private firstInLine(agent: TrafficAgent): boolean {
-    for (const o of this.agents) {
+    const agents = this.agents;
+    for (let i = 0; i < agents.length; i++) {
+      const o = agents[i]!;
       if (o !== agent && o.lane === agent.lane && !o.turn && o.s > agent.s && VEHICLE_SPECS[o.kind].big) return false;
     }
     return true;
@@ -442,30 +444,34 @@ export class TrafficSim {
   private readonly safe: SafeInfo = { speed: 0, gap: 0, lateral: 0, slow: false, side: 0, sideClear: 0, byObstacle: false, byPerson: false, leaderSpeed: 0, blockHalf: 0, ahead: 0, blockTop: 0, look: 0, fx: 0, fz: 0 };
 
   /**
-   * Ghi nhận một vật phía trước nếu nó nằm trong hành lang của `agent` và gần hơn vật đã có.
-   * `halfWidth`: nửa bề ngang vật đó (theo phương ngang của `agent`); `ahead`: khoảng tim-tới-tim khi hai bên chạm nhau;
-   * `top`: tốc độ tối đa của vật đó (0 = vật cản đứng yên, không phải xe NPC).
+   * Vật đang xét trong `consider` (ghi vào đây rồi gọi): vị trí; `halfWidth` nửa bề ngang (theo phương ngang của xe đang
+   * tính); `ahead` khoảng tim-tới-tim khi hai bên chạm nhau; `speed` tốc độ dọc hướng xe; `top` tốc độ tối đa (0 = vật cản
+   * đứng yên, không phải xe NPC). Không truyền qua tham số: gọi hàm với số thực ⇒ V8 "đóng hộp" từng số = rác bộ nhớ.
    */
-  private consider(agent: TrafficAgent, ownHalf: number, ox: number, oz: number, halfWidth: number, ahead: number, speed: number, top: number, person = false): void {
+  private readonly cand = { x: 0, z: 0, halfWidth: 0, ahead: 0, speed: 0, top: 0, person: false };
+
+  /** Ghi nhận vật `cand` nếu nó nằm trong hành lang của `agent` và gần hơn vật đã có. */
+  private consider(agent: TrafficAgent): void {
     const r = this.safe;
-    const dx = ox - agent.x;
-    const dz = oz - agent.z;
+    const c = this.cand;
+    const dx = c.x - agent.x;
+    const dz = c.z - agent.z;
     const d = dx * r.fx + dz * r.fz;
     // Tầm nhìn tính cho hai xe máy; vật dài hơn thì nhìn xa thêm đúng phần thân dài hơn đó.
-    if (d <= 0 || d > r.look + Math.max(0, ahead - BIKE.length)) return;
+    if (d <= 0 || d > r.look + Math.max(0, c.ahead - BIKE.length)) return;
     const l = dx * -r.fz + dz * r.fx;
-    if (Math.abs(l) > ownHalf + halfWidth) return;
-    const g = d - ahead;
+    if (Math.abs(l) > VEHICLE_SPECS[agent.kind].halfWidth + c.halfWidth) return;
+    const g = d - c.ahead;
     if (g < r.gap) {
       r.gap = g;
       r.lateral = l;
-      r.leaderSpeed = speed;
-      r.slow = speed < agent.speed * 0.7 || speed < 1;
-      r.byObstacle = top === 0;
-      r.byPerson = person;
-      r.blockHalf = halfWidth;
-      r.ahead = ahead;
-      r.blockTop = top;
+      r.leaderSpeed = c.speed;
+      r.slow = c.speed < agent.speed * 0.7 || c.speed < 1;
+      r.byObstacle = c.top === 0;
+      r.byPerson = c.person;
+      r.blockHalf = c.halfWidth;
+      r.ahead = c.ahead;
+      r.blockTop = c.top;
     }
   }
 
@@ -534,13 +540,29 @@ export class TrafficSim {
           r.sideClear = clear;
         }
       }
-      this.consider(agent, spec.halfWidth, o.x, o.z, half, ahead, Math.max(0, o.speed * align), Math.min(other.maxSpeed, 99));
+      const c = this.cand;
+      c.x = o.x;
+      c.z = o.z;
+      c.halfWidth = half;
+      c.ahead = ahead;
+      c.speed = Math.max(0, o.speed * align);
+      c.top = Math.min(other.maxSpeed, 99);
+      c.person = false;
+      this.consider(agent);
     }
     for (let i = 0; i < obstacles.length; i++) {
       const ob = obstacles[i] as Obstacle;
       const box = look + spec.length / 2;
       if (Math.abs(ob.x - agent.x) > box || Math.abs(ob.z - agent.z) > box) continue;
-      this.consider(agent, spec.halfWidth, ob.x, ob.z, ob.radius, ob.radius + spec.length / 2, 0, 0, ob.person === true);
+      const c = this.cand;
+      c.x = ob.x;
+      c.z = ob.z;
+      c.halfWidth = ob.radius;
+      c.ahead = ob.radius + spec.length / 2;
+      c.speed = 0;
+      c.top = 0;
+      c.person = ob.person === true;
+      this.consider(agent);
     }
 
     if (r.gap === Infinity) {

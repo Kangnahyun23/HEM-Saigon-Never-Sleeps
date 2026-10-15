@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
 import { ChaseSystem } from '@/ai/chaseSystem';
-import { POLICE_CHASE } from '@/ai/chase';
+import { POLICE_CHASE, type ChasePlayer } from '@/ai/chase';
 import { patrolWitness } from '@/ai/patrol';
 import { Siren } from '@/audio/siren';
 import type { Blip } from '@/ui/minimap';
@@ -12,6 +12,7 @@ import { Heat, SightGrid } from '@/systems/heat';
 import type { SaveSlot } from '@/systems/save';
 import { NearPedestrianView } from '@/ai/nearPedestrians';
 import { SeatedPeopleView } from '@/ai/seatedPeople';
+import { CIVILIANS, NpcPool } from '@/ai/npcBody';
 import { PedestrianView } from '@/ai/pedestrianView';
 import { Horn } from '@/audio/horn';
 import { MissionDirector } from '@/missions/director';
@@ -96,11 +97,15 @@ const MOUNT_RANGE = 2.4;
 const DISMOUNT_MAX_SPEED = 4;
 /** Xe đang đậu: không ga, phanh tay (dùng chung, không tạo đối tượng mỗi bước). */
 const PARKED: BikeControls = { ...NO_CONTROL, handbrake: true };
+/** Không có xe nào lao tới người đi bộ (Tín đang đi bộ). */
+const NO_THREATS: readonly Threat[] = [];
 
 interface Bike {
   kind: 'bike';
   phys: MotorbikePhysics;
   view: MotorbikeView;
+  /** Vòng tròn báo cho xe NPC biết để phanh / lách — dùng lại mỗi bước. */
+  obstacle: Obstacle;
 }
 
 interface Car {
@@ -140,6 +145,8 @@ export class Game {
   private readonly nearPedestrians: NearPedestrianView | null;
   /** Người ngồi quán cóc / người bán ở xe đẩy quanh camera. */
   private readonly seated: SeatedPeopleView | null;
+  /** Kho hình NPC có xương dùng chung (người đi bộ gần, người ngồi quán). */
+  readonly npcPool = new NpcPool();
   private readonly view: THREE.PerspectiveCamera;
   /** Giờ trong game (mặc định 16:30, 1 phút thật = 1 giờ game). */
   readonly clock: GameClock;
@@ -169,6 +176,12 @@ export class Game {
   private readonly maxCars: number;
   /** Vật cản "người đi bộ" báo cho xe NPC (dùng lại mỗi bước). */
   private readonly selfObstacle: Obstacle = { x: 0, z: 0, radius: 0.45, person: true };
+  /** Đối tượng dùng lại mỗi bước vật lý (vòng lặp khung hình không tạo đối tượng mới). */
+  private readonly obstacleList: Obstacle[] = [];
+  private readonly stepPos = { x: 0, y: 0, z: 0 };
+  private readonly trafficFocus = { x: 0, z: 0, dirX: 0, dirZ: 0 };
+  private readonly rideThreat: Threat[] = [{ x: 0, z: 0, vx: 0, vz: 0 }];
+  private readonly runner: ChasePlayer = { x: 0, z: 0, speed: 0, dirX: 0, dirZ: 1 };
   private readonly door = { x: 0, z: 0 };
   private lowHealthWarned = false;
   readonly story: StoryRunner;
@@ -284,10 +297,15 @@ export class Game {
     this.pedestrianView = new PedestrianView(this.pedestrians.walkers.length);
     scene.add(this.pedestrianView.root);
     this.view = camera;
-    this.nearPedestrians = NearPedestrianView.available() && budget.nearPedestrians > 0 ? new NearPedestrianView(budget.nearPedestrians) : null;
+    // NPC có xương (người đi bộ gần camera, người ngồi quán) dùng chung một kho hình theo mẫu người.
+    scene.add(this.npcPool.root);
+    const near = NearPedestrianView.available() ? budget.nearPedestrians : 0;
+    const seated = near > 0 ? Math.max(2, Math.round(near * 0.6)) : 0;
+    this.nearPedestrians = near > 0 ? new NearPedestrianView(near, this.npcPool) : null;
     if (this.nearPedestrians) scene.add(this.nearPedestrians.root);
-    this.seated = SeatedPeopleView.available() && budget.nearPedestrians > 0 ? new SeatedPeopleView(city.seats, Math.max(2, Math.round(budget.nearPedestrians * 0.6))) : null;
-    if (this.seated) scene.add(this.seated.root);
+    this.seated = seated > 0 ? new SeatedPeopleView(city.seats, seated, this.npcPool) : null;
+    // Dựng sẵn hình lúc tải (gặp người mới giữa phố khỏi nhân bản xương ⇒ khựng): đủ cho số người hiện cùng lúc chia đều các mẫu.
+    if (near > 0) this.npcPool.prebuild(CIVILIANS.map((c) => c.id), Math.ceil((near + seated) / CIVILIANS.length));
     this.places = city.places;
     this.shopRng = createRng(city.layout.seed + 41);
     this.hud.shop.onConfirm = (key, mode) => (mode === 'buy' ? this.buyOffer(key) : this.sellSlot(Number(key)));
@@ -1065,16 +1083,17 @@ export class Game {
 
   /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */
   private trafficObstacles(): Obstacle[] {
-    const out: Obstacle[] = [];
+    const out = this.obstacleList;
+    out.length = 0;
     if (this.mode === 'foot') {
-      const f = this.character.feet();
-      this.selfObstacle.x = f.x;
-      this.selfObstacle.z = f.z;
+      this.selfObstacle.x = this.character.curr.x;
+      this.selfObstacle.z = this.character.curr.z;
       out.push(this.selfObstacle);
     }
     for (const b of this.bikes) {
-      const t = b.phys.body.translation();
-      out.push({ x: t.x, z: t.z, radius: 0.9 });
+      b.obstacle.x = b.phys.curr.x;
+      b.obstacle.z = b.phys.curr.z;
+      out.push(b.obstacle);
     }
     // Ô tô dài hơn rộng nhiều: báo bằng hai vòng tròn ở đầu và đuôi xe.
     for (const c of this.cars) {
@@ -1096,7 +1115,7 @@ export class Game {
     const phys = new MotorbikePhysics(this.physics.RAPIER, this.physics.world, x, PAD_HEIGHT, z, yaw);
     const view = new MotorbikeView(color);
     this.scene.add(view.root);
-    this.bikes.push({ kind: 'bike', phys, view });
+    this.bikes.push({ kind: 'bike', phys, view, obstacle: { x: phys.curr.x, z: phys.curr.z, radius: 0.9 } });
   }
 
   /** Đặt một ô tô đậu ven đường (lòng đường ở cao độ 0). */
@@ -1422,24 +1441,43 @@ export class Game {
     const fwd = frozen ? 0 : input.axis(keys.back, keys.fwd);
     const strafe = frozen ? 0 : input.axis(keys.left, keys.right);
     for (let i = 0; i < steps; i++) {
-      const me = this.riding ? this.riding.phys.body.translation() : this.character.feet();
-      this.traffic.step(STEP, { x: me.x, z: me.z, dirX: cam.x, dirZ: cam.z }, this.trafficObstacles());
+      // Chỗ Tín (hoặc xe Tín đang lái) sau bước vật lý trước — đối tượng dùng lại, không tạo mới mỗi bước.
+      const me = this.stepPos;
+      const at = this.riding ? this.riding.phys.curr : this.character.curr;
+      me.x = at.x;
+      me.y = at.y;
+      me.z = at.z;
+      const focus = this.trafficFocus;
+      focus.x = me.x;
+      focus.z = me.z;
+      focus.dirX = cam.x;
+      focus.dirZ = cam.z;
+      this.traffic.step(STEP, focus, this.trafficObstacles());
       // Người đi bộ né xe của người chơi khi xe lao tới.
-      const threats: Threat[] = [];
+      let threats = NO_THREATS;
       if (this.riding) {
         const v = this.riding.phys.body.linvel();
-        threats.push({ x: me.x, z: me.z, vx: v.x, vz: v.z });
+        const th = this.rideThreat[0]!;
+        th.x = me.x;
+        th.z = me.z;
+        th.vx = v.x;
+        th.vz = v.z;
+        threats = this.rideThreat;
       }
       this.pedestrians.step(STEP, me, threats);
       this.handleCrowd(STEP, me.x, me.z);
 
       // Truy đuổi: xe đàn em bám theo khi có Độ Nóng; khuất tầm nhìn đủ lâu thì cắt đuôi.
-      const mySpeed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
-      if (this.chase.step(STEP, { x: me.x, z: me.z, speed: mySpeed }, this.heat.level)) this.caughtThisStep = true;
       // Truy nã: xe công an theo sao; công an thấy thì vùng tìm kiếm đi theo Tín, khuất mặt đủ lâu thì thoát.
       // Hướng chạy để đặt chốt chặn phía trước (lùi xe thì hướng ngược đầu xe).
       const heading = this.riding ? this.riding.phys.heading() + (this.riding.phys.speed < 0 ? Math.PI : 0) : this.character.yaw;
-      const runner = { x: me.x, z: me.z, speed: mySpeed, dirX: Math.sin(heading), dirZ: Math.cos(heading) };
+      const runner = this.runner;
+      runner.x = me.x;
+      runner.z = me.z;
+      runner.speed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
+      runner.dirX = Math.sin(heading);
+      runner.dirZ = Math.cos(heading);
+      if (this.chase.step(STEP, runner, this.heat.level)) this.caughtThisStep = true;
       if (this.police.step(STEP, runner, this.wanted.level) && !this.outcome) this.bustedThisStep = true;
       if (this.wanted.update(STEP, this.police.sim.seen, me.x, me.z, this.wanted.level > 0 && this.inHem(me.x, me.z)) === 'escaped') {
         this.police.sim.disperse();

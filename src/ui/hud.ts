@@ -38,7 +38,9 @@ export class Hud {
   private readonly health: HTMLElement;
   private readonly armor: HTMLElement;
   private readonly vitals: HTMLElement;
-  private lastVitals = '';
+  /** Máu / giáp lần vẽ trước (đơn vị 0,5 %) — khỏi đổi DOM khi không đổi. */
+  private lastHealth = -1;
+  private lastArmor = -1;
   private readonly fps: HTMLElement;
   private readonly clock: HTMLElement;
   /** Bản đồ nhỏ (tạo sau khi có bố cục khu phố). */
@@ -58,7 +60,10 @@ export class Hud {
   private readonly subtitle: HTMLElement;
   private subtitleTimer = 0;
   private readonly heat: HTMLElement;
-  private lastHeat = '';
+  /** Độ Nóng lần vẽ trước: cấp, có bị thấy không, tiến độ cắt đuôi (bước 10 %). */
+  private lastHeatLevel = -1;
+  private lastHeatSeen = false;
+  private lastHeatEscape = -1;
   private readonly wanted: HTMLElement;
   private readonly wantedStars: HTMLElement[];
   private lastWanted = -1;
@@ -174,9 +179,11 @@ export class Hud {
 
   /** Độ Nóng / truy nã: 5 ô sao dưới tiền mặt (góc trên phải); khuất tầm nhìn thì sao nhấp nháy và chữ đổi thành tiến độ cắt đuôi. */
   setHeat(level: number, escape: number, seen: boolean): void {
-    const key = `${level}|${seen}|${Math.round(escape * 10)}`;
-    if (key === this.lastHeat) return;
-    this.lastHeat = key;
+    const step = Math.round(escape * 10);
+    if (level === this.lastHeatLevel && seen === this.lastHeatSeen && step === this.lastHeatEscape) return;
+    this.lastHeatLevel = level;
+    this.lastHeatSeen = seen;
+    this.lastHeatEscape = step;
     this.heat.hidden = level === 0;
     if (level === 0) return;
     this.heat.querySelectorAll('span').forEach((s, i) => s.classList.toggle('on', i < level));
@@ -340,9 +347,11 @@ export class Hud {
   setVitals(health: number, armor: number): void {
     const h = Math.max(0, Math.min(1, health));
     const a = Math.max(0, Math.min(1, armor));
-    const key = `${Math.round(h * 200)}|${Math.round(a * 200)}`;
-    if (key === this.lastVitals) return;
-    this.lastVitals = key;
+    const hk = Math.round(h * 200);
+    const ak = Math.round(a * 200);
+    if (hk === this.lastHealth && ak === this.lastArmor) return;
+    this.lastHealth = hk;
+    this.lastArmor = ak;
     this.health.style.transform = `scaleX(${h})`;
     this.armor.style.transform = `scaleX(${a})`;
     this.vitals.classList.toggle('low', h < 0.25);

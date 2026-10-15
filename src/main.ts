@@ -9,7 +9,6 @@ import { NightBloom } from '@/render/bloom';
 import { createRenderer } from '@/render/renderer';
 import { ResolutionGovernor } from '@/render/resolution';
 import { gpuIdle, warmUpPipelines } from '@/render/warmup';
-import { civilianSamples } from '@/ai/npcBody';
 import { buildCity } from '@/world/city/buildCity';
 import { createEnvironment } from '@/world/environment';
 import { nightUniform } from '@/world/nightGlow';
@@ -201,7 +200,8 @@ async function main(): Promise<void> {
   // Biên dịch sẵn shader của mọi vật (kể cả đang ẩn, chỉ hiện ban đêm, lượt bloom) khi màn hình tải còn che —
   // không thì mỗi loại vật lần đầu lọt vào tầm nhìn làm game khựng 60–90 ms giữa lúc chơi.
   if (loadingSub) loadingSub.textContent = 'Sài Gòn Không Ngủ · đang chuẩn bị đồ hoạ…';
-  warmUpPipelines(renderer, scene, camera, { samples: civilianSamples(), extra: () => bloom.warm() });
+  // NPC có xương: kho hình dùng chung đã dựng sẵn (ẩn) trong cảnh — revealAll tạm hiện ra nên cũng được làm nóng.
+  warmUpPipelines(renderer, scene, camera, { extra: () => bloom.warm() });
   lap('warmup');
   if (loadingSub) loadingSub.textContent = 'Sài Gòn Không Ngủ · đang biên dịch shader (lần đầu hơi lâu)…';
   await gpuIdle(renderer);

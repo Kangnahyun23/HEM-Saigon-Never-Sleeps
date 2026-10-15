@@ -65,6 +65,9 @@ export class Minimap {
   private zoom = 1.8;
   /** Còn bao lâu (s) mới vẽ lại. */
   private redrawIn = 0;
+  /** Khung nhìn + điểm đánh dấu dùng lại mỗi lần vẽ (không tạo đối tượng mới). */
+  private readonly view: MapView = { px: 0, pz: 0, fx: 0, fz: 1, cx: 0, cy: 0, scale: 1 };
+  private readonly mark = { u: 0, v: 0, edge: false };
   private police: readonly PoliceBlip[] = [];
   private policeCount = 0;
   /** Vùng tìm kiếm của công an (r = 0: không có). */
@@ -248,7 +251,14 @@ export class Minimap {
     const c = this.ctx;
     const half = SIZE / 2;
     const radius = half - 6;
-    const view: MapView = { px, pz, fx, fz, cx: half, cy: half, scale: this.zoom };
+    const view = this.view;
+    view.px = px;
+    view.pz = pz;
+    view.fx = fx;
+    view.fz = fz;
+    view.cx = half;
+    view.cy = half;
+    view.scale = this.zoom;
 
     // Ảnh nền: chỉ đổi transform (pixel ảnh → pixel CSS của bản đồ, nhân tỉ lệ hiển thị).
     const k = this.cssScale;
@@ -263,7 +273,7 @@ export class Minimap {
     c.beginPath();
     c.arc(half, half, radius, 0, Math.PI * 2);
     c.stroke();
-    const north = markerOnMap(view, px, pz - 1e5, radius - 9);
+    const north = markerOnMap(view, px, pz - 1e5, radius - 9, this.mark);
     c.fillStyle = 'rgba(14,12,20,.85)';
     c.beginPath();
     c.arc(north.u, north.v, 9, 0, Math.PI * 2);
@@ -276,7 +286,7 @@ export class Minimap {
 
     // Vùng tìm kiếm của công an: vòng xanh mờ (khuất mặt + ra khỏi vòng thì mau hết truy nã).
     if (this.searchR > 0) {
-      const o = worldToMap(view, this.searchX, this.searchZ);
+      const o = worldToMap(view, this.searchX, this.searchZ, this.mark);
       c.fillStyle = 'rgba(70,120,255,.14)';
       c.strokeStyle = 'rgba(130,170,255,.55)';
       c.lineWidth = 1.5;
@@ -290,7 +300,7 @@ export class Minimap {
     const red = Math.floor(this.flash * 4) % 2 === 0;
     for (let i = 0; i < this.policeCount; i++) {
       const u = this.police[i]!;
-      const p = markerOnMap(view, u.x, u.z, radius - 4);
+      const p = markerOnMap(view, u.x, u.z, radius - 4, this.mark);
       if (!p.edge) {
         const hx = Math.sin(u.yaw);
         const hz = Math.cos(u.yaw);
@@ -315,7 +325,7 @@ export class Minimap {
 
     for (let i = 0; i < this.blipCount; i++) {
       const blip = this.blips[i]!;
-      const p = markerOnMap(view, blip.x, blip.z, radius - 4);
+      const p = markerOnMap(view, blip.x, blip.z, radius - 4, this.mark);
       c.fillStyle = blip.color;
       c.beginPath();
       c.arc(p.u, p.v, p.edge ? 3.5 : 4.5, 0, Math.PI * 2);
@@ -323,7 +333,7 @@ export class Minimap {
     }
 
     if (this.waypoint) {
-      const p = markerOnMap(view, this.waypoint.x, this.waypoint.z, radius - 8);
+      const p = markerOnMap(view, this.waypoint.x, this.waypoint.z, radius - 8, this.mark);
       c.fillStyle = '#ffd23f';
       c.strokeStyle = '#1c1a22';
       c.lineWidth = 2;
