@@ -205,10 +205,10 @@ test('công an đuổi vào hẻm: xe máy chạy chậm hơn Tín chạy bộ, 
     const chasers = g.police.sim.chasers;
     const car = chasers.find((c) => c.kind === 'car')!;
     const bike = chasers.find((c) => c.kind === 'bike')!;
-    // Cả hai đang phóng tới miệng hẻm (thấy Tín dọc hẻm).
-    for (const [c, s] of [[bike, -6], [car, -16]] as const) {
+    // Cả hai đang trên đường, phóng tới miệng hẻm (thấy Tín dọc hẻm), còn đủ quãng phanh.
+    for (const [c, s, v] of [[bike, -8, 9], [car, -14, 10]] as const) {
       const p = along(s);
-      Object.assign(c, { x: p.x, z: p.z, prevX: p.x, prevZ: p.z, yaw: inward, prevYaw: inward, speed: 14 });
+      Object.assign(c, { x: p.x, z: p.z, prevX: p.x, prevZ: p.z, yaw: inward, prevYaw: inward, speed: v });
     }
     let bikeEntered = false;
     let bikeTop = 0;
