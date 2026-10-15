@@ -360,6 +360,9 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   không ra. Test không kiểm tra công an thì tắt nó: `game.patrolSees = () => undefined` (xem `combat.spec.ts`).
 - Tín đi bộ mà có sao: xe công an tới gần là dừng cho người lái xuống (`mode: 'parked'`, R3) ⇒ test đếm xe truy đuổi
   bằng `mode === 'chase'` sẽ thiếu xe — đếm `mode !== 'block'`.
+- Trên CI (SwiftShader, 2 worker) mỗi khung hình mất 1–5 s khi cảnh nặng, và mỗi `page.evaluate` phải chờ khung đang vẽ
+  ⇒ vòng `for` gọi `evaluate` hàng chục lần ăn hết vài phút. Đặt cả vòng chờ / chuỗi đòn vào TRONG một `evaluate`
+  (hàm dùng lại thì gắn lên `window`, xem test "đánh công an"). Test này từng qua ở PR nhưng đỏ trên `main` (quá 400 s).
 - HUD chỉ cập nhật trong `game.update`: đổi trạng thái lúc đang dừng thì phải `simulate(1/60)` rồi mới kiểm tra DOM.
 - Test `phone` từng hỏng một lần trên CI (3 thay vì 4 tin nhắn) mà không tái hiện được. Test giờ chờ đủ tin và in
   `playTime` + hộp thư nếu thiếu — gặp lại thì đọc thông tin đó.
@@ -384,9 +387,9 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- PR #28–#36 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1–P3, R1) đã merge vào `main`.
-- R2 là PR #37 (nhánh `r2-cong-an-co-xuong`), R4 là PR #38 (nhánh `r4-hem-cham`, tách từ R2), R3 là PR #39 (nhánh
-  `r3-danh-cong-an`, tách từ R4) — merge đúng thứ tự #37 → #38 → #39 (merge commit, không squash: nhánh xếp chồng).
+- PR #28–#39 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1–P3, R1–R4) đã merge vào `main` (2026-10-15).
+- CI trên `main` sau khi merge #39 đỏ: e2e "đánh công an" quá 400 s trên CI (xem mục 5, "Chạy e2e trên máy") — sửa ở
+  nhánh `r3b-e2e-cong-an-nhanh` (PR #40): gom vòng chờ vào một `evaluate`, test còn ~50 s ở máy.
   Unit test: 309 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`, `hemNav.test.ts`, `footPolice.test.ts`).
 - Việc chủ dự án giao 2026-10-15 (R1–R4 trong plan-v0.2.md) đã làm hết: người lái xe NPC có xương (R1), công an có xương
   (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4). Tiếp theo: N7.4–N10.
