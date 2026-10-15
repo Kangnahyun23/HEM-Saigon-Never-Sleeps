@@ -37,7 +37,7 @@ Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `
 Vật đổ bóng KHÔNG dùng `alphaTest` (để `castShadow: false`): lượt vẽ bóng dùng chung một vật liệu bóng, vật có / không
 alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (từng ăn ~16 % CPU + nửa rác bộ nhớ).
 NPC có xương lấy / trả qua kho chung `NpcPool` (ai/npcBody.ts — `KeyedPool` theo mẫu người, dựng sẵn lúc tải bằng
-`prebuild`; người đi bộ gần và người ngồi quán dùng chung) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
+`prebuild`; người đi bộ gần, người ngồi quán và người lái xe máy NPC gần dùng chung) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
 three.js vẫn tính ma trận xương của vật đang ẩn; bộ đệm hình riêng từng ô từng phình tới hàng chục nghìn xương sau vài phút chơi.
 NPC dùng bộ xương rút gọn 23 xương (assets/slimRig.ts: bỏ xương ngón tay + xương lá; clip lấy bằng `getNpcClip`, đã lọc
 track của xương bị bỏ); chỉ Tín giữ đủ 66 xương (`FULL_RIG` trong characters.ts).
@@ -54,14 +54,19 @@ Thuộc tính instance tới fragment qua nội suy: số nguyên có thể thà
 `material.positionNode` được gán SAU bước instancing (ghi đè cả phần dịch của instance).
 Nhân vật có xương: đừng gọi `skeleton.pose()` (lưới lượng tử hoá meshopt ⇒ xương gốc lệch chỗ); động tác mới thêm vào
 `ANIMATIONS` trong scripts/assets.mjs (tên trong game → tên clip gốc) rồi `npm run assets`.
+Đo tư thế trong một động tác (vị trí hông khi ngồi / lái) bằng `hipIn` (ai/npcBody.ts): PropertyMixer của three.js chỉ ghi
+xương khi kết quả trộn KHÁC khung trước ⇒ tự ghi tay vào xương rồi trả lại sẽ làm track tĩnh (clip nén một khoá) kẹt ở tư
+thế cũ; phải trả trọng số rồi `mixer.update(0)` để mixer tự ghi lại.
+Người lái xe máy (Tín và NPC) ngồi theo `RIDER_POSE` (vehicles/bikeModel.ts): ghim hông lên nửa trước yên, ngả người về
+trước, IK hai đoạn (`reachArm`, player/armIk.ts) đặt cổ tay lên tay nắm ghi-đông — động tác 'drive' gốc là tư thế lái ô tô.
 KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % thời gian vẽ): vật liệu kim loại / mặt nước cần phản chiếu
 thì bọc `reflective(mat)` (world/reflections.ts); ánh sáng nền thay IBL là đèn `envFill` trong environment.ts.
 Đo GPU trên máy không GPU: đổi vật liệu / đèn xong phải `await renderer.compileAsync()` rồi mới đo — three.js bỏ qua
 không vẽ vật đang biên dịch shader dở (số đo sẽ "nhanh" giả).
 Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`, `__HEM__.timings`
 (thời gian từng bước dựng cảnh lúc tải), `__HEM__.hardware` (card đồ hoạ, bậc máy, ngân sách cảnh).
-Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ (và số người gần vẽ bằng nhân vật
-có xương), hạt mưa, cỡ bản đồ bóng lúc tải;
+Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ (và số người đi bộ / người lái xe
+máy gần vẽ bằng nhân vật có xương), hạt mưa, cỡ bản đồ bóng lúc tải;
 thứ gì mới tốn theo số lượng thì đưa vào ngân sách đó. Playwright (navigator.webdriver) luôn dùng bậc "mạnh".
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
@@ -117,8 +122,10 @@ src/
                      lightPools (vũng đèn đường), nightStreet (đèn tiệm + phản chiếu đường ướt)
   player/            characterBody (Rapier character controller), skinnedCharacter (nhân vật có xương: AnimationMixer,
                      mũ bảo hiểm / thùng hàng gắn vào xương; lùi về characterModel khối hộp nếu tải lỗi),
-                     locomotion (trộn đứng/đi/chạy theo tốc độ — có unit test), followCamera (góc nhìn 3, chống xuyên tường)
-  vehicles/          bikeModel (mẫu xe từ khối), motorbikePhysics (ray-cast vehicle), motorbikeView
+                     locomotion (trộn đứng/đi/chạy theo tốc độ — có unit test), followCamera (góc nhìn 3, chống xuyên tường),
+                     armIk (IK hai đoạn: đặt cổ tay người lái lên tay nắm ghi-đông — có unit test)
+  vehicles/          bikeModel (mẫu xe từ khối + tư thế người lái `RIDER_POSE`), motorbikePhysics (ray-cast vehicle),
+                     motorbikeView (tay nắm `grips` xoay theo cụm lái — đích IK tay của Tín)
                      carModel (sedan / taxi / bán tải từ khối), carPhysics (bốn bánh, khoá nghiêng như xe máy — có unit test),
                      carView (thân gộp theo vật liệu, màu trong đỉnh, bốn bánh một InstancedMesh; chúi / nghiêng là hiệu ứng hình).
                      Trong game.ts xe là `Vehicle = Bike | Car` (trường `kind`); ô tô đậu: `game.cars`, chỗ đậu world/city/carSpots.ts.
@@ -128,8 +135,10 @@ src/
   ai/                giao thông NPC: trafficNetwork (lưới làn từ bố cục), traffic (mô phỏng thuần logic — có unit test),
                      trafficKinds (bảng loại xe: xe máy, sedan, taxi, bán tải, buýt, ba gác, xích lô, xe đẩy — kích thước,
                      sức máy, chạy sát tim đường / sát lề; xe "big" qua giao lộ theo lượt, xe nhỏ nhường),
-                     trafficView (InstancedMesh cho đàn xe máy + người lái), trafficFleetView (các loại xe còn lại, 4 lệnh vẽ;
-                     mẫu ở vehicles/npcVehicleModels.ts), trafficSystem (gắn Rapier kinematic + hình).
+                     trafficView (InstancedMesh cho đàn xe máy + người lái khối hộp), trafficFleetView (các loại xe còn lại, 4 lệnh vẽ;
+                     mẫu ở vehicles/npcVehicleModels.ts), trafficSystem (gắn Rapier kinematic + hình),
+                     nearRiders (K xe máy gần camera có người lái là nhân vật có xương lấy từ NpcPool, mũ cùng màu người lái
+                     khối hộp; trafficView ẩn phần người của các xe đó — có unit test).
                      Thêm loại xe: một dòng trong VEHICLE_SPECS + mẫu khối trong npcVehicleModels + chỗ trong CAR_MIX / SLOW_MIX.
                      Đổi luật giao thông thì chạy trafficFleet.test.ts — nó đo cả đàn 150 giây (tốc độ trung bình, xe đứng ì, chồng xe)
                      pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /

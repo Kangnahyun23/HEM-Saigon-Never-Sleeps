@@ -90,6 +90,12 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] P3 bớt việc CPU mỗi khung: kho NPC có xương dùng chung + dựng sẵn lúc tải (hết khựng khi dịch chuyển xa), bộ xương NPC
   rút 66 → 23 xương, ghi thẳng ma trận instance, bỏ các chỗ tạo đối tượng mỗi bước. Chạy xe ngày 168 → 210 fps, đêm
   109 → 164–180 fps, mưa đêm 133 → 163 fps;
+- Chen ngang theo yêu cầu chủ dự án (2026-10-15), mỗi mục một PR:
+  - [x] R1 người lái xe máy NPC gần camera là nhân vật có xương như người đi đường (0 / 3 / 5 người theo sức máy, đội mũ
+    bảo hiểm cùng màu người lái khối hộp); Tín và NPC ngồi nửa trước yên, ngả người, hai tay nắm ghi-đông (IK hai đoạn);
+  - [ ] R2 công an (và đàn em Phát) lái xe truy đuổi là nhân vật có xương (`police-m` / `police-f`);
+  - [ ] R3 đánh được công an: công an xuống xe đuổi bộ, trúng đòn như người đi đường, đánh công an lên 4–5 sao;
+  - [ ] R4 vào hẻm thì xe truy đuổi (công an, đàn em) chậm lại hẳn — ngoài đường lớn vẫn nhanh như cũ;
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa

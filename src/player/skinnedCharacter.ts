@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import { attachToBone, createCharacter, getClip, hasCharacter } from '@/assets/characters';
 import type { AnimationName, CharacterId } from '@/assets/manifest';
 import type { ItemId } from '@/systems/inventory';
+import { RIDER_POSE, SEAT_ANCHOR } from '@/vehicles/bikeModel';
+import { reachArm } from './armIk';
 import { CharacterModel, TIN_COLORS, type AnimState } from './characterModel';
 import { clipTimeScale, locomotionWeights } from './locomotion';
 
@@ -14,6 +16,15 @@ export interface CharacterView {
   setWeapon?(id: ItemId | null): void;
   /** Ra đòn: phát động tác `clip` một lần, dài `duration` giây (đè lên động tác di chuyển). */
   attack?(clip: AnimationName, duration: number): void;
+  /** Tay nắm ghi-đông của xe máy đang lái (null khi đi bộ / lái ô tô): tay đặt lên đó. Mẫu khối hộp bỏ qua. */
+  setGrips?(grips: RideGrips | null): void;
+}
+
+/** Tay nắm trái / phải của xe (xoay theo cụm lái) + khung xe (toạ độ xe) để đặt hướng khuỷu tay. */
+export interface RideGrips {
+  readonly left: THREE.Object3D;
+  readonly right: THREE.Object3D;
+  readonly frame: THREE.Object3D;
 }
 
 /** Hình vũ khí dựng từ khối (lưỡi + cán), trục dài theo +Z cục bộ, cán ở gốc. */
@@ -65,8 +76,13 @@ function weaponMesh(id: ItemId): THREE.Group {
 
 /** Thứ tự cố định: 0..3 khớp locomotionWeights (đứng, đi, chạy nhẹ, chạy nhanh). */
 const ACTIONS: readonly AnimationName[] = ['idle', 'walk', 'jog', 'sprint', 'jumpAir', 'drive', 'phone', 'swordIdle'];
-/** Hông nhân vật khối hộp cũ cao 0,95 m so với gốc khi ngồi xe — yên xe được canh theo mốc đó. */
-const RIDE_HIP_HEIGHT = 0.95;
+/** Chỗ hông khi ngồi xe, tính từ chỗ gắn trên yên (gốc của root lúc lái): RIDER_POSE.hip − SEAT_ANCHOR. */
+const HIP_FROM_SEAT = new THREE.Vector3(RIDER_POSE.hip[0] - SEAT_ANCHOR[0], RIDER_POSE.hip[1] - SEAT_ANCHOR[1], RIDER_POSE.hip[2] - SEAT_ANCHOR[2]);
+/** Ngả người về trước quanh hông khi lái xe máy. */
+const RIDE_LEAN = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), RIDER_POSE.leanForward);
+const _hip = new THREE.Vector3();
+const _target = new THREE.Vector3();
+const _pole = new THREE.Vector3();
 
 const damp = (current: number, target: number, rate: number, dt: number): number => current + (target - current) * (1 - Math.exp(-rate * dt));
 
@@ -94,8 +110,12 @@ export class SkinnedCharacter implements CharacterView {
   private readonly attacks = new Map<AnimationName, THREE.AnimationAction>();
   private attackAction: THREE.AnimationAction | null = null;
   private attackLeft = 0;
-  /** Độ cao đặt mẫu khi ngồi xe để hông ở đúng mốc yên xe. */
-  private readonly rideOffset: number;
+  /** Hông trong tư thế lái (toạ độ root, đã gồm co giãn của mẫu) — để ghim hông đúng chỗ ngồi. */
+  private readonly rideHip: THREE.Vector3;
+  /** Xương hai tay (cánh tay trên, cẳng tay, cổ tay — trái rồi phải) và góc gốc trong động tác lái (cánh tay trên, cẳng tay). */
+  private readonly arms: THREE.Object3D[] = [];
+  private readonly armRest: THREE.Quaternion[] = [];
+  private grips: RideGrips | null = null;
 
   constructor(body: THREE.Object3D) {
     this.body = body;
@@ -121,8 +141,17 @@ export class SkinnedCharacter implements CharacterView {
     drive.setEffectiveWeight(1);
     this.mixer.update(0);
     this.root.updateMatrixWorld(true);
-    const hip = pelvis ? new THREE.Vector3().setFromMatrixPosition(pelvis.matrixWorld).y : RIDE_HIP_HEIGHT;
-    this.rideOffset = RIDE_HIP_HEIGHT - hip;
+    this.rideHip = pelvis ? new THREE.Vector3().setFromMatrixPosition(pelvis.matrixWorld) : new THREE.Vector3(0, 0.95, 0);
+    // Góc tay trong động tác lái: đặt lại mỗi khung trước IK (bẻ lái qua lại không làm tay xoắn dần).
+    for (const name of ['upperarm_l', 'lowerarm_l', 'hand_l', 'upperarm_r', 'lowerarm_r', 'hand_r']) {
+      const bone = body.getObjectByName(name);
+      if (!bone) {
+        this.arms.length = 0;
+        break;
+      }
+      this.arms.push(bone);
+      this.armRest.push(bone.quaternion.clone());
+    }
     drive.setEffectiveWeight(0);
     for (const [o, p, q, s] of saved) {
       o.position.copy(p);
@@ -167,6 +196,24 @@ export class SkinnedCharacter implements CharacterView {
     this.helmet.visible = on;
   }
 
+  setGrips(grips: RideGrips | null): void {
+    this.grips = grips;
+  }
+
+  /** Đặt hai tay lên tay nắm ghi-đông (sau bộ trộn động tác). */
+  private gripBar(grips: RideGrips): void {
+    const arms = this.arms;
+    for (let k = 0; k < 6; k++) arms[k]!.quaternion.copy(this.armRest[k]!);
+    for (let side = 0; side < 2; side++) {
+      const grip = side === 0 ? grips.left : grips.right;
+      grip.getWorldPosition(_target);
+      const e = RIDER_POSE.elbowPole;
+      _pole.set(side === 0 ? e[0] : -e[0], e[1], e[2]);
+      grips.frame.localToWorld(_pole);
+      reachArm(arms[side * 3]!, arms[side * 3 + 1]!, arms[side * 3 + 2]!, _target, _pole);
+    }
+  }
+
   attack(clip: AnimationName, duration: number): void {
     let action = this.attacks.get(clip);
     if (!action) {
@@ -205,10 +252,14 @@ export class SkinnedCharacter implements CharacterView {
     let rate = 9;
     if (s.mode === 'ride') {
       t[ACTIONS.indexOf('drive')] = 1;
-      this.body.position.y = this.rideOffset;
+      // Hông ghim đúng chỗ ngồi (trong động tác lái gốc hông lùi sau gốc nhân vật), người ngả về trước quanh hông.
+      this.body.quaternion.copy(RIDE_LEAN);
+      _hip.copy(this.rideHip).applyQuaternion(RIDE_LEAN);
+      this.body.position.subVectors(HIP_FROM_SEAT, _hip);
       rate = 14;
     } else {
-      this.body.position.y = 0;
+      this.body.position.set(0, 0, 0);
+      this.body.quaternion.identity();
       if (!s.grounded) {
         t[ACTIONS.indexOf('jumpAir')] = 1;
         rate = 12;
@@ -247,6 +298,7 @@ export class SkinnedCharacter implements CharacterView {
       this.actions[i]!.setEffectiveWeight(this.weights[i]!);
     }
     this.mixer.update(dt);
+    if (s.mode === 'ride' && this.grips && this.arms.length === 6) this.gripBar(this.grips);
   }
 }
 

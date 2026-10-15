@@ -1,7 +1,7 @@
 import { createRng, pick } from '@/core/random';
 import type { Seat } from '@/world/city/build/context';
 import { eateryOccupancy } from '@/world/timeOfDay';
-import { CIVILIANS, civiliansAvailable, hipHeightIn, NPC_ACTION, NPC_CLIPS, stepNpc, type NpcBody, type NpcClip, type NpcPool } from './npcBody';
+import { CIVILIANS, civiliansAvailable, hipIn, NPC_ACTION, NPC_CLIPS, stepNpc, type NpcBody, type NpcClip, type NpcPool } from './npcBody';
 import { PedestrianLod, type LodPoint } from './pedestrianLod';
 
 /** Bán kính (m) quanh camera có người ngồi quán / người bán hàng (xa hơn thì bàn ghế trống — khó thấy). */
@@ -90,7 +90,7 @@ export class SeatedPeopleView {
       const key = `${look.id}:${clip}`;
       let hip = sitHip.get(key);
       if (hip === undefined) {
-        hip = hipHeightIn(npc, slot.action) / scale;
+        hip = hipIn(npc, slot.action).y;
         sitHip.set(key, hip);
       }
       // Gốc nhân vật (chân) đặt sao cho hông ngay trên mặt ghế; ghế thấp ⇒ chân lún nhẹ, có giới hạn.

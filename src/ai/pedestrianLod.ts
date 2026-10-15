@@ -26,10 +26,13 @@ export class PedestrianLod {
     this.slots = new Array<number>(capacity).fill(-1);
   }
 
-  /** Cập nhật chỗ theo vị trí camera (cx, cz). Không tạo mảng / closure mới mỗi khung hình. */
-  update(points: readonly LodPoint[], cx: number, cz: number): void {
+  /**
+   * Cập nhật chỗ theo vị trí camera (cx, cz); chỉ xét `count` điểm đầu (mảng xe NPC xếp xe máy trước, ô tô sau).
+   * Không tạo mảng / closure mới mỗi khung hình.
+   */
+  update(points: readonly LodPoint[], cx: number, cz: number, count = points.length): void {
     const { dist, order, slots } = this;
-    const n = points.length;
+    const n = Math.min(count, points.length);
     dist.length = n;
     order.length = 0;
     const r2 = this.radius * this.radius;
