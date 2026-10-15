@@ -96,7 +96,9 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   - [x] R2 công an (và đàn em Phát) lái xe truy đuổi là nhân vật có xương: công an mẫu `police-m` / `police-f` mặc
     quân phục ô-liu (đổi màu ảnh gốc lúc tải), đàn em đồ đen mũ đỏ; 0 / 2 / 3 người mỗi phe theo sức máy;
   - [ ] R3 đánh được công an: công an xuống xe đuổi bộ, trúng đòn như người đi đường, đánh công an lên 4–5 sao;
-  - [ ] R4 vào hẻm thì xe truy đuổi (công an, đàn em) chậm lại hẳn — ngoài đường lớn vẫn nhanh như cũ;
+  - [x] R4 vào hẻm thì xe truy đuổi (công an, đàn em) chậm lại hẳn — ngoài đường lớn vẫn nhanh như cũ: xe máy trong hẻm
+    ≤ 5 m/s (Tín chạy bộ 6,4 m/s ⇒ chạy là bỏ được, đứng lại vẫn bị bắt), phanh trước miệng hẻm; ô tô dừng ở miệng hẻm;
+    mất dấu trong hẻm thì tới chỗ thấy Tín lần cuối rồi men theo hẻm ra (trước đây lao thẳng về giao lộ xuyên qua nhà);
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa

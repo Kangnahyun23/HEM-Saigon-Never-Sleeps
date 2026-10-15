@@ -154,6 +154,8 @@ src/
                      công an có đèn chớp đỏ – xanh; chốt chặn là vật cản cho xe NPC qua `addObstacles`; xe máy gần camera
                      có người lái có xương — `chaseSystem.riders`: công an `POLICE_RIDERS`, đàn em `GANG_RIDERS` từ kho
                      riêng `game.gangPool`; xe truy đuổi đánh số theo chỗ trong mảng nên chọn người theo `generation`),
+                     hemNav (HemMap — xe truy đuổi trong hẻm: xe máy ≤ `hemSpeed`, chậm hơn Tín chạy bộ; ô tô dừng ở miệng
+                     hẻm; mất dấu trong hẻm thì tới chỗ thấy Tín lần cuối rồi men theo trục hẻm ra, không xuyên nhà — có unit test),
                      patrol (xe tuần tra 'police' trong dòng xe NPC thấy Tín gây án ⇒ lên sao ngay, chính nó quay sang đuổi — có unit test)
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker

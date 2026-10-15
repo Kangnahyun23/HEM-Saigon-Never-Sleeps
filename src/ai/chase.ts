@@ -1,12 +1,15 @@
 import { createRng, range, type Rng } from '@/core/random';
 import type { SightGrid } from '@/systems/heat';
+import type { HemMap } from './hemNav';
 import { lanePoint, type TrafficLane, type TrafficNetwork } from './trafficNetwork';
 
 /**
  * Đàn em của Phát "CEO" đi xe máy truy đuổi (thuần logic, 60 Hz, có seed, có unit test).
  *
  * Xe truy đuổi bám theo mạng đường lớn (tìm đường ngắn nhất giữa các giao lộ); khi thấy Tín trong tầm nhìn và
- * đủ gần thì lao thẳng tới. Chúng KHÔNG vào hẻm ⇒ chui hẻm, khuất tầm nhìn là cách cắt đuôi.
+ * đủ gần thì lao thẳng tới. Chúng không tự tìm vào hẻm ⇒ chui hẻm, khuất tầm nhìn là cách cắt đuôi. Thấy Tín trong hẻm
+ * thì xe máy theo vào nhưng chạy chậm hơn Tín chạy bộ (`hemSpeed`), ô tô dừng ở miệng hẻm; mất dấu trong hẻm thì tới chỗ
+ * thấy Tín lần cuối rồi men theo hẻm ra (HemMap).
  * Bị một xe áp sát khi đang đứng / chạy chậm thì "bị chặn đầu" (game trừ tiền, theo kiểu hoạt hình).
  *
  * Công an (N7.3) dùng chung bộ máy này, thêm: ô tô công an từ 3 sao (to, nhanh trên đường thẳng, cua kém xe máy) và
@@ -39,6 +42,10 @@ export interface Chaser {
   repath: number;
   /** Đang rút lui (hết truy đuổi) — đi xa rồi biến mất. */
   leaving: boolean;
+  /** Chỗ thấy Tín lần cuối và đã bao lâu (s) — xe trong hẻm mất dấu thì tới đó trước. */
+  lastX: number;
+  lastZ: number;
+  lastSeen: number;
 }
 
 export interface ChasePlayer {
@@ -91,6 +98,11 @@ export interface ChaseConfig {
   /** Xuất hiện cách Tín trong khoảng này (m). */
   readonly spawnMin: number;
   readonly spawnMax: number;
+  /**
+   * Tốc độ tối đa của xe máy trong hẻm (m/s): hẻm hẹp, đông người ⇒ chậm hơn Tín chạy bộ (6,4 m/s), chạy vào hẻm là
+   * bỏ được xe máy (đứng lại thì vẫn bị bắt). Ô tô không vào hẻm.
+   */
+  readonly hemSpeed: number;
   /** Số ô tô trong tổng số xe theo cấp (thiếu = chỉ có xe máy). */
   readonly carsPerLevel?: readonly number[];
   readonly car?: ChaseCarConfig;
@@ -112,6 +124,7 @@ export const POLICE_CHASE: ChaseConfig = {
   catchTime: 2,
   spawnMin: 60,
   spawnMax: 110,
+  hemSpeed: 5,
   // Từ 3 sao có ô tô: nhanh hơn xe máy của Tín trên đường thẳng (Tín lái ô tô hết ga vẫn nhanh hơn), cua kém hơn.
   carsPerLevel: [0, 0, 0, 1, 2, 3],
   car: { maxSpeed: 23, accel: 5.5, turnRate: 1.7, catchRange: 3.8, stopGap: 3.3, radius: 2.3 },
@@ -132,6 +145,7 @@ export const CHASE: ChaseConfig = {
   catchTime: 1.2,
   spawnMin: 55,
   spawnMax: 95,
+  hemSpeed: 5,
 };
 
 /** Xe truy đuổi dừng cách Tín ngần này (m, tâm tới tâm): đầu xe 0,95 m + thân người 0,3 m + khoảng chừa — vẫn trong tầm bắt. */
@@ -140,6 +154,8 @@ const STOP_GAP = 2;
 const BIKE_RADIUS = 1;
 /** Đặt chốt không được (không có đường phía trước) thì thử lại sau ngần này giây. */
 const BLOCK_RETRY = 2;
+/** Xe trong hẻm mất dấu Tín: còn nhớ chỗ thấy lần cuối trong ngần này giây. */
+const LAST_SEEN_TIME = 4;
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -156,12 +172,16 @@ export class ChaseSim {
   private readonly dist: Float64Array;
   private readonly prev: Int32Array;
   private readonly done: Uint8Array;
+  /** Điểm ra khỏi hẻm (dùng lại). */
+  private readonly exitPoint = { x: 0, z: 0 };
 
   constructor(
     private readonly network: TrafficNetwork,
     private readonly sight: SightGrid,
     seed = 31,
     readonly config: ChaseConfig = CHASE,
+    /** Hẻm (không có = coi như thành phố không hẻm: xe không giảm tốc, không dừng ở miệng hẻm). */
+    private readonly hems: HemMap | null = null,
   ) {
     this.rng = createRng(seed);
     const n = network.nodes.length;
@@ -244,6 +264,9 @@ export class ChaseSim {
       path: [],
       repath: 0,
       leaving: false,
+      lastX: x,
+      lastZ: z,
+      lastSeen: Infinity,
     };
     this.chasers.push(c);
     return c;
@@ -358,6 +381,11 @@ export class ChaseSim {
       const visible = d < cfg.sightRange && this.sight.clear(c.x, c.z, player.x, player.z);
       if (!c.leaving && visible) this.seen = true;
       if (!c.leaving && d < (car?.catchRange ?? cfg.catchRange)) close = true;
+      if (!c.leaving && visible) {
+        c.lastX = player.x;
+        c.lastZ = player.z;
+        c.lastSeen = 0;
+      } else c.lastSeen += dt;
 
       if (c.mode === 'block') {
         // Chốt chặn đứng yên; hết giờ, hạ sao, hoặc Tín đã vượt qua chốt thì rút đi (thành xe thường, chạy xa rồi biến mất).
@@ -371,13 +399,17 @@ export class ChaseSim {
         continue;
       }
 
-      // Chọn điểm hướng tới: thấy & gần ⇒ lao thẳng; không thì theo đường lớn.
+      // Chọn điểm hướng tới: thấy & gần ⇒ lao thẳng; trong hẻm mà mất dấu ⇒ men theo hẻm; không thì theo đường lớn.
+      const inHem = this.hems ? this.hems.at(c.x, c.z) : -1;
       let tx: number;
       let tz: number;
       if (!c.leaving && visible) {
         tx = player.x;
         tz = player.z;
         c.path.length = 0;
+      } else if (inHem >= 0 && this.hemTarget(c, inHem, player)) {
+        tx = this.exitPoint.x;
+        tz = this.exitPoint.z;
       } else {
         c.repath -= dt;
         if (c.repath <= 0 || c.path.length === 0) {
@@ -413,7 +445,7 @@ export class ChaseSim {
       const turn = clamp(diff, -turnRate * dt, turnRate * dt);
       c.yaw = wrap(c.yaw + turn);
       const distT = Math.hypot(tx - c.x, tz - c.z);
-      let target = (car?.maxSpeed ?? cfg.maxSpeed) * Math.max(0.3, Math.cos(diff));
+      let target = Math.min(car?.maxSpeed ?? cfg.maxSpeed, this.hemCap(c, car, inHem, tx, tz, accel)) * Math.max(0.3, Math.cos(diff));
       // Áp sát rồi dừng cách STOP_GAP (không đâm xuyên, không hất người đi bộ): tốc độ không quá mức còn phanh kịp.
       // Không cộng tốc độ của Tín vào đây — bị xe đẩy thì Tín "nhanh" lên, cộng vào sẽ thành vòng lặp càng đẩy càng nhanh;
       // Tín chạy thật thì xe vẫn bám theo ở khoảng cách mà đường phanh cho phép.
@@ -436,8 +468,14 @@ export class ChaseSim {
           pz += (oz / od) * (room - od);
         }
       }
-      c.x += Math.sin(c.yaw) * c.speed * dt + px * dt * 2;
-      c.z += Math.cos(c.yaw) * c.speed * dt + pz * dt * 2;
+      const nx = c.x + Math.sin(c.yaw) * c.speed * dt + px * dt * 2;
+      const nz = c.z + Math.cos(c.yaw) * c.speed * dt + pz * dt * 2;
+      // Ô tô không lọt vào hẻm (trụ chắn miệng hẻm), kể cả khi bị xe khác đẩy.
+      if (car && this.hems && inHem < 0 && this.hems.at(nx, nz) >= 0) c.speed = 0;
+      else {
+        c.x = nx;
+        c.z = nz;
+      }
       const leanGoal = car ? 0 : clamp(Math.atan((c.speed * (turn / dt)) / 9.81), -0.5, 0.5);
       c.lean += (leanGoal - c.lean) * (1 - Math.exp(-5 * dt));
     }
@@ -453,6 +491,36 @@ export class ChaseSim {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Xe đang ở trong hẻm `i`, không thấy Tín: tới chỗ thấy Tín lần cuối, tới nơi vẫn không thấy thì men theo trục hẻm ra
+   * đầu thông gần Tín (đang đuổi) / gần mình (đang rút lui). Ghi vào `exitPoint`; false nếu hẻm không có đầu thông.
+   */
+  private hemTarget(c: Chaser, i: number, player: ChasePlayer): boolean {
+    c.path.length = 0;
+    if (!c.leaving && c.lastSeen < LAST_SEEN_TIME) {
+      if (Math.hypot(c.lastX - c.x, c.lastZ - c.z) > 1.5) {
+        this.exitPoint.x = c.lastX;
+        this.exitPoint.z = c.lastZ;
+        return true;
+      }
+      c.lastSeen = Infinity;
+    }
+    return this.hems!.exit(i, c.leaving ? c.x : player.x, c.leaving ? c.z : player.z, this.exitPoint);
+  }
+
+  /**
+   * Tốc độ tối đa vì hẻm khi đi thẳng tới (tx, tz): xe máy trong hẻm không quá `hemSpeed` và phanh kịp trước miệng hẻm;
+   * ô tô dừng trước miệng hẻm (lỡ ở trong hẻm rồi thì đi chậm ra).
+   */
+  private hemCap(c: Chaser, car: ChaseCarConfig | undefined, inHem: number, tx: number, tz: number, accel: number): number {
+    if (!this.hems) return Infinity;
+    const ahead = inHem >= 0 ? 0 : this.hems.entry(c.x, c.z, tx, tz);
+    if (ahead === Infinity) return Infinity;
+    const brake = accel * 1.5;
+    if (car && ahead > 0) return Math.sqrt(2 * brake * Math.max(0, ahead - car.radius));
+    return Math.sqrt(this.config.hemSpeed * this.config.hemSpeed + 2 * brake * ahead);
   }
 
   /** Cho tất cả rút lui (sau khi bị chặn đầu / cắt đuôi). */

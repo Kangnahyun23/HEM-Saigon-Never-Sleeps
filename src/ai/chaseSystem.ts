@@ -6,6 +6,7 @@ import type { PhysicsWorld } from '@/physics/physics';
 import type { SightGrid } from '@/systems/heat';
 import { nightUniform } from '@/world/nightGlow';
 import { CHASE, ChaseSim, type ChaseConfig, type Chaser, type ChaserKind, type ChasePlayer } from './chase';
+import type { HemMap } from './hemNav';
 import type { NearRiderView } from './nearRiders';
 import type { Obstacle } from './traffic';
 import { TrafficFleetView, type FleetPose } from './trafficFleetView';
@@ -77,8 +78,9 @@ export class ChaseSystem {
     seed: number,
     style: RiderStyle = 'gang',
     config: ChaseConfig = CHASE,
+    hems: HemMap | null = null,
   ) {
-    this.sim = new ChaseSim(network, sight, seed, config);
+    this.sim = new ChaseSim(network, sight, seed, config, hems);
     const max = Math.max(...config.perLevel) + 3;
     // Ô tô: số ô tô nhiều nhất theo cấp + một chốt chặn (tối đa 3 xe) + vài chỗ cho xe đang rút lui.
     const maxCars = config.car ? Math.max(0, ...(config.carsPerLevel ?? [0])) + (config.roadblock ? 3 : 0) + 3 : 0;
