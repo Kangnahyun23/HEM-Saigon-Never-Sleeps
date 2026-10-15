@@ -36,14 +36,19 @@ Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `
 Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ.
 Vật đổ bóng KHÔNG dùng `alphaTest` (để `castShadow: false`): lượt vẽ bóng dùng chung một vật liệu bóng, vật có / không
 alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (từng ăn ~16 % CPU + nửa rác bộ nhớ).
-NPC có xương lấy / trả qua `KeyedPool` (core/keyedPool.ts) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
+NPC có xương lấy / trả qua kho chung `NpcPool` (ai/npcBody.ts — `KeyedPool` theo mẫu người, dựng sẵn lúc tải bằng
+`prebuild`; người đi bộ gần và người ngồi quán dùng chung) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
 three.js vẫn tính ma trận xương của vật đang ẩn; bộ đệm hình riêng từng ô từng phình tới hàng chục nghìn xương sau vài phút chơi.
+NPC dùng bộ xương rút gọn 23 xương (assets/slimRig.ts: bỏ xương ngón tay + xương lá; clip lấy bằng `getNpcClip`, đã lọc
+track của xương bị bỏ); chỉ Tín giữ đủ 66 xương (`FULL_RIG` trong characters.ts).
+Ma trận instance của đám đông / đàn xe ghi thẳng vào `instanceMatrix.array` (pedestrianView `writePart`, trafficView
+`writeFramed`), không qua Matrix4 / Euler: V8 đóng hộp số thực khi gọi hàm không inline được ⇒ mỗi ma trận là rác.
 Mỗi lệnh vẽ tốn CPU (three.js ~15–20 µs / vật / lượt, cả lượt bóng): vật nhỏ nằm dưới / trong vật khác thì `castShadow = false`.
 InstancedMesh hết bản (count = 0) thì ẩn luôn (`visible = false`): three.js vẫn tốn lệnh vẽ cho mesh 0 bản ở mọi lượt.
 Pipeline biên dịch sẵn lúc tải (render/warmup.ts): `warmUpPipelines` vẽ một lần MỌI vật (kể cả đang ẩn, ngoài khung nhìn,
 chỉ hiện ban đêm) + lượt bloom, rồi `gpuIdle` chờ GPU biên dịch xong. Thiếu thì vật lần đầu xuất hiện làm khựng 60–90 ms
 (D3D11), lượt bloom đầu tiên lúc trời tối ~1 s, và ngay sau màn hình tải game đứng 5–8 s chờ GPU. Vật tạo muộn (chưa nằm
-trong cảnh, kể cả dạng ẩn) thì đưa một mẫu vào `samples` (như `civilianSamples()`); kiểm tra bằng cách đếm
+trong cảnh, kể cả dạng ẩn) thì đưa một mẫu vào `samples`, hoặc dựng sẵn ở dạng ẩn lúc tải (như `NpcPool.prebuild`); kiểm tra bằng cách đếm
 `renderer.backend.createRenderPipeline` lúc chơi — phải bằng 0.
 Thuộc tính instance tới fragment qua nội suy: số nguyên có thể thành 0,9999… ⇒ giải mã bằng ngưỡng, đừng `fract()` đúng tại số nguyên.
 `material.positionNode` được gán SAU bước instancing (ghi đè cả phần dịch của instance).
@@ -78,7 +83,8 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 ```
 src/
   assets/            manifest.ts (tự sinh: texture, nhân vật, động tác), textures.ts (tải lúc vào game, getTextures),
-                     characters.ts (mẫu người có xương + clip động tác Mesh2Motion CC0: createCharacter, getClip)
+                     characters.ts (mẫu người có xương + clip động tác Mesh2Motion CC0: createCharacter, getClip, getNpcClip),
+                     slimRig (rút bộ xương NPC 66 → 23 xương + lọc track clip — có unit test)
   main.ts            khởi tạo renderer, physics, khu phố, Game; vòng lặp khung hình; móc __HEM__
   game/game.ts       vòng chơi: đi bộ ⇄ lái xe, bước vật lý cố định + nội suy, camera, HUD
   core/              fixedStep, input (phím + chuột/pointer lock; khi khoá chuột, nút chuột thành mã `Mouse0` / `Mouse2`), random (seed), rect,
@@ -129,7 +135,7 @@ src/
                      pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /
                      gọi báo / đánh trả — có unit test), civilians (mẫu người dùng chung cho mô phỏng + hình), pedestrianView (khối hộp instanced),
                      nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test),
-                     seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương)
+                     seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương + kho chung NpcPool)
                      chase (xe truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test; cấu hình CHASE cho đàn em
                      Phát, POLICE_CHASE cho công an: từ 3 sao có ô tô (`carsPerLevel`) và chốt chặn ô tô đỗ ngang đường phía
                      trước — `placeRoadblock`, chaser `mode: 'block'`), chaseSystem (thân Rapier + hình theo loại xe máy / ô tô;

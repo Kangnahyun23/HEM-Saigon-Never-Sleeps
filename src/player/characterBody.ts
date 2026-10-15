@@ -101,7 +101,10 @@ export class CharacterBody {
   /** Lưu vị trí sau bước vật lý (gọi SAU world.step()). */
   snapshot(): void {
     Object.assign(this.prev, this.curr);
-    Object.assign(this.curr, this.feet());
+    const t = this.body.translation();
+    this.curr.x = t.x;
+    this.curr.y = t.y - CHARACTER.halfHeight - CHARACTER.radius;
+    this.curr.z = t.z;
   }
 
   /** Bật/tắt va chạm (tắt khi đang ngồi trên xe). */

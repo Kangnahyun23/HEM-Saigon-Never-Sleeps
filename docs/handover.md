@@ -214,7 +214,7 @@ biên dịch shader (D3D11 / FXC chậm).
 - **Vật lần đầu xuất hiện** (ô tô đậu lọt vào tầm 110 m, mẫu người mới, băng ghế ngoài tầm chi tiết…): 60–90 ms mỗi lần.
 - **Lượt bloom đầu tiên lúc trời tối**: vẽ vào ảnh HDR (định dạng khác) ⇒ mọi vật cần pipeline thứ hai, ~0,9 s CPU + GPU.
 - **Sửa** (`render/warmup.ts`): lúc tải `revealAll` tạm hiện mọi vật (ẩn / ngoài khung nhìn / InstancedMesh 0 bản) + mỗi mẫu người
-  dân một thân (`civilianSamples`), vẽ thật một lần ở 0,25× điểm ảnh (lượt chính + bóng) rồi một lượt bloom, sau đó
+  dân một thân (`civilianSamples` — P3 thay bằng thân dựng sẵn trong `NpcPool`), vẽ thật một lần ở 0,25× điểm ảnh (lượt chính + bóng) rồi một lượt bloom, sau đó
   `gpuIdle` chờ `queue.onSubmittedWorkDone()`. Bẫy: ShadowNode chỉ vẽ bóng một lần mỗi camera mỗi khung, mà trước vòng lặp
   hoạt ảnh khung chưa sang ⇒ lượt chính dùng `camera.clone()` để lượt bloom vẫn vẽ bóng (bóng trong bloom có pipeline riêng).
   Pipeline bóng của nhân vật có xương riêng theo từng mẫu người. `compileAsync` thử rồi: chậm hơn (11,6 s so với 9,5 s) và không làm lượt bóng.
@@ -224,9 +224,26 @@ biên dịch shader (D3D11 / FXC chậm).
 - **Kết quả** (`npm run perf`, trước → sau): khựng (> 33 ms / 8 s) chạy xe đêm 3 → 0–1, mưa đêm 3 → 0, khung lâu nhất
   đêm 90 → 16–36 ms; fps chạy xe ngày 154 → 167, đêm 129 → 143–158. Lúc chơi không còn tạo pipeline nào (ngày, đêm, mưa, đàn em,
   công an 3 sao, chuyển ngày → đêm).
-- **Còn lại**: ~40 MB/s rác (dọn rác nhỏ giờ chỉ ~0,2 % thời gian — không còn gây khựng); dịch chuyển xa (bị bắt / tỉnh dậy ở
-  trạm y tế) vẫn có 1–2 khung 40–90 ms (tải lại bộ đệm chi tiết + nhân vật có xương mới); dựng node cho nhân vật có xương mới
-  (~10 ms mỗi người) khi pool tạo thân mới.
+- **Còn lại**: xem P3 ngay dưới.
+
+### P3 — bớt việc CPU mỗi khung (nhánh `perf-3-toi-uu`, tách từ `main` sau PR #34)
+Đo bằng `npm run perf` + hồ sơ CPU / lấy mẫu bộ nhớ theo hàm (Chrome thật, WebGPU). Sau P2 phần "logic" (mô phỏng + cập nhật
+hình) còn 1–1,8 ms / khung, nhân vật có xương chiếm phần lớn (`updateMatrixWorld` của xương, `Skeleton.update`, mixer).
+- **Kho NPC dùng chung** `NpcPool` (ai/npcBody.ts): một `KeyedPool` theo mẫu người cho cả người đi bộ gần lẫn người ngồi quán;
+  mỗi thân có sẵn MỌI động tác NPC (`NPC_CLIPS`, 19 clip) nên đổi động tác không cần thân khác. Dựng sẵn lúc tải (`prebuild`,
+  đủ cho số ô của hai LOD) ⇒ lúc chơi không dựng nhân vật mới nữa (trước ~10 ms + pipeline mới mỗi lần); thân ẩn được
+  `revealAll` hâm nóng nên bỏ `civilianSamples`. Khựng 40–90 ms khi dịch chuyển xa (bị bắt / tỉnh dậy) hết hẳn: 0 khung > 25 ms.
+- **Bộ xương rút gọn** (assets/slimRig.ts): NPC 66 → 23 xương (bỏ 40 xương ngón tay + 3 xương lá; đỉnh đang bám xương bị bỏ
+  chuyển sang xương cha gần nhất còn giữ), clip lọc bỏ track tương ứng (`getNpcClip`). Tín giữ đủ xương (thấy tay gần).
+- **Bớt rác do code game**: ma trận instance của đám đông / đàn xe ghi thẳng vào `instanceMatrix.array` (không qua Matrix4 /
+  Euler — V8 đóng hộp số thực); `traffic.consider` đọc ứng viên từ một đối tượng dùng lại; `ChaseSim.route` dùng lại mảng
+  kiểu cố định; vòng bước vật lý trong game.ts dùng lại vị trí / mối đe doạ / `runner` / danh sách vật cản; HUD so số thay
+  chuỗi khoá; `characterBody.snapshot` khỏi tạo đối tượng; bản đồ nhỏ truyền `out` cho `worldToMap` / `markerOnMap`.
+- **Kết quả** (fps trước → sau, không khoá vsync, 2560×1600): đứng yên ban ngày 192 → 194; chạy xe ngày 168 → 210; đêm
+  109 → 164–180; mưa đêm 133 → 163; truy đuổi 144 → 164–174 (một lượt 135 — cảnh này dao động mạnh). Logic 1,0–1,8 → 0,7–1,0 ms.
+  Rác ~38 → ~35 MB/s, dọn rác ~0,5 % CPU.
+- **Còn lại**: rác ~35 MB/s phần lớn nằm trong three.js (danh sách vẽ, cập nhật uniform, `writeBuffer`); `traffic.step` /
+  `safeSpeed` / `pedestrians.step` còn ~4,7 MB/s (số thực bị đóng hộp). Chưa đáng sửa — dọn rác không còn gây khựng.
 
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
@@ -256,12 +273,7 @@ biên dịch shader (D3D11 / FXC chậm).
 - **Thế giới**:
   - tiệm vào được mở 24/24, chưa có cửa cuốn đóng ban đêm;
   - bảng hiệu nhà thuốc có khi bị cây che.
-- **Hiệu năng**: còn vài chỗ tạo đối tượng mỗi khung hình có từ trước:
-  - `character.feet()` (Rapier `translation()`);
-  - mảng `threats` mỗi bước vật lý;
-  - chuỗi khoá trong `hud.setHeat` / `setVitals`;
-  - `markerOnMap` trên bản đồ nhỏ (nay chỉ vẽ lại 30 lần / giây);
-  - xem thêm "Còn lại" ở mục P2 phía trên.
+- **Hiệu năng**: xem "Còn lại" ở mục P3 phía trên (rác còn lại chủ yếu trong three.js).
 
 ## 5. Bẫy đã gặp (đọc trước khi sửa)
 
@@ -293,8 +305,11 @@ biên dịch shader (D3D11 / FXC chậm).
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- PR #28–#33 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1) đã merge vào `main` (2026-10-14), `main` đã deploy.
-- P2 nằm trên nhánh `perf-2-toi-uu`, tách từ `main`. Unit test: 272 (thêm test `revealAll`).
+- PR #28–#34 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1, P2) đã merge vào `main`, `main` đã deploy.
+- P3 nằm trên nhánh `perf-3-toi-uu`, tách từ `main`. Unit test: 278 (thêm `slimRig.test.ts` + 2 test so ma trận instance
+  ghi tay với Matrix4 trong `performance.test.ts`).
+- Việc tiếp theo chủ dự án đã giao (2026-10-15), mỗi việc một PR: người lái xe NPC thành nhân vật có xương như người đi bộ →
+  công an là nhân vật có xương (`police-m` / `police-f`) → đánh được công an → công an truy đuổi chậm lại trong hẻm.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

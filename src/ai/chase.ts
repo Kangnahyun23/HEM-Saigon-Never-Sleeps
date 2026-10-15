@@ -152,6 +152,10 @@ export class ChaseSim {
   private blockTimer = 0;
   /** Lần cuối xe truy đuổi thấy Tín (để HUD báo "đang bị bám"). */
   seen = false;
+  /** Bộ nhớ tạm của `route` (dùng lại, không tạo mảng mỗi lần tìm đường). */
+  private readonly dist: Float64Array;
+  private readonly prev: Int32Array;
+  private readonly done: Uint8Array;
 
   constructor(
     private readonly network: TrafficNetwork,
@@ -160,6 +164,10 @@ export class ChaseSim {
     readonly config: ChaseConfig = CHASE,
   ) {
     this.rng = createRng(seed);
+    const n = network.nodes.length;
+    this.dist = new Float64Array(n);
+    this.prev = new Int32Array(n);
+    this.done = new Uint8Array(n);
   }
 
   /** Nút giao lộ gần điểm (x, z) nhất. */
@@ -176,34 +184,42 @@ export class ChaseSim {
     return best;
   }
 
-  /** Đường ngắn nhất giữa hai nút (Dijkstra trên vài chục nút). */
-  route(from: number, to: number): number[] {
+  /** Đường ngắn nhất giữa hai nút (Dijkstra trên vài chục nút), ghi vào `out` (xoá trước) rồi trả về chính nó. */
+  route(from: number, to: number, out: number[] = []): number[] {
     const nodes = this.network.nodes;
-    const dist = new Array<number>(nodes.length).fill(Infinity);
-    const prev = new Array<number>(nodes.length).fill(-1);
-    const done = new Array<boolean>(nodes.length).fill(false);
+    const { dist, prev, done } = this;
+    dist.fill(Infinity);
+    prev.fill(-1);
+    done.fill(0);
     dist[from] = 0;
     for (let k = 0; k < nodes.length; k++) {
       let u = -1;
-      for (let i = 0; i < nodes.length; i++) if (!done[i] && (u === -1 || (dist[i] as number) < (dist[u] as number))) u = i;
+      for (let i = 0; i < nodes.length; i++) if (!done[i] && (u === -1 || dist[i]! < dist[u]!)) u = i;
       if (u === -1 || dist[u] === Infinity) break;
-      done[u] = true;
+      done[u] = 1;
       if (u === to) break;
-      for (const laneId of nodes[u]?.out ?? []) {
-        const lane = this.network.lanes[laneId] as TrafficLane;
-        const nd = (dist[u] as number) + lane.length;
-        if (nd < (dist[lane.to] as number)) {
+      const outLanes = nodes[u]!.out;
+      for (let j = 0; j < outLanes.length; j++) {
+        const lane = this.network.lanes[outLanes[j]!] as TrafficLane;
+        const nd = dist[u]! + lane.length;
+        if (nd < dist[lane.to]!) {
           dist[lane.to] = nd;
           prev[lane.to] = u;
         }
       }
     }
-    const path: number[] = [];
-    for (let v = to; v !== -1; v = prev[v] as number) {
-      path.unshift(v);
+    // Lần ngược từ đích về nguồn rồi đảo lại.
+    out.length = 0;
+    for (let v = to; v !== -1; v = prev[v]!) {
+      out.push(v);
       if (v === from) break;
     }
-    return path[0] === from ? path : [to];
+    out.reverse();
+    if (out[0] !== from) {
+      out.length = 0;
+      out.push(to);
+    }
+    return out;
   }
 
   /** Thêm một xe truy đuổi ở (x, z) hướng `yaw` — ví dụ xe tuần tra vừa thấy Tín gây án quay sang đuổi. */
@@ -308,13 +324,20 @@ export class ChaseSim {
     const lvl = clamp(level, 0, cfg.perLevel.length - 1);
     const want = cfg.perLevel[lvl] as number;
     const wantCars = Math.min(want, cfg.carsPerLevel?.[lvl] ?? 0);
-    // Xe chốt chặn không tính vào số xe đuổi theo cấp.
-    const active = this.chasers.filter((c) => !c.leaving && c.mode === 'chase');
+    // Xe chốt chặn không tính vào số xe đuổi theo cấp. Hạ cấp / hết truy đuổi: các xe thừa (sau `want` xe đầu) rút lui.
+    let active = 0;
     let cars = 0;
-    for (const c of active) if (c.kind === 'car') cars++;
-    for (let i = active.length; i < want; i++) this.spawn(player, cars++ < wantCars ? 'car' : 'bike');
-    // Hạ cấp / hết truy đuổi: các xe thừa rút lui.
-    active.slice(want).forEach((c) => (c.leaving = true));
+    for (let i = 0; i < this.chasers.length; i++) {
+      const c = this.chasers[i]!;
+      if (c.leaving || c.mode !== 'chase') continue;
+      if (active >= want) {
+        c.leaving = true;
+        continue;
+      }
+      active++;
+      if (c.kind === 'car') cars++;
+    }
+    for (let i = active; i < want; i++) this.spawn(player, cars++ < wantCars ? 'car' : 'bike');
 
     // Chốt chặn: đủ sao, Tín đang phóng xe, chưa có chốt nào ⇒ đặt chốt phía trước.
     const rb = cfg.roadblock;
@@ -354,13 +377,13 @@ export class ChaseSim {
       if (!c.leaving && visible) {
         tx = player.x;
         tz = player.z;
-        c.path = [];
+        c.path.length = 0;
       } else {
         c.repath -= dt;
         if (c.repath <= 0 || c.path.length === 0) {
           c.repath = 1;
           const goal = c.leaving ? this.nearestNode(c.x * 2 - player.x, c.z * 2 - player.z) : this.nearestNode(player.x, player.z);
-          c.path = this.route(this.nearestNode(c.x, c.z), goal);
+          this.route(this.nearestNode(c.x, c.z), goal, c.path);
           // Đã đi quá nút đầu (đang nằm giữa nút 0 và nút 1) ⇒ bỏ nút đầu, khỏi quay đầu chạy ngược.
           const n0 = this.network.nodes[c.path[0] ?? -1];
           const n1 = this.network.nodes[c.path[1] ?? -1];
@@ -374,7 +397,7 @@ export class ChaseSim {
           const here = this.network.nodes[this.nearestNode(c.x, c.z)];
           const out = here?.out ?? [];
           const lane = this.network.lanes[out[Math.floor(this.rng() * out.length)] ?? -1];
-          c.path = lane ? [lane.to] : [];
+          if (lane) c.path.push(lane.to);
           c.repath = 4;
         }
         const target = this.network.nodes[c.path[0] ?? -1];

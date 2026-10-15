@@ -19,13 +19,15 @@ export interface MapView {
   scale: number;
 }
 
-/** Điểm thế giới → toạ độ canvas. */
-export function worldToMap(view: MapView, x: number, z: number): { u: number; v: number } {
+/** Điểm thế giới → toạ độ canvas (ghi vào `out` nếu có — bản đồ vẽ lại 30 lần / giây, khỏi tạo đối tượng). */
+export function worldToMap(view: MapView, x: number, z: number, out = { u: 0, v: 0 }): { u: number; v: number } {
   const dx = x - view.px;
   const dz = z - view.pz;
   const right = -dx * view.fz + dz * view.fx;
   const ahead = dx * view.fx + dz * view.fz;
-  return { u: view.cx + right * view.scale, v: view.cy - ahead * view.scale };
+  out.u = view.cx + right * view.scale;
+  out.v = view.cy - ahead * view.scale;
+  return out;
 }
 
 /**
@@ -43,13 +45,17 @@ export function mapImageTransform(view: MapView, x0: number, z0: number, k: numb
  * Vị trí điểm đánh dấu trên bản đồ tròn bán kính `radius` (px): nếu nằm ngoài thì ghim lên mép (kèm cờ `edge`)
  * để người chơi biết hướng cần đi.
  */
-export function markerOnMap(view: MapView, x: number, z: number, radius: number): { u: number; v: number; edge: boolean } {
-  const p = worldToMap(view, x, z);
-  const du = p.u - view.cx;
-  const dv = p.v - view.cy;
+export function markerOnMap(view: MapView, x: number, z: number, radius: number, out = { u: 0, v: 0, edge: false }): { u: number; v: number; edge: boolean } {
+  worldToMap(view, x, z, out);
+  const du = out.u - view.cx;
+  const dv = out.v - view.cy;
   const d = Math.hypot(du, dv);
-  if (d <= radius) return { ...p, edge: false };
-  return { u: view.cx + (du / d) * radius, v: view.cy + (dv / d) * radius, edge: true };
+  out.edge = d > radius;
+  if (out.edge) {
+    out.u = view.cx + (du / d) * radius;
+    out.v = view.cy + (dv / d) * radius;
+  }
+  return out;
 }
 
 /** Góc xoay (rad, theo chiều kim đồng hồ trên màn hình) của mũi tên người chơi có hướng `yaw` khi camera nhìn (fx, fz). */

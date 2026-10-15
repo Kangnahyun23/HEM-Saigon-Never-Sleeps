@@ -87,6 +87,9 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] P2 hết khựng do biên dịch shader: biên dịch sẵn mọi pipeline lúc tải (cả vật ẩn, vật ban đêm, mẫu người, lượt bloom)
   và chờ GPU xong mới tắt màn hình tải — hết cảnh đứng hình 5–8 s ngay sau khi vào game, hết khựng 60–90 ms khi vật mới
   xuất hiện, hết ~1 s khựng lúc trời tối; ẩn InstancedMesh rỗng, bốn bánh ô tô một lệnh vẽ;
+- [x] P3 bớt việc CPU mỗi khung: kho NPC có xương dùng chung + dựng sẵn lúc tải (hết khựng khi dịch chuyển xa), bộ xương NPC
+  rút 66 → 23 xương, ghi thẳng ma trận instance, bỏ các chỗ tạo đối tượng mỗi bước. Chạy xe ngày 168 → 210 fps, đêm
+  109 → 164–180 fps, mưa đêm 133 → 163 fps;
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa

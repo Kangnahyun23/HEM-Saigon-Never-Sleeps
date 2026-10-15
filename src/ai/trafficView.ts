@@ -35,7 +35,7 @@ const STYLE_COLORS: Record<Exclude<RiderStyle, 'civilian'>, { body: string; shir
 
 type Look = 'shirt' | 'pants' | 'skin' | 'helmet' | 'shoe' | 'visor' | 'cargo';
 
-interface Part {
+export interface Part {
   shape: 'box' | 'cyl';
   local: THREE.Matrix4;
   /** Màu cố định, hoặc vai trò lấy màu theo "diện mạo" từng xe. */
@@ -71,7 +71,8 @@ const RIDER: Array<{ size: [number, number, number]; pos: [number, number, numbe
   { size: [0.46, 0.42, 0.42], pos: [0, 1.12, -0.74], color: 'cargo', cargo: true },
 ];
 
-function buildParts(): Part[] {
+/** Các khối của một xe máy + người lái (xuất ra cho unit test). */
+export function buildParts(): Part[] {
   const parts: Part[] = [];
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
@@ -122,26 +123,71 @@ export function beamMaterial(): THREE.MeshBasicNodeMaterial {
   return mat;
 }
 
-const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-const _m = new THREE.Matrix4();
-const _w = new THREE.Matrix4();
-const _q = new THREE.Quaternion();
-const _e = new THREE.Euler();
-const _p = new THREE.Vector3();
-const _one = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color();
-const _up = new THREE.Vector3(0, 1, 0);
+/**
+ * Khung xe đang ghi: _r[0..8] = ma trận quay 3×3 (theo hàng), _r[9..11] = vị trí, _r[12] = hướng, _r[13] = độ nghiêng.
+ * Truyền qua mảng thay vì tham số số thực (gọi hàm với số thực ⇒ V8 "đóng hộp" từng số = rác bộ nhớ) và ghi thẳng vào
+ * bộ đệm, không qua Matrix4.
+ */
+const _r = new Float64Array(14);
 
-/** Ghi ma trận các khối của xe thứ `i` (khung `_w` đã đặt sẵn). Hàm thường, không tạo closure mỗi khung hình. */
+/** Tính phần quay của khung từ _r[12] (hướng) và _r[13] (nghiêng quanh trục dọc xe) — như Euler 'YXZ' (0, hướng, −nghiêng). */
+function setFrame(): void {
+  const r = _r;
+  const cy = Math.cos(r[12]!);
+  const sy = Math.sin(r[12]!);
+  const cz = Math.cos(r[13]!);
+  const sz = -Math.sin(r[13]!);
+  r[0] = cy * cz;
+  r[1] = -cy * sz;
+  r[2] = sy;
+  r[3] = sz;
+  r[4] = cz;
+  r[5] = 0;
+  r[6] = -sy * cz;
+  r[7] = sy * sz;
+  r[8] = cy;
+}
+
+/** Ghi `khung · e` (e: ma trận cục bộ affine của khối, theo cột như three.js) vào `out` tại `o`. */
+function writeFramed(out: Float32Array, o: number, e: readonly number[]): void {
+  const r = _r;
+  for (let j = 0; j < 12; j += 4) {
+    const ex = e[j]!;
+    const ey = e[j + 1]!;
+    const ez = e[j + 2]!;
+    out[o + j] = r[0]! * ex + r[1]! * ey + r[2]! * ez;
+    out[o + j + 1] = r[3]! * ex + r[4]! * ey + r[5]! * ez;
+    out[o + j + 2] = r[6]! * ex + r[7]! * ey + r[8]! * ez;
+    out[o + j + 3] = 0;
+  }
+  const tx = e[12]!;
+  const ty = e[13]!;
+  const tz = e[14]!;
+  out[o + 12] = r[0]! * tx + r[1]! * ty + r[2]! * tz + r[9]!;
+  out[o + 13] = r[3]! * tx + r[4]! * ty + r[5]! * tz + r[10]!;
+  out[o + 14] = r[6]! * tx + r[7]! * ty + r[8]! * tz + r[11]!;
+  out[o + 15] = 1;
+}
+
+/** Ma trận "ẩn" (co về một điểm) tại `o`. */
+function writeHidden(out: Float32Array, o: number): void {
+  out.fill(0, o, o + 15);
+  out[o + 15] = 1;
+}
+
+/** Ghi ma trận các khối của xe thứ `i` (khung trong _r đã đặt sẵn). Hàm thường, không tạo closure mỗi khung hình. */
 function writeParts(mesh: THREE.InstancedMesh, parts: readonly Part[], i: number, cargo: boolean): void {
+  const out = mesh.instanceMatrix.array as Float32Array;
+  const base = i * parts.length * 16;
   for (let k = 0; k < parts.length; k++) {
     const part = parts[k] as Part;
-    if (part.cargo && !cargo) mesh.setMatrixAt(i * parts.length + k, ZERO);
-    else mesh.setMatrixAt(i * parts.length + k, _m.multiplyMatrices(_w, part.local));
+    if (part.cargo && !cargo) writeHidden(out, base + k * 16);
+    else writeFramed(out, base + k * 16, part.local.elements);
   }
 }
 /** Vệt đèn pha: rộng 2.6 m, dài 7 m, bắt đầu ngay trước đầu xe, sát mặt đường. */
-const BEAM_LOCAL = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.04, 4.3), new THREE.Quaternion(), new THREE.Vector3(2.6, 1, 7));
+const BEAM_LOCAL = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.04, 4.3), new THREE.Quaternion(), new THREE.Vector3(2.6, 1, 7)).elements;
 
 export class TrafficView {
   readonly root = new THREE.Group();
@@ -236,22 +282,25 @@ export class TrafficView {
     const n = Math.min(count, agents.length, this.capacity);
     // Không có xe (đàn em / công an lúc không truy đuổi): ẩn cả nhóm — InstancedMesh 0 bản vẫn tốn lệnh vẽ ở mọi lượt.
     this.root.visible = n > 0;
+    const beams = this.beams.instanceMatrix.array as Float32Array;
     for (let i = 0; i < n; i++) {
       const a = agents[i] as BikePose;
       const look = this.lookFor(a);
       const dyaw = Math.atan2(Math.sin(a.yaw - a.prevYaw), Math.cos(a.yaw - a.prevYaw));
-      const yaw = a.prevYaw + dyaw * alpha;
-      const lean = a.prevLean + (a.lean - a.prevLean) * alpha;
-      _p.set(a.prevX + (a.x - a.prevX) * alpha, 0, a.prevZ + (a.z - a.prevZ) * alpha);
-      _q.setFromEuler(_e.set(0, yaw, -lean, 'YXZ'));
-      _w.compose(_p, _q, _one);
+      const r = _r;
+      r[9] = a.prevX + (a.x - a.prevX) * alpha;
+      r[10] = 0;
+      r[11] = a.prevZ + (a.z - a.prevZ) * alpha;
+      r[12] = a.prevYaw + dyaw * alpha;
+      r[13] = a.prevLean + (a.lean - a.prevLean) * alpha;
+      setFrame();
       writeParts(this.boxes, this.boxParts, i, look.cargo);
       writeParts(this.cyls, this.cylParts, i, look.cargo);
       writeParts(this.lamps, this.lampParts, i, look.cargo);
       // Vệt đèn: theo hướng xe nhưng nằm phẳng trên đường (không nghiêng theo xe).
-      _q.setFromAxisAngle(_up, yaw);
-      _w.compose(_p, _q, _one);
-      this.beams.setMatrixAt(i, _m.multiplyMatrices(_w, BEAM_LOCAL));
+      r[13] = 0;
+      setFrame();
+      writeFramed(beams, i * 16, BEAM_LOCAL);
     }
     this.boxes.count = n * this.boxParts.length;
     this.cyls.count = n * this.cylParts.length;
