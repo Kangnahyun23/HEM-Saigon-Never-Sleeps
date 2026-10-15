@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Obstacle } from '@/ai/traffic';
 import { TrafficSystem } from '@/ai/trafficSystem';
 import { ChaseSystem } from '@/ai/chaseSystem';
-import { CHASE, POLICE_CHASE, type ChasePlayer } from '@/ai/chase';
+import { CHASE, POLICE_CHASE } from '@/ai/chase';
 import { HemMap } from '@/ai/hemNav';
 import { patrolWitness } from '@/ai/patrol';
 import { Siren } from '@/audio/siren';
@@ -12,6 +12,8 @@ import { PedestrianSim, type Threat } from '@/ai/pedestrians';
 import { Heat, SightGrid } from '@/systems/heat';
 import type { SaveSlot } from '@/systems/save';
 import { NearPedestrianView } from '@/ai/nearPedestrians';
+import { FOOT_POLICE, FootPoliceSim, MAX_CORPSES, type FootPlayer } from '@/ai/footPolice';
+import { FootPoliceView } from '@/ai/footPoliceView';
 import { GANG_RIDERS, NearRiderView, POLICE_RIDERS } from '@/ai/nearRiders';
 import { GANG_CLOTHES } from '@/assets/outfits';
 import { SeatedPeopleView } from '@/ai/seatedPeople';
@@ -96,6 +98,8 @@ const BREAK_TEXT: Partial<Record<ItemId, string>> = { gheNhua: 'Ghế nhựa v�
 const OUTCOME = { black: 2.6, respawn: 3.2, reveal: 3.5, end: 4.1 } as const;
 /** Số vũng máu chờ loang cùng lúc tối đa. */
 const POOL_QUEUE = 8;
+/** Vũng máu của công an đi bộ: số trong hàng chờ = OFFICER_POOL + id công an (người đi đường: id người đi bộ). */
+const OFFICER_POOL = 100_000;
 const MOUNT_RANGE = 2.4;
 const DISMOUNT_MAX_SPEED = 4;
 /** Xe đang đậu: không ga, phanh tay (dùng chung, không tạo đối tượng mỗi bước). */
@@ -186,12 +190,18 @@ export class Game {
   private readonly stepPos = { x: 0, y: 0, z: 0 };
   private readonly trafficFocus = { x: 0, z: 0, dirX: 0, dirZ: 0 };
   private readonly rideThreat: Threat[] = [{ x: 0, z: 0, vx: 0, vz: 0 }];
-  private readonly runner: ChasePlayer = { x: 0, z: 0, speed: 0, dirX: 0, dirZ: 1 };
+  private readonly runner: FootPlayer = { x: 0, z: 0, speed: 0, dirX: 0, dirZ: 1, onFoot: true };
   private readonly door = { x: 0, z: 0 };
   private lowHealthWarned = false;
   readonly story: StoryRunner;
   readonly chase: ChaseSystem;
   readonly police: ChaseSystem;
+  /** Công an xuống xe đuổi bộ (đánh nhau được, còng tay Tín đứng yên). */
+  readonly footPolice: FootPoliceSim;
+  private readonly footPoliceView: FootPoliceView | null = null;
+  /** Đã nhắc "công an xuống xe" / "bị nắm tay" (nhắc một lần mỗi lượt). */
+  private footPoliceWarned = false;
+  private grabWarned = false;
   /** Lưới che tầm nhìn (nhà cửa) — xe tuần tra có thấy chỗ Tín gây án không. */
   private readonly sight: SightGrid;
   private readonly siren = new Siren();
@@ -279,6 +289,9 @@ export class Game {
     this.chase = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 11, 'gang', CHASE, hems);
     // Công an: cùng cách bám theo đường lớn như đàn em Phát, số xe theo sao truy nã, có đèn chớp + còi hú.
     this.police = new ChaseSystem(scene, physics, network, sight, city.layout.seed + 13, 'police', POLICE_CHASE, hems);
+    // Công an tới gần Tín đang đi bộ thì xuống xe đuổi bộ — cần mẫu người công an (thiếu thì xe tự bắt như trước).
+    const footCap = NearRiderView.available(POLICE_RIDERS) ? budget.footPolice : 0;
+    this.footPolice = new FootPoliceSim(this.police.sim, sight, hems, footCap, city.layout.seed + 17);
     const { spawn } = city.layout;
     this.fallGuard = new FallGuard({ x: spawn.x, y: PAD_HEIGHT, z: spawn.z, yaw: spawn.yaw });
     this.character = new CharacterBody(physics.RAPIER, physics.world, spawn.x, PAD_HEIGHT, spawn.z);
@@ -323,8 +336,11 @@ export class Game {
     const chaseRiders = budget.chaseRiders;
     if (chaseRiders > 0 && NearRiderView.available(POLICE_RIDERS)) {
       this.police.riders = new NearRiderView(chaseRiders, this.npcPool, { style: 'police', cast: POLICE_RIDERS, byGeneration: true });
-      this.npcPool.prebuild(POLICE_RIDERS.map((c) => c.id), chaseRiders);
     }
+    // Công an đi bộ: cùng kho với người lái công an (xuống xe thì người lái trả hình, người đi bộ lấy đúng mẫu đó).
+    if (footCap > 0) this.footPoliceView = new FootPoliceView(footCap + MAX_CORPSES, this.npcPool);
+    const policeShown = (this.police.riders ? chaseRiders : 0) + footCap;
+    if (policeShown > 0) this.npcPool.prebuild(POLICE_RIDERS.map((c) => c.id), policeShown);
     if (chaseRiders > 0 && NearRiderView.available(GANG_RIDERS)) {
       scene.add(this.gangPool.root);
       this.chase.riders = new NearRiderView(chaseRiders, this.gangPool, { style: 'gang', cast: GANG_RIDERS, byGeneration: true });
@@ -466,22 +482,25 @@ export class Game {
     this.combo = heavy ? 0 : nextCombo(this.combo, this.sinceAttack);
     const def = attackFor(this.equipped, this.combo, heavy);
     const p = this.character.feet();
-    let best = -1;
+    let found = false;
+    let tx = 0;
+    let tz = 0;
     let bestD = 2.4;
     const yaw = this.character.yaw;
-    for (const w of this.pedestrians.walkers) {
-      if (w.dead) continue;
-      const d = Math.hypot(w.x - p.x, w.z - p.z);
-      const facing = ((w.x - p.x) * Math.sin(yaw) + (w.z - p.z) * Math.cos(yaw)) / Math.max(d, 1e-3);
+    // Người đi đường hoặc công an đi bộ gần nhất phía trước.
+    const consider = (x: number, z: number): void => {
+      const d = Math.hypot(x - p.x, z - p.z);
+      const facing = ((x - p.x) * Math.sin(yaw) + (z - p.z) * Math.cos(yaw)) / Math.max(d, 1e-3);
       if (d < bestD && facing > 0.25) {
         bestD = d;
-        best = w.id;
+        tx = x;
+        tz = z;
+        found = true;
       }
-    }
-    if (best >= 0) {
-      const w = this.pedestrians.walkers[best]!;
-      this.character.yaw = Math.atan2(w.x - p.x, w.z - p.z);
-    }
+    };
+    for (const w of this.pedestrians.walkers) if (!w.dead) consider(w.x, w.z);
+    for (const o of this.footPolice.officers) if (!o.dead) consider(o.x, o.z);
+    if (found) this.character.yaw = Math.atan2(tx - p.x, tz - p.z);
     this.model.attack?.(def.clip, def.duration);
     this.attack = def;
     this.attackT = 0;
@@ -513,6 +532,26 @@ export class Game {
           if (b.pool > 0) this.queuePool(w.id, w.generation, r === 'dead' ? 1.5 : 0.7, b.pool);
         }
       }
+      // Công an đi bộ: trúng đòn như người đi đường (khoẻ hơn); đánh công an là lên sao.
+      let cops = 0;
+      let copKills = 0;
+      for (const o of this.footPolice.officers) {
+        if (o.dead || !inStrike(p.x, p.z, yaw, def.reach, def.arc, o.x, o.z)) continue;
+        const r = this.footPolice.hit(o.id, def.damage, p.x, p.z, def.knock);
+        if (!r) continue;
+        hits++;
+        cops++;
+        if (r === 'dead') {
+          kills++;
+          copKills++;
+        }
+        if (this.bloodOn) {
+          const b = bloodFor(this.equipped, r);
+          this.blood.spray(o.x, PAD_HEIGHT + 1.2, o.z, o.x - p.x, o.z - p.z, b.drops, PAD_HEIGHT);
+          if (b.pool > 0) this.queuePool(OFFICER_POOL + o.id, 0, r === 'dead' ? 1.5 : 0.7, b.pool);
+        }
+      }
+      if (cops > 0) this.assaultPolice(copKills > 0, p.x, p.z);
       if (hits > 0) {
         this.hitStop = def.knock ? 0.11 : 0.06;
         this.camera.shake(def.knock ? 0.07 : 0.035);
@@ -554,6 +593,39 @@ export class Game {
     }
     this.murderT = Math.max(0, this.murderT - dt);
     this.carjackT = Math.max(0, this.carjackT - dt);
+  }
+
+  /** Sự kiện của công an đi bộ mỗi bước: dùi cui trúng Tín, có người vừa xuống xe (còi), sắp bị còng (nhắc chạy). */
+  private handleFootPolice(): void {
+    const fp = this.footPolice;
+    if (fp.damageToPlayer > 0) {
+      this.hurtPlayer(fp.damageToPlayer);
+      fp.damageToPlayer = 0;
+    }
+    if (fp.dismounted > 0) {
+      fp.dismounted = 0;
+      playSfx('whistle');
+      if (!this.footPoliceWarned) {
+        this.footPoliceWarned = true;
+        this.hud.showToast('Công an xuống xe! Đứng yên là bị còng — chạy đi hoặc đánh', 3);
+      }
+    }
+    if (fp.grabProgress > 0.3 && !this.grabWarned) {
+      this.grabWarned = true;
+      this.hud.showToast('Công an nắm tay rồi — chạy ngay!', 1.8);
+    } else if (fp.grabProgress <= 0) this.grabWarned = false;
+    if (this.wanted.level <= 0) this.footPoliceWarned = false;
+  }
+
+  /** Đánh công an: truy nã lên ít nhất 4 sao (giết công an: 5 sao); từ đó công an rút dùi cui đánh lại. */
+  private assaultPolice(killed: boolean, x: number, z: number): void {
+    const before = this.wanted.level;
+    const want = killed ? 5 : 4;
+    this.wanted.raise(Math.max(0, want - before), x, z);
+    if (this.wanted.level > before) {
+      this.hud.showToast(killed ? 'Giết công an — truy nã 5 sao!' : 'Tấn công người thi hành công vụ — truy nã 4 sao!', 3);
+      playSfx('alert');
+    }
   }
 
   /**
@@ -609,6 +681,19 @@ export class Game {
     this.poolRadius[slot] = radius;
   }
 
+  /** Vũng máu dưới thân công an đi bộ `id` (đã lên xe / bị dọn thì thôi). */
+  private officerPool(id: number, radius: number): void {
+    const o = this.footPolice.find(id);
+    if (!o) return;
+    let x = o.x;
+    let z = o.z;
+    if (this.footPoliceView?.pelvisOf(id, this.tmp)) {
+      x = this.tmp.x;
+      z = this.tmp.z;
+    }
+    this.blood.pool(x, PAD_HEIGHT, z, radius);
+  }
+
   /** Máu: giọt bay, vết mờ dần; tới giờ thì loang vũng dưới thân người nằm (hông nhân vật có xương, hoặc ước lượng). */
   private updateBlood(dt: number): void {
     this.blood.step(dt);
@@ -618,6 +703,10 @@ export class Game {
       this.poolTimer[i]! -= dt;
       if (this.poolTimer[i]! > 0) continue;
       this.poolWalker[i] = -1;
+      if (id >= OFFICER_POOL) {
+        this.officerPool(id - OFFICER_POOL, this.poolRadius[i]!);
+        continue;
+      }
       const w = this.pedestrians.walkers[id];
       // Người đã được đặt lại chỗ khác (đi xa rồi quay lại) ⇒ thôi.
       if (!w || w.generation !== this.poolGeneration[i]) continue;
@@ -796,6 +885,7 @@ export class Game {
     // Xe của Tín được đưa tới đậu bên trái (trái của hướng (sin, cos) là (cos, −sin)).
     this.bikes[0]?.phys.reset(place.x + Math.cos(place.yaw) * 1.6, PAD_HEIGHT, place.z - Math.sin(place.yaw) * 1.6, place.yaw);
     this.wanted.clear();
+    this.footPolice.clear();
     this.police.sim.disperse();
     this.heat.set(0);
     this.chase.sim.disperse();
@@ -1505,9 +1595,14 @@ export class Game {
       runner.speed = this.riding ? Math.abs(this.riding.phys.speed) : this.character.actualSpeed;
       runner.dirX = Math.sin(heading);
       runner.dirZ = Math.cos(heading);
+      runner.onFoot = !this.riding;
       if (this.chase.step(STEP, runner, this.heat.level)) this.caughtThisStep = true;
       if (this.police.step(STEP, runner, this.wanted.level) && !this.outcome) this.bustedThisStep = true;
-      if (this.wanted.update(STEP, this.police.sim.seen, me.x, me.z, this.wanted.level > 0 && this.inHem(me.x, me.z)) === 'escaped') {
+      // Công an xuống xe đuổi bộ: còng tay Tín đứng yên, đánh lại bằng dùi cui.
+      if (this.footPolice.update(STEP, runner, this.wanted.level) && !this.outcome) this.bustedThisStep = true;
+      this.handleFootPolice();
+      const policeSees = this.police.sim.seen || this.footPolice.seen;
+      if (this.wanted.update(STEP, policeSees, me.x, me.z, this.wanted.level > 0 && this.inHem(me.x, me.z)) === 'escaped') {
         this.police.sim.disperse();
         this.hud.showToast('Đã thoát khỏi truy nã!', 2.4);
         playSfx('escaped');
@@ -1600,6 +1695,7 @@ export class Game {
     this.traffic.render(alpha, dt, this.view.position.x, this.view.position.z);
     this.chase.render(alpha, dt, this.view.position.x, this.view.position.z);
     this.police.render(alpha, dt, this.view.position.x, this.view.position.z);
+    this.footPoliceView?.update(this.footPolice.officers, this.footPolice.hostile || this.wanted.level >= FOOT_POLICE.hostileLevel, alpha, dt);
     if (this.caughtThisStep) {
       this.caughtThisStep = false;
       this.caught();

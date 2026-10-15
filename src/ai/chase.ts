@@ -21,8 +21,13 @@ export type ChaserKind = 'bike' | 'car';
 export interface Chaser {
   id: number;
   kind: ChaserKind;
-  /** 'chase' = bám theo Tín; 'block' = ô tô đỗ chắn ngang đường (chốt chặn), đứng yên tới khi Tín qua khỏi. */
-  mode: 'chase' | 'block';
+  /**
+   * 'chase' = bám theo Tín; 'block' = ô tô đỗ chắn ngang đường (chốt chặn), đứng yên tới khi Tín qua khỏi;
+   * 'parked' = dừng lại cho công an xuống đuổi bộ (FootPolice) — phanh tới khi đứng yên, không bám / bắt ai nữa.
+   */
+  mode: 'chase' | 'block' | 'parked';
+  /** Người lái còn trên xe (false: đã xuống đuổi bộ — hình bỏ người lái). */
+  rider: boolean;
   /** Chốt chặn: còn đứng bao lâu (s), và hướng con đường lúc đặt chốt (để biết Tín đã vượt qua chưa). */
   life: number;
   roadX: number;
@@ -248,6 +253,7 @@ export class ChaseSim {
       id: this.nextId++,
       kind,
       mode: 'chase',
+      rider: true,
       life: 0,
       roadX: 0,
       roadZ: 0,
@@ -347,12 +353,13 @@ export class ChaseSim {
     const lvl = clamp(level, 0, cfg.perLevel.length - 1);
     const want = cfg.perLevel[lvl] as number;
     const wantCars = Math.min(want, cfg.carsPerLevel?.[lvl] ?? 0);
-    // Xe chốt chặn không tính vào số xe đuổi theo cấp. Hạ cấp / hết truy đuổi: các xe thừa (sau `want` xe đầu) rút lui.
+    // Xe chốt chặn không tính vào số xe đuổi theo cấp (xe đỗ cho công an xuống đuổi bộ thì vẫn tính). Hạ cấp / hết
+    // truy đuổi: các xe thừa (sau `want` xe đầu) rút lui.
     let active = 0;
     let cars = 0;
     for (let i = 0; i < this.chasers.length; i++) {
       const c = this.chasers[i]!;
-      if (c.leaving || c.mode !== 'chase') continue;
+      if (c.leaving || c.mode === 'block') continue;
       if (active >= want) {
         c.leaving = true;
         continue;
@@ -377,6 +384,10 @@ export class ChaseSim {
       c.prevYaw = c.yaw;
       c.prevLean = c.lean;
       const car = c.kind === 'car' ? cfg.car : undefined;
+      if (c.mode === 'parked') {
+        this.stepParked(c, dt, car?.accel ?? cfg.accel);
+        continue;
+      }
       const d = Math.hypot(player.x - c.x, player.z - c.z);
       const visible = d < cfg.sightRange && this.sight.clear(c.x, c.z, player.x, player.z);
       if (!c.leaving && visible) this.seen = true;
@@ -491,6 +502,34 @@ export class ChaseSim {
       return true;
     }
     return false;
+  }
+
+  /** Dừng xe cho công an xuống đuổi bộ (FootPolice): phanh tới khi đứng yên, không bám / bắt ai nữa. */
+  park(c: Chaser): void {
+    if (c.mode === 'chase') c.mode = 'parked';
+  }
+
+  /** Người lái đã lên lại xe: bám theo tiếp (hoặc đi luôn nếu đang rút lui). */
+  unpark(c: Chaser): void {
+    c.mode = 'chase';
+    c.rider = true;
+    c.path.length = 0;
+    c.repath = 0;
+  }
+
+  /** Xe đang dừng: phanh gấp theo hướng đang chạy, ô tô không lọt vào hẻm. */
+  private stepParked(c: Chaser, dt: number, accel: number): void {
+    c.speed = Math.max(0, c.speed - accel * 2 * dt);
+    c.lean += (0 - c.lean) * (1 - Math.exp(-5 * dt));
+    if (c.speed <= 0) return;
+    const nx = c.x + Math.sin(c.yaw) * c.speed * dt;
+    const nz = c.z + Math.cos(c.yaw) * c.speed * dt;
+    if (c.kind === 'car' && this.hems && this.hems.at(c.x, c.z) < 0 && this.hems.at(nx, nz) >= 0) {
+      c.speed = 0;
+      return;
+    }
+    c.x = nx;
+    c.z = nz;
   }
 
   /**

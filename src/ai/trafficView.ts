@@ -15,6 +15,8 @@ export interface BikePose {
   prevYaw: number;
   prevLean: number;
   generation: number;
+  /** Xe không có người lái (công an đã xuống đuổi bộ): bỏ khối người lái, NearRiderView không đặt người lên yên. */
+  riderless?: boolean;
 }
 
 /**
@@ -314,7 +316,7 @@ export class TrafficView {
       r[12] = a.prevYaw + dyaw * alpha;
       r[13] = a.prevLean + (a.lean - a.prevLean) * alpha;
       setFrame();
-      const bare = skinned !== null && skinned.has(a.id);
+      const bare = a.riderless === true || (skinned !== null && skinned.has(a.id));
       writeParts(this.boxes, this.boxParts, i, look.cargo, bare);
       writeParts(this.cyls, this.cylParts, i, look.cargo, bare);
       writeParts(this.lamps, this.lampParts, i, look.cargo, bare);

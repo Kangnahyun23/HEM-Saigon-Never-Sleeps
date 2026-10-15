@@ -37,7 +37,7 @@ Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `
 Vật đổ bóng KHÔNG dùng `alphaTest` (để `castShadow: false`): lượt vẽ bóng dùng chung một vật liệu bóng, vật có / không
 alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (từng ăn ~16 % CPU + nửa rác bộ nhớ).
 NPC có xương lấy / trả qua kho chung `NpcPool` (ai/npcBody.ts — `KeyedPool` theo mẫu người, dựng sẵn lúc tải bằng
-`prebuild`; người đi bộ gần, người ngồi quán, người lái xe máy NPC gần và công an lái xe dùng chung; đàn em Phát có kho
+`prebuild`; người đi bộ gần, người ngồi quán, người lái xe máy NPC gần, công an lái xe và công an đi bộ dùng chung; đàn em Phát có kho
 riêng mặc đồ đen — `new NpcPool(GANG_CLOTHES)`) và ẩn bằng `showNpc(npc, false)` (tắt cả `matrixWorldAutoUpdate`):
 three.js vẫn tính ma trận xương của vật đang ẩn; bộ đệm hình riêng từng ô từng phình tới hàng chục nghìn xương sau vài phút chơi.
 NPC dùng bộ xương rút gọn 23 xương (assets/slimRig.ts: bỏ xương ngón tay + xương lá; clip lấy bằng `getNpcClip`, đã lọc
@@ -58,6 +58,8 @@ Nhân vật có xương: đừng gọi `skeleton.pose()` (lưới lượng tử 
 Đo tư thế trong một động tác (vị trí hông khi ngồi / lái) bằng `hipIn` (ai/npcBody.ts): PropertyMixer của three.js chỉ ghi
 xương khi kết quả trộn KHÁC khung trước ⇒ tự ghi tay vào xương rồi trả lại sẽ làm track tĩnh (clip nén một khoá) kẹt ở tư
 thế cũ; phải trả trọng số rồi `mixer.update(0)` để mixer tự ghi lại.
+Hình NPC vừa lấy từ kho có mọi trọng số động tác = 0: đặt thẳng trọng số đích lúc lấy (nearRiders, seatedPeople,
+footPoliceView `fresh`) — trộn dần từ 0 thì PropertyMixer trộn cả tư thế gốc chữ T vào (dang tay vài khung hình).
 Người lái xe máy (Tín và NPC) ngồi theo `RIDER_POSE` (vehicles/bikeModel.ts): ghim hông lên nửa trước yên, ngả người về
 trước, IK hai đoạn (`reachArm`, player/armIk.ts) đặt cổ tay lên tay nắm ghi-đông — động tác 'drive' gốc là tư thế lái ô tô.
 KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % thời gian vẽ): vật liệu kim loại / mặt nước cần phản chiếu
@@ -67,7 +69,8 @@ không vẽ vật đang biên dịch shader dở (số đo sẽ "nhanh" giả).
 Đo hiệu năng: `__HEM__.renderer.info.render` (lệnh vẽ, tam giác), `__HEM__.scene`, `__HEM__.camera`, `__HEM__.timings`
 (thời gian từng bước dựng cảnh lúc tải), `__HEM__.hardware` (card đồ hoạ, bậc máy, ngân sách cảnh).
 Dựng cảnh theo sức máy: `SCENE_BUDGETS` (hardware.ts) quyết định số xe NPC, người đi bộ (và số người đi bộ / người lái xe
-máy / người lái xe truy đuổi gần vẽ bằng nhân vật có xương), hạt mưa, cỡ bản đồ bóng lúc tải;
+máy / người lái xe truy đuổi gần vẽ bằng nhân vật có xương), số công an xuống xe đuổi bộ cùng lúc (`footPolice`),
+hạt mưa, cỡ bản đồ bóng lúc tải;
 thứ gì mới tốn theo số lượng thì đưa vào ngân sách đó. Playwright (navigator.webdriver) luôn dùng bậc "mạnh".
 Trên máy cloud không có GPU: e2e render bằng SwiftShader (~1 fps) — chậm nhưng đúng hình. Sau mỗi thay đổi về hình ảnh,
 chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước khi mở PR.
@@ -147,21 +150,29 @@ src/
                      pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /
                      gọi báo / đánh trả — có unit test), civilians (mẫu người dùng chung cho mô phỏng + hình), pedestrianView (khối hộp instanced),
                      nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test),
-                     seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương + kho chung NpcPool)
+                     seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương + kho chung NpcPool;
+                     dùi cui gắn tay phải `npc.baton`, ẩn khi trả về kho)
                      chase (xe truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test; cấu hình CHASE cho đàn em
                      Phát, POLICE_CHASE cho công an: từ 3 sao có ô tô (`carsPerLevel`) và chốt chặn ô tô đỗ ngang đường phía
-                     trước — `placeRoadblock`, chaser `mode: 'block'`), chaseSystem (thân Rapier + hình theo loại xe máy / ô tô;
+                     trước — `placeRoadblock`, chaser `mode: 'block'`; xe dừng cho người lái xuống: `mode: 'parked'`, `rider` =
+                     còn người trên xe), chaseSystem (thân Rapier + hình theo loại xe máy / ô tô;
                      công an có đèn chớp đỏ – xanh; chốt chặn là vật cản cho xe NPC qua `addObstacles`; xe máy gần camera
                      có người lái có xương — `chaseSystem.riders`: công an `POLICE_RIDERS`, đàn em `GANG_RIDERS` từ kho
                      riêng `game.gangPool`; xe truy đuổi đánh số theo chỗ trong mảng nên chọn người theo `generation`),
                      hemNav (HemMap — xe truy đuổi trong hẻm: xe máy ≤ `hemSpeed`, chậm hơn Tín chạy bộ; ô tô dừng ở miệng
                      hẻm; mất dấu trong hẻm thì tới chỗ thấy Tín lần cuối rồi men theo trục hẻm ra, không xuyên nhà — có unit test),
+                     footPolice (công an xuống xe đuổi bộ: xe tới gần Tín đang đi bộ thì dừng, người lái xuống — chạy 5,6 m/s,
+                     chậm hơn Tín; Tín đứng yên trong tầm 1,3 m đủ 2 s thì còng = bị bắt; đánh được (130 máu, `resolveHit`),
+                     bị đánh / từ 4 sao thì vung dùi cui đánh lại; Tín lên xe / mất dấu thì về xe; người lái gục thì xe bỏ lại,
+                     gọi xe khác tới; số người theo ngân sách `footPolice` — có unit test), footPoliceView (hình: đúng mẫu người
+                     + chiều cao như lúc lái — `pickRider` theo `generation` = id xe + 1; kho NpcPool chung với người lái),
                      patrol (xe tuần tra 'police' trong dòng xe NPC thấy Tín gây án ⇒ lên sao ngay, chính nó quay sang đuổi — có unit test)
   missions/          mission (chuỗi mục tiêu, giới hạn giờ — có unit test), jobs (kèo giao hàng có seed — có unit test),
                      director (nhiệm vụ đang chạy, bảng kèo trong điện thoại, điểm đánh dấu, HUD, trả tiền), marker
                      story (5 nhiệm vụ Hồi 1: điểm hẹn, lời thoại, trả nợ — có unit test), storyRunner
   audio/             âm thanh tổng hợp WebAudio (không file): mixer (MỘT AudioContext + âm lượng, phím M), engineSound
-                     (tiếng máy theo tốc độ / ga), ambience (ồn phố, dế đêm), sfx (tiền, tin nhắn, nhiệm vụ, truy đuổi, té xe),
+                     (tiếng máy theo tốc độ / ga), ambience (ồn phố, dế đêm), sfx (tiền, tin nhắn, nhiệm vụ, truy đuổi, té xe,
+                     còi tuýt công an xuống xe),
                      horn, rainSound, siren (còi hú công an theo khoảng cách); soundModel (thông số âm thanh — thuần logic, có unit test).
                      Âm thanh mới nối vào mixer.bus(), KHÔNG tạo AudioContext riêng.
   ui/                HUD (địa điểm, giờ, đồng hồ tốc độ, máu / giáp, sao truy nã, bảng phím F1, hàng thông báo — toastQueue
@@ -176,7 +187,8 @@ src/
                      shopCatalog (hàng + giá từng tiệm, mặc cả, cầm đồ mua lại, nâng cấp — có unit test; giao diện ui/shopPanel, phím E),
                      carjack (cướp xe: xe nào cướp được, tầm với, chỗ tài xế bị kéo ra — có unit test; tài xế là người đi bộ
                      `pedestrians.eject()` chạy lên vỉa hè gọi báo),
-                     wanted (sao truy nã công an 0–5: dân gọi báo ⇒ lên sao; vùng tìm kiếm theo sao, khuất mặt đủ lâu — nhanh
+                     wanted (sao truy nã công an 0–5: dân gọi báo ⇒ lên sao; đánh công an ⇒ 4 sao, giết ⇒ 5 sao —
+                     `game.assaultPolice`; vùng tìm kiếm theo sao, khuất mặt đủ lâu — nhanh
                      hơn khi ra khỏi vùng / trốn trong hẻm — thì thoát; có unit test),
                      social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),
                      inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu — có unit test; giao diện ui/backpack, phím I),
