@@ -1,6 +1,6 @@
 # Bàn giao dự án — HẺM: Sài Gòn Không Ngủ
 
-Cập nhật: 2026-10-15, sau R4 — người lái xe máy NPC, công an, đàn em có xương; xe truy đuổi chậm lại trong hẻm (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
+Cập nhật: 2026-10-15, sau R3 — người lái xe máy NPC, công an, đàn em có xương; xe truy đuổi chậm lại trong hẻm; công an xuống xe đuổi bộ, đánh được công an (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
 `docs/plan-v0.2.md` (kế hoạch v0.2 chi tiết + tiến độ) và `docs/gdd.md` (thiết kế đầy đủ).
 
 ## 1. Dự án là gì
@@ -294,6 +294,25 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
 - Kiểm tra: `hemNav.test.ts` (8 test; tắt HemMap thì 5 test truy đuổi đỏ), e2e `police` thêm test "công an đuổi vào
   hẻm" (ảnh `police-hem.png`).
 
+### R3 — đánh được công an: công an xuống xe đuổi bộ (nhánh `r3-danh-cong-an`, tách từ `r4-hem-cham`)
+- Chủ dự án: "làm thêm chức năng có thể tấn công cả công an". `ai/footPolice.ts` (`FootPoliceSim`, thuần logic, có seed):
+  - xe công an (xe máy, ô tô) đang đuổi mà cách Tín đang đi bộ < 9 m, thấy Tín ⇒ `ChaseSim.park` (chaser `mode: 'parked'`:
+    phanh dần rồi đứng lại); xe đứng hẳn thì người lái xuống bên trái xe (`rider = false` ⇒ xe vẽ không người lái —
+    `BikePose.riderless`);
+  - công an chạy 5,6 m/s (Tín 6,4 m/s ⇒ chạy là thoát); áp sát Tín đứng yên / đi chậm (< 2 m/s) trong 1,3 m đủ 2 s ⇒ còng
+    tay = bị bắt (màn hình BỊ BẮT như cũ). HUD: "Công an xuống xe!" kèm còi tuýt (`sfx 'whistle'`), "nắm tay rồi — chạy ngay!";
+  - đánh được: 130 máu (người đi đường 100), trúng đòn qua `resolveHit` như người đi đường; đánh công an ⇒ 4 sao, giết ⇒
+    5 sao (`game.assaultPolice`); đã bị đánh (hoặc từ 4 sao) thì công an vung dùi cui đánh lại: 8 máu mỗi cú, nghỉ 1,2–1,8 s;
+  - Tín lên xe / hết sao / mất dấu 5 s ⇒ công an chạy về xe (Tín không còn thấy thì "lên xe" luôn), xe đuổi tiếp;
+  - người lái gục ⇒ xe bỏ lại bên đường (`leaving`, đứng yên), đoàn truy đuổi gọi xe khác tới; xác nằm lại tối đa 2,
+    dọn khi khuất mặt Tín.
+- Số người xuống xe cùng lúc theo sức máy: `SCENE_BUDGETS.footPolice` (yếu 2, vừa 3, mạnh 4); 0 chỗ (hoặc mẫu công an chưa
+  tải được) thì xe tự bắt như trước. Hình (`ai/footPoliceView.ts`): đúng người + chiều cao như lúc lái (`pickRider` theo
+  `generation`), xuống từ xe máy thì vẫn đội mũ, tay phải cầm dùi cui (`npc.baton`, npcBody); động tác chạy / thủ thế / nắm
+  tay / vung dùi cui (`slashA`) / trúng đòn / ngã / gục. Dùng chung kho NpcPool với người lái (dựng sẵn thêm `footPolice` thân).
+- Kiểm tra: `footPolice.test.ts` (7 test), e2e `police` thêm test "đánh công an" (ảnh `police-foot.png`,
+  `police-fight.png`); e2e `patrol` đếm cả xe đang đậu cho người lái xuống. Lúc chơi 0 pipeline mới.
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -314,8 +333,8 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
 ### Việc nhỏ đã dời lại (ghi để khỏi quên)
 - **Chiến đấu**:
   - né (Q) và đỡ đòn;
-  - công an đi bộ xuống xe đuổi / còng tay;
-  - đánh được công an (`Wanted.raise` đã sẵn cho 4–5 sao).
+  - công an đi bộ chưa có thân vật lý (Tín đi xuyên qua được; chỉ tự giãn cách nhau), chưa hiện trên bản đồ nhỏ;
+  - xác công an có thể nằm đè lên chân Tín (chưa đẩy ra).
 - **Nhân vật**:
   - người lái xe máy NPC có xương chưa nghiêng tay lái / chống chân khi dừng đèn đỏ;
   - công an quân phục ô-liu nhưng giày, thắt lưng cũng thành ô-liu (mặt nạ trang phục chỉ phân biệt da / không phải da);
@@ -339,6 +358,8 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   `tickScale`. Nhịp màn hình kết cục đổi dt game sang giây thật bằng cách chia `timeScale`.
 - Test đánh người giữa phố: xe tuần tra (N7.3) đi ngang thấy là bắt ngay ⇒ màn hình BỊ BẮT khoá điều khiển, đòn sau
   không ra. Test không kiểm tra công an thì tắt nó: `game.patrolSees = () => undefined` (xem `combat.spec.ts`).
+- Tín đi bộ mà có sao: xe công an tới gần là dừng cho người lái xuống (`mode: 'parked'`, R3) ⇒ test đếm xe truy đuổi
+  bằng `mode === 'chase'` sẽ thiếu xe — đếm `mode !== 'block'`.
 - HUD chỉ cập nhật trong `game.update`: đổi trạng thái lúc đang dừng thì phải `simulate(1/60)` rồi mới kiểm tra DOM.
 - Test `phone` từng hỏng một lần trên CI (3 thay vì 4 tin nhắn) mà không tái hiện được. Test giờ chờ đủ tin và in
   `playTime` + hộp thư nếu thiếu — gặp lại thì đọc thông tin đó.
@@ -352,6 +373,8 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   rồi tự trả lại ⇒ track không đổi theo thời gian (clip nén một khoá: chân trong 'drive' / 'sit') kẹt ở giá trị ghi tay —
   từng làm người lái NPC "đứng" trên yên. Đo tư thế thì dùng `hipIn` (trả trọng số rồi `mixer.update(0)`); IK chạy SAU
   `mixer.update` mỗi khung và chỉ đúng nếu điểm xuất phát là tư thế của clip (Tín: trả xương về `armRest` trước IK).
+- Hình NPC vừa lấy từ kho có mọi trọng số = 0; trộn dần lên thì PropertyMixer trộn cả tư thế gốc chữ T vào (công an vừa
+  xuống xe dang tay). Đặt thẳng trọng số đích ở khung đầu (`fresh` trong footPoliceView; nearRiders / seatedPeople đặt lúc lấy).
 
 **Vật lý và truy đuổi**
 - Xe truy đuổi là thân Rapier kinematic: không gì chặn được (xuyên tường) ⇒ đường đi phải tự tránh nhà — đường lớn theo
@@ -361,14 +384,12 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   độ mục tiêu (tạo vòng lặp càng hất càng nhanh).
 
 ## 6. Trạng thái lúc kết thúc phiên
-- PR #28–#34 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1, P2) đã merge vào `main`, `main` đã deploy. P3 là PR #35.
-- R1 là PR #36 (nhánh `r1-nguoi-lai-xe`, tách từ `perf-3-toi-uu`); R2 là PR #37 (nhánh `r2-cong-an-co-xuong`, tách từ R1);
-  R4 nằm trên nhánh `r4-hem-cham` (tách từ R2). Unit test: 302 (thêm `nearRiders.test.ts`, `armIk.test.ts`,
-  `outfits.test.ts`, `hemNav.test.ts`).
-- Việc tiếp theo chủ dự án đã giao (2026-10-15), mỗi việc một PR (danh sách R1–R4 trong plan-v0.2.md): ~~người lái xe NPC
-  thành nhân vật có xương~~ (R1) → ~~công an là nhân vật có xương~~ (R2) → đánh được công an (R3: công an xuống xe đuổi
-  bộ — mẫu `police-m` / `police-f` đã mặc quân phục ô-liu sẵn trong kho chung) → ~~công an truy đuổi chậm lại trong hẻm~~
-  (R4, làm trước R3). Còn R3.
+- PR #28–#36 (N6.4, N7.1 phần 1–2, N7.2, N7.3, P1–P3, R1) đã merge vào `main`.
+- R2 là PR #37 (nhánh `r2-cong-an-co-xuong`), R4 là PR #38 (nhánh `r4-hem-cham`, tách từ R2), R3 là PR #39 (nhánh
+  `r3-danh-cong-an`, tách từ R4) — merge đúng thứ tự #37 → #38 → #39 (merge commit, không squash: nhánh xếp chồng).
+  Unit test: 309 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`, `hemNav.test.ts`, `footPolice.test.ts`).
+- Việc chủ dự án giao 2026-10-15 (R1–R4 trong plan-v0.2.md) đã làm hết: người lái xe NPC có xương (R1), công an có xương
+  (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4). Tiếp theo: N7.4–N10.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

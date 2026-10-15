@@ -234,3 +234,118 @@ test('công an đuổi vào hẻm: xe máy chạy chậm hơn Tín chạy bộ, 
   expect(result.carSpeed).toBeLessThan(0.5);
   await shot(page, 'police-hem');
 });
+
+test('đánh công an: công an xuống xe đuổi bộ; chém thì lên 4 sao, công an rút dùi cui đánh lại; giết thì 5 sao', async ({ page }) => {
+  test.setTimeout(400_000);
+  await page.goto('/?moi=1&gio=10');
+  await page.waitForFunction(() => window.__HEM__?.ready === true, null, { timeout: 90_000 });
+
+  type Officer = { id: number; vehicle: number; x: number; z: number; yaw: number; health: number; dead: boolean; strike: number };
+  type Foot = Game & {
+    health: number;
+    outcome: string | null;
+    freeCamera: boolean;
+    patrolSees: () => void;
+    character: { yaw: number };
+    footPolice: { officers: Officer[]; hostile: boolean };
+    police: { sim: { chasers: Array<{ id: number; mode: string; rider: boolean; leaving: boolean }> } };
+  };
+
+  // 2 sao, cầm mã tấu, đứng giữa đại lộ; tắt xe tuần tra trong dòng xe (chỉ có đoàn truy nã).
+  await page.evaluate(() => {
+    const h = window.__HEM__!;
+    h.paused = true;
+    const g = h.game as Foot;
+    g.patrolSees = () => undefined;
+    const layout = h.layout as { spawn: { x: number }; roads: Array<{ axis: string; kind: string; pos: number }> };
+    const avenue = layout.roads.find((r) => r.axis === 'x' && r.kind === 'avenue')!;
+    g.character.teleport(layout.spawn.x, 0.4, avenue.pos, 0);
+    g.inventory.add('maTau');
+    g.equipped = 'maTau';
+    (h.simulate as (s: number) => void)(0.2);
+    (h.setWanted as (n: number) => void)(2);
+  });
+  // Xe công an tới gần thì dừng, người lái xuống đuổi bộ; xe đứng lại không người lái.
+  let officers = 0;
+  for (let i = 0; i < 60 && officers === 0; i++) {
+    officers = await page.evaluate(() => {
+      (window.__HEM__!.simulate as (s: number) => void)(0.25);
+      return (window.__HEM__!.game as Foot).footPolice.officers.length;
+    });
+  }
+  expect(officers).toBeGreaterThan(0);
+  const parked = await page.evaluate(() => {
+    const h = window.__HEM__!;
+    const g = h.game as Foot;
+    (h.simulate as (s: number) => void)(0.4);
+    const o = g.footPolice.officers[0]!;
+    // Nhìn công an từ phía trước chếch bên trái.
+    (h.setCamera as (...a: number[]) => void)(o.x + Math.cos(o.yaw) * 2.6 + Math.sin(o.yaw) * 2.2, 1.7, o.z - Math.sin(o.yaw) * 2.6 + Math.cos(o.yaw) * 2.2, o.x, 1, o.z);
+    return g.police.sim.chasers.filter((c) => c.mode === 'parked' && !c.rider).length;
+  });
+  expect(parked).toBeGreaterThan(0);
+  await expect(page.locator('.hud-toast')).toContainText('Công an xuống xe');
+  await shot(page, 'police-foot');
+
+  // Chém công an gần nhất (combo mã tấu 3 nhát) ⇒ chống người thi hành công vụ: 4 sao, công an đánh lại.
+  const strike = (heavy: boolean) =>
+    page.evaluate((heavy) => {
+      const h = window.__HEM__!;
+      const g = h.game as Foot;
+      const input = h.input as { setKey(c: string, d: boolean): void };
+      const p = g.character.feet();
+      let o: Officer | null = null;
+      for (const x of g.footPolice.officers) if (!x.dead && (!o || Math.hypot(x.x - p.x, x.z - p.z) < Math.hypot(o.x - p.x, o.z - p.z))) o = x;
+      if (o) g.character.yaw = Math.atan2(o.x - p.x, o.z - p.z);
+      const key = heavy ? 'Mouse2' : 'Mouse0';
+      input.setKey(key, true);
+      (h.simulate as (s: number) => void)(1 / 60);
+      input.setKey(key, false);
+      (h.simulate as (s: number) => void)(heavy ? 0.9 : 0.55);
+    }, heavy);
+  await page.evaluate(() => ((window.__HEM__!.game as Foot).freeCamera = false));
+  for (let k = 0; k < 3; k++) await strike(false);
+  const hit = await page.evaluate(() => {
+    const g = window.__HEM__!.game as Foot;
+    return { wanted: g.wanted.level, hostile: g.footPolice.hostile, hurt: g.footPolice.officers.filter((o) => o.health < 130).length, health: g.health };
+  });
+  expect(hit.wanted).toBe(4);
+  expect(hit.hostile).toBe(true);
+  expect(hit.hurt).toBeGreaterThan(0);
+  await expect(page.locator('.hud-toast')).toContainText('truy nã 4 sao');
+
+  // Công an hoàn hồn thì vung dùi cui: Tín mất máu. Chụp lúc đang vung.
+  let beaten = false;
+  for (let i = 0; i < 50 && !beaten; i++) {
+    beaten = await page.evaluate((h0) => {
+      (window.__HEM__!.simulate as (s: number) => void)(0.1);
+      return (window.__HEM__!.game as Foot).health < h0;
+    }, hit.health);
+  }
+  expect(beaten).toBe(true);
+  await page.evaluate(() => {
+    const h = window.__HEM__!;
+    const g = h.game as Foot;
+    const o = g.footPolice.officers.find((x) => x.strike > 0) ?? g.footPolice.officers.find((x) => !x.dead)!;
+    (h.setCamera as (...a: number[]) => void)(o.x + Math.cos(o.yaw) * 2.8 + Math.sin(o.yaw) * 1.6, 1.8, o.z - Math.sin(o.yaw) * 2.8 + Math.cos(o.yaw) * 1.6, o.x, 1, o.z);
+  });
+  await shot(page, 'police-fight');
+
+  // Đòn mạnh tới khi hạ một người ⇒ giết công an: 5 sao; xe của người đó bỏ lại bên đường.
+  let killed = false;
+  for (let k = 0; k < 8 && !killed; k++) {
+    await strike(true);
+    killed = await page.evaluate(() => (window.__HEM__!.game as Foot).footPolice.officers.some((o) => o.dead));
+  }
+  expect(killed).toBe(true);
+  const after = await page.evaluate(() => {
+    const g = window.__HEM__!.game as Foot;
+    const dead = g.footPolice.officers.find((o) => o.dead)!;
+    const vehicle = g.police.sim.chasers.find((c) => c.id === dead.vehicle);
+    return { wanted: g.wanted.level, abandoned: vehicle ? vehicle.leaving && !vehicle.rider : true, outcome: g.outcome };
+  });
+  expect(after.wanted).toBe(5);
+  expect(after.abandoned).toBe(true);
+  expect(after.outcome).toBeNull();
+  await expect(page.locator('.hud-toast')).toContainText('Giết công an');
+});

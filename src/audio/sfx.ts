@@ -1,7 +1,7 @@
 import { mixer } from './mixer';
 
 /** Các hiệu ứng âm thanh theo sự kiện trong game (tổng hợp bằng WebAudio, không dùng file). */
-export type Sfx = 'money' | 'lose' | 'message' | 'phoneOpen' | 'phoneClose' | 'start' | 'complete' | 'fail' | 'alert' | 'escaped' | 'crash' | 'swing' | 'hit' | 'hitHeavy' | 'pickup' | 'scream';
+export type Sfx = 'money' | 'lose' | 'message' | 'phoneOpen' | 'phoneClose' | 'start' | 'complete' | 'fail' | 'alert' | 'escaped' | 'crash' | 'swing' | 'hit' | 'hitHeavy' | 'pickup' | 'scream' | 'whistle';
 
 type Wave = OscillatorType;
 
@@ -59,6 +59,7 @@ const PRIORITY: Record<Sfx, number> = {
   hitHeavy: 3,
   pickup: 1,
   scream: 2,
+  whistle: 2,
 };
 /** Trong khoảng này (giây) sau một tiếng, tiếng ưu tiên thấp hơn bị bỏ. */
 const OVERLAP = 0.4;
@@ -126,6 +127,9 @@ export function playSfx(name: Sfx): void {
       case 'scream': // người đi đường la "Á!": hai giọng chói trượt xuống
         note(ctx, 980, t, 0.34, 'sawtooth', 0.035, 560);
         note(ctx, 1240, t + 0.03, 0.28, 'triangle', 0.03, 700);
+        break;
+      case 'whistle': // còi công an "tuýt tuýt": hai hồi rung cao (nốt cao xen kẽ thật nhanh)
+        for (let k = 0; k < 2; k++) for (let i = 0; i < 6; i++) note(ctx, i % 2 ? 3150 : 2850, t + k * 0.36 + i * 0.04, 0.05, 'sine', 0.05);
         break;
       case 'pickup': // nhặt đồ: "lạch cạch" ngắn
         thud(ctx, t, 0.08, 1800, 0.25);

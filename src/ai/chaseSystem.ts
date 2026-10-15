@@ -255,6 +255,7 @@ export class ChaseSystem {
 function copyBike(out: BikePose, c: Chaser, slot: number): void {
   out.id = slot;
   out.generation = c.id + 1;
+  out.riderless = !c.rider;
   out.x = c.x;
   out.z = c.z;
   out.yaw = c.yaw;

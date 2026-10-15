@@ -38,6 +38,7 @@ function fakeBody(id: CharacterId): NpcBody {
     timeScales: actions.map((a) => a.timeScale),
     pelvis,
     handset: new THREE.Object3D(),
+    baton: new THREE.Object3D(),
     helmet,
     arms: null,
   };

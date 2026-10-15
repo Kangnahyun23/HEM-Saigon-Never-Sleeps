@@ -5,6 +5,7 @@ import { CHARACTERS, type AnimationName, type CharacterId } from '@/assets/manif
 import type { Outfit } from '@/assets/outfits';
 import { KeyedPool } from '@/core/keyedPool';
 import { CIVILIANS } from './civilians';
+import { FOOT_POLICE } from './footPolice';
 
 export { CIVILIANS } from './civilians';
 
@@ -42,14 +43,16 @@ export const NPC_CLIPS = [
   'sit',
   'sitTalk',
   'drive',
+  // Công an vung dùi cui (động tác chém kiếm một tay).
+  'slashA',
 ] as const satisfies readonly AnimationName[];
 export type NpcClip = (typeof NPC_CLIPS)[number];
 
 /** Chỉ số action của từng động tác trong mọi NpcBody. */
 export const NPC_ACTION = Object.fromEntries(NPC_CLIPS.map((name, i) => [name, i])) as Readonly<Record<NpcClip, number>>;
 
-/** Động tác chỉ phát một lần rồi giữ tư thế cuối (trúng đòn, ngã, gục, cú đấm). */
-const ONCE: readonly NpcClip[] = ['hitChest', 'knockback', 'deathA', 'deathB', 'jab'];
+/** Động tác chỉ phát một lần rồi giữ tư thế cuối (trúng đòn, ngã, gục, cú đấm, vung dùi cui). */
+const ONCE: readonly NpcClip[] = ['hitChest', 'knockback', 'deathA', 'deathB', 'jab', 'slashA'];
 /** Cú đấm của NPC dài 0,5 s; động tác gục tua nhanh cho ngã trong ~1,9 s (deathA dài 4,5 s, deathB 1,9 s). */
 const PUNCH_SECONDS = 0.5;
 const DEATH_SECONDS = 1.9;
@@ -69,6 +72,8 @@ export interface NpcBody {
   readonly pelvis: THREE.Object3D | null;
   /** Điện thoại trong tay phải (ẩn; hiện khi gọi báo / quay video). */
   readonly handset: THREE.Object3D;
+  /** Dùi cui trong tay phải (ẩn; hiện khi là công an đi bộ). */
+  readonly baton: THREE.Object3D;
   /** Mũ bảo hiểm trên đầu (ẩn; hiện khi lái xe). Vật liệu riêng từng hình: màu mũ đặt qua `material.color`. */
   readonly helmet: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardNodeMaterial>;
   /** Xương tay trái / phải (cánh tay trên, cẳng tay, cổ tay) cho IK đặt tay lên ghi-đông; null nếu mẫu thiếu xương. */
@@ -93,6 +98,9 @@ export interface NpcSource {
 
 const PHONE_GEO = new THREE.BoxGeometry(0.07, 0.14, 0.01);
 const PHONE_MAT = new THREE.MeshStandardNodeMaterial({ color: '#15171c', roughness: 0.3 });
+/** Dùi cui cao su đen dài ~0,55 m, trục dọc +Z cục bộ (cầm như vũ khí của Tín), cán ở gốc. */
+const BATON_GEO = new THREE.CylinderGeometry(0.017, 0.02, 0.55, 8).rotateX(Math.PI / 2).translate(0, 0, 0.2);
+const BATON_MAT = new THREE.MeshStandardNodeMaterial({ color: '#16171a', roughness: 0.55 });
 
 /** Mũ bảo hiểm (cỡ như mũ của Tín): vỏ nửa cầu trắng (nhân màu vật liệu) + kính tối, gộp một khối — một lệnh vẽ. */
 function helmetGeometry(): THREE.BufferGeometry {
@@ -123,6 +131,8 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, outfit: Outfit
   }
   const punch = actions[NPC_ACTION.jab]!;
   punch.timeScale = punch.getClip().duration / PUNCH_SECONDS;
+  const strike = actions[NPC_ACTION.slashA]!;
+  strike.timeScale = strike.getClip().duration / FOOT_POLICE.strikeTime;
   for (const name of ['deathA', 'deathB'] as const) {
     const fall = actions[NPC_ACTION[name]]!;
     fall.timeScale = Math.max(1, fall.getClip().duration / DEATH_SECONDS);
@@ -134,6 +144,12 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, outfit: Outfit
   const hand = body.getObjectByName('hand_r');
   // Trong lòng bàn tay phải (tư thế gốc chữ T: tay phải duỗi về phía −X), như điện thoại của Tín.
   if (hand) attachToBone(body, hand, handset, new THREE.Vector3(-0.08, -0.02, 0.03));
+  const baton = new THREE.Mesh(BATON_GEO, BATON_MAT);
+  baton.name = 'npc-baton';
+  baton.visible = false;
+  baton.castShadow = false;
+  // Chỗ cầm như vũ khí của Tín (skinnedCharacter: grip).
+  if (hand) attachToBone(body, hand, baton, new THREE.Vector3(-0.09, -0.02, 0));
   const helmet = new THREE.Mesh(HELMET_GEO, new THREE.MeshStandardNodeMaterial({ vertexColors: true, roughness: 0.35 }));
   helmet.name = 'npc-helmet';
   helmet.visible = false;
@@ -153,12 +169,13 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, outfit: Outfit
     timeScales: actions.map((a) => a.timeScale),
     pelvis: body.getObjectByName('pelvis') ?? null,
     handset,
+    baton,
     helmet,
     arms: left && right ? { left, right } : null,
   };
 }
 
-/** Đưa hình về trạng thái mới tinh trước khi dùng lại: mọi động tác tắt, tốc độ phát gốc, cất điện thoại và mũ. */
+/** Đưa hình về trạng thái mới tinh trước khi dùng lại: mọi động tác tắt, tốc độ phát gốc, cất điện thoại, dùi cui, mũ. */
 function resetNpc(npc: NpcBody): void {
   npc.weights.fill(0);
   for (let i = 0; i < npc.actions.length; i++) {
@@ -167,6 +184,7 @@ function resetNpc(npc: NpcBody): void {
     a.timeScale = npc.timeScales[i]!;
   }
   npc.handset.visible = false;
+  npc.baton.visible = false;
   npc.helmet.visible = false;
   npc.body.rotation.set(0, 0, 0);
 }

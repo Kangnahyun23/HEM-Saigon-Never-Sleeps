@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 type Agent = { kind: string; x: number; z: number; yaw: number; speed: number; generation: number };
-type Chaser = { kind: 'bike' | 'car'; mode: 'chase' | 'block'; x: number; z: number; yaw: number; leaving: boolean };
+type Chaser = { kind: 'bike' | 'car'; mode: 'chase' | 'block' | 'parked'; x: number; z: number; yaw: number; leaving: boolean };
 type Walker = { id: number; x: number; z: number; yaw: number; dead: boolean; react: string; enter: number };
 type Game = {
   traffic: { sim: { bikes: number; agents: Agent[] } };
@@ -130,7 +130,7 @@ test('3 sao: ô tô công an truy đuổi, chốt chặn chắn ngang đường 
   }
   await shot(page, 'patrol-3-roadblock-night');
 
-  // Chờ đoàn xe đuổi tới: 3 sao có một ô tô công an.
+  // Chờ đoàn xe đuổi tới: 3 sao có một ô tô công an (tới gần Tín đang đi bộ thì dừng cho người lái xuống — vẫn tính).
   const cars = await page.evaluate(() => {
     const h = window.__HEM__!;
     const g = h.game as Game;
@@ -138,11 +138,11 @@ test('3 sao: ô tô công an truy đuổi, chốt chặn chắn ngang đường 
     let near = Infinity;
     for (let i = 0; i < 60 && near > 15; i++) {
       (h.simulate as (s: number) => void)(0.5);
-      for (const c of g.police.sim.chasers) if (c.kind === 'car' && c.mode === 'chase' && !c.leaving) near = Math.min(near, Math.hypot(c.x - p.x, c.z - p.z));
+      for (const c of g.police.sim.chasers) if (c.kind === 'car' && c.mode !== 'block' && !c.leaving) near = Math.min(near, Math.hypot(c.x - p.x, c.z - p.z));
     }
-    const car = g.police.sim.chasers.find((c) => c.kind === 'car' && c.mode === 'chase' && !c.leaving);
+    const car = g.police.sim.chasers.find((c) => c.kind === 'car' && c.mode !== 'block' && !c.leaving);
     if (car) h.setCamera(car.x + 7, 3, car.z + 6, car.x, 0.8, car.z);
-    return { near, chase: g.police.sim.chasers.filter((c) => c.mode === 'chase' && !c.leaving).map((c) => c.kind) };
+    return { near, chase: g.police.sim.chasers.filter((c) => c.mode !== 'block' && !c.leaving).map((c) => c.kind) };
   });
   expect(cars.chase.filter((k) => k === 'car')).toHaveLength(1);
   expect(cars.chase).toHaveLength(3);

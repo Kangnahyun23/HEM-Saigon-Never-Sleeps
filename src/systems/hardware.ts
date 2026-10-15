@@ -72,6 +72,8 @@ export interface SceneBudget {
   nearRiders: number;
   /** Người lái xe máy truy đuổi gần camera vẽ bằng nhân vật có xương — mỗi phe (công an, đàn em Phát). */
   chaseRiders: number;
+  /** Công an xuống xe đuổi bộ cùng lúc (nhân vật có xương, đánh nhau được) — thêm thì vẫn ngồi xe đuổi. */
+  footPolice: number;
   /** Ô tô đậu ven đường lái được (mỗi xe một thân Rapier động + ~8 lệnh vẽ). */
   cars: number;
   /** Hạt mưa quanh camera. */
@@ -81,9 +83,9 @@ export interface SceneBudget {
 }
 
 export const SCENE_BUDGETS: Record<Tier, SceneBudget> = {
-  low: { traffic: 40, trafficCars: 4, trafficSlow: 3, pedestrians: 30, nearPedestrians: 3, nearRiders: 0, chaseRiders: 0, cars: 3, rain: 4000, shadowMapSize: 1024 },
-  medium: { traffic: 60, trafficCars: 7, trafficSlow: 4, pedestrians: 45, nearPedestrians: 6, nearRiders: 3, chaseRiders: 2, cars: 5, rain: 6500, shadowMapSize: 2048 },
-  high: { traffic: 80, trafficCars: 10, trafficSlow: 6, pedestrians: 60, nearPedestrians: 10, nearRiders: 5, chaseRiders: 3, cars: 7, rain: 9000, shadowMapSize: 2048 },
+  low: { traffic: 40, trafficCars: 4, trafficSlow: 3, pedestrians: 30, nearPedestrians: 3, nearRiders: 0, chaseRiders: 0, footPolice: 2, cars: 3, rain: 4000, shadowMapSize: 1024 },
+  medium: { traffic: 60, trafficCars: 7, trafficSlow: 4, pedestrians: 45, nearPedestrians: 6, nearRiders: 3, chaseRiders: 2, footPolice: 3, cars: 5, rain: 6500, shadowMapSize: 2048 },
+  high: { traffic: 80, trafficCars: 10, trafficSlow: 6, pedestrians: 60, nearPedestrians: 10, nearRiders: 5, chaseRiders: 3, footPolice: 4, cars: 7, rain: 9000, shadowMapSize: 2048 },
 };
 
 export const TIER_LABELS: Record<Tier, string> = { low: 'yếu', medium: 'trung bình', high: 'mạnh' };

@@ -16,12 +16,14 @@ const LEAN_FORWARD = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1
 export interface RiderCast {
   readonly id: CharacterId;
   readonly height: readonly [number, number];
+  /** Nữ (động tác chạy riêng khi xuống xe đi bộ). */
+  readonly female?: boolean;
 }
 
 /** Công an lái xe: nam / nữ (quân phục ô-liu nướng vào ảnh màu lúc tải — assets/outfits.ts). */
 export const POLICE_RIDERS: readonly RiderCast[] = [
   { id: 'police-m', height: [1.66, 1.76] },
-  { id: 'police-f', height: [1.58, 1.68] },
+  { id: 'police-f', height: [1.58, 1.68], female: true },
 ];
 
 /**
@@ -53,6 +55,8 @@ interface Slot {
   /** Hông so với gốc nhân vật trong tư thế lái (toạ độ của hình, đã nhân co giãn): cao, dọc. */
   hipY: number;
   hipZ: number;
+  /** Xe đang không có người lái (lúc gán) — đổi thì gán lại. */
+  empty: boolean;
 }
 
 /** Hông trong tư thế lái xe (toạ độ của hình, trên 1 đơn vị co giãn) — đo một lần mỗi mẫu người. */
@@ -82,6 +86,18 @@ function gripBar(chain: ArmChain, side: number, q: THREE.Quaternion, ox: number,
 const riderSeed = (id: number, generation: number): number => id * 6151 + generation * 92821 + 17;
 
 /**
+ * Người lái xe `id` ở lượt thả `generation` (`byGeneration`: id = 0): mẫu người + chiều cao. Trả kèm chuỗi ngẫu
+ * nhiên đã rút hai lượt đó (NearRiderView rút tiếp để lệch pha động tác). Công an xuống xe đi bộ (FootPoliceView)
+ * gọi cùng hàm ⇒ đúng người vừa lái.
+ */
+export function pickRider(cast: readonly RiderCast[], id: number, generation: number): { look: RiderCast; height: number; rng: () => number } {
+  const rng = createRng(riderSeed(id, generation));
+  const look = pick(rng, cast);
+  const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
+  return { look, height, rng };
+}
+
+/**
  * Người lái xe máy gần camera: tối đa `capacity` xe gần nhất có người lái vẽ bằng nhân vật có xương (mẫu người theo
  * phe — dân thường, công an, đàn em; động tác lái xe, mũ bảo hiểm cùng màu mũ khối hộp lúc ở xa); TrafficView bỏ khối
  * người lái của đúng các xe này (`has`). Hình lấy từ kho NPC, người lái nghiêng theo xe khi cua.
@@ -103,7 +119,7 @@ export class NearRiderView implements RiderSet {
     this.cast = options.cast ?? CIVILIANS;
     this.byGeneration = options.byGeneration ?? false;
     this.lod = new PedestrianLod(capacity, NEAR_RADIUS);
-    for (let k = 0; k < capacity; k++) this.slots.push({ pose: -1, generation: -1, npc: null, hipY: 0, hipZ: 0 });
+    for (let k = 0; k < capacity; k++) this.slots.push({ pose: -1, generation: -1, npc: null, hipY: 0, hipZ: 0, empty: false });
   }
 
   /** Có đủ mẫu người (`cast`) + động tác để dùng không (thiếu thì người lái vẫn là khối hộp). */
@@ -142,9 +158,10 @@ export class NearRiderView implements RiderSet {
     this.release(slot);
     slot.pose = pose.id;
     slot.generation = pose.generation;
-    const rng = createRng(riderSeed(this.byGeneration ? 0 : pose.id, pose.generation));
-    const look = pick(rng, this.cast);
-    const height = look.height[0] + rng() * (look.height[1] - look.height[0]);
+    slot.empty = pose.riderless === true;
+    // Xe không người lái (công an xuống đuổi bộ): giữ chỗ, không lấy hình.
+    if (slot.empty) return;
+    const { look, height, rng } = pickRider(this.cast, this.byGeneration ? 0 : pose.id, pose.generation);
     const npc = this.pool.take(look.id);
     slot.npc = npc;
     if (!npc) return;
@@ -182,7 +199,7 @@ export class NearRiderView implements RiderSet {
         continue;
       }
       const p = poses[id]!;
-      if (slot.pose !== id || slot.generation !== p.generation) this.assign(slot, p);
+      if (slot.pose !== id || slot.generation !== p.generation || slot.empty !== (p.riderless === true)) this.assign(slot, p);
       const npc = slot.npc;
       if (!npc) continue;
       const dyaw = Math.atan2(Math.sin(p.yaw - p.prevYaw), Math.cos(p.yaw - p.prevYaw));

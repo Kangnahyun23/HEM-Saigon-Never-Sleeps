@@ -95,7 +95,9 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
     bảo hiểm cùng màu người lái khối hộp); Tín và NPC ngồi nửa trước yên, ngả người, hai tay nắm ghi-đông (IK hai đoạn);
   - [x] R2 công an (và đàn em Phát) lái xe truy đuổi là nhân vật có xương: công an mẫu `police-m` / `police-f` mặc
     quân phục ô-liu (đổi màu ảnh gốc lúc tải), đàn em đồ đen mũ đỏ; 0 / 2 / 3 người mỗi phe theo sức máy;
-  - [ ] R3 đánh được công an: công an xuống xe đuổi bộ, trúng đòn như người đi đường, đánh công an lên 4–5 sao;
+  - [x] R3 đánh được công an: xe công an tới gần Tín đang đi bộ thì dừng, người lái xuống đuổi bộ (chạy 5,6 m/s — chậm hơn
+    Tín; đứng yên 2 s thì bị còng), trúng đòn như người đi đường (130 máu), đánh công an lên 4 sao, giết lên 5 sao, bị
+    đánh thì rút dùi cui đánh lại; người lái gục thì xe bỏ lại, xe khác tới; 2 / 3 / 4 người theo sức máy;
   - [x] R4 vào hẻm thì xe truy đuổi (công an, đàn em) chậm lại hẳn — ngoài đường lớn vẫn nhanh như cũ: xe máy trong hẻm
     ≤ 5 m/s (Tín chạy bộ 6,4 m/s ⇒ chạy là bỏ được, đứng lại vẫn bị bắt), phanh trước miệng hẻm; ô tô dừng ở miệng hẻm;
     mất dấu trong hẻm thì tới chỗ thấy Tín lần cuối rồi men theo hẻm ra (trước đây lao thẳng về giao lộ xuyên qua nhà);
