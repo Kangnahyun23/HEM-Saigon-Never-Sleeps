@@ -5,7 +5,7 @@ import { GROUP, interaction } from '@/physics/groups';
 import type { PhysicsWorld } from '@/physics/physics';
 import type { SightGrid } from '@/systems/heat';
 import { nightUniform } from '@/world/nightGlow';
-import { CHASE, ChaseSim, type ChaseConfig, type Chaser, type ChaserKind, type ChasePlayer } from './chase';
+import { CHASE, ChaseSim, chaserCapacity, type ChaseConfig, type Chaser, type ChaserKind, type ChasePlayer } from './chase';
 import type { HemMap } from './hemNav';
 import type { NearRiderView } from './nearRiders';
 import type { Obstacle } from './traffic';
@@ -57,8 +57,6 @@ export class ChaseSystem {
   /** Xe đang truy đuổi (cập nhật mỗi lần render) — bản đồ nhỏ đọc `units` + `unitCount`. */
   readonly units: ChaseUnit[] = [];
   unitCount = 0;
-  /** Vật cản cho xe NPC: hai vòng tròn mỗi ô tô chốt chặn (dùng lại, không tạo mới). */
-  private readonly blockObstacles: Obstacle[] = [];
   private readonly lights: THREE.InstancedMesh | null = null;
   private time = 0;
   private readonly m = new THREE.Matrix4();
@@ -81,9 +79,7 @@ export class ChaseSystem {
     hems: HemMap | null = null,
   ) {
     this.sim = new ChaseSim(network, sight, seed, config, hems);
-    const max = Math.max(...config.perLevel) + 3;
-    // Ô tô: số ô tô nhiều nhất theo cấp + một chốt chặn (tối đa 3 xe) + vài chỗ cho xe đang rút lui.
-    const maxCars = config.car ? Math.max(0, ...(config.carsPerLevel ?? [0])) + (config.roadblock ? 3 : 0) + 3 : 0;
+    const { bike: max, car: maxCars } = chaserCapacity(config);
     this.view = new TrafficView(max, style);
     scene.add(this.view.root);
     const { RAPIER, world } = physics;
@@ -103,7 +99,6 @@ export class ChaseSystem {
     }
     for (let i = 0; i < maxCars; i++) {
       this.carPoses.push({ id: i, kind: 'police', x: 0, z: 0, yaw: 0, prevX: 0, prevZ: 0, prevYaw: 0, wheel: 0, generation: 0 });
-      this.blockObstacles.push({ x: 0, z: 0, radius: 1.05 }, { x: 0, z: 0, radius: 1.05 });
     }
     for (let i = 0; i < max + maxCars; i++) this.units.push({ x: 0, z: 0, yaw: 0 });
     if (maxCars > 0) {
@@ -176,21 +171,9 @@ export class ChaseSystem {
     return caught;
   }
 
-  /** Thêm vào `out` vật cản của các ô tô chốt chặn (xe NPC phải dừng / lách quanh chốt). */
+  /** Thêm vào `out` vật cản của các xe đứng giữa đường (chốt chặn, xe dừng cho công an xuống, xe bỏ lại). */
   addObstacles(out: Obstacle[]): void {
-    let k = 0;
-    for (const c of this.sim.chasers) {
-      if (c.mode !== 'block' || k + 1 >= this.blockObstacles.length) continue;
-      const fx = Math.sin(c.yaw) * 1.1;
-      const fz = Math.cos(c.yaw) * 1.1;
-      const a = this.blockObstacles[k++]!;
-      const b = this.blockObstacles[k++]!;
-      a.x = c.x + fx;
-      a.z = c.z + fz;
-      b.x = c.x - fx;
-      b.z = c.z - fz;
-      out.push(a, b);
-    }
+    this.sim.addObstacles(out);
   }
 
   /** Cập nhật hình mỗi khung hình; (cx, cz) = camera — chọn xe nào có người lái vẽ bằng nhân vật có xương. */

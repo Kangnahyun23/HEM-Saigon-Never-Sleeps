@@ -52,7 +52,7 @@ export type NpcClip = (typeof NPC_CLIPS)[number];
 export const NPC_ACTION = Object.fromEntries(NPC_CLIPS.map((name, i) => [name, i])) as Readonly<Record<NpcClip, number>>;
 
 /** Động tác chỉ phát một lần rồi giữ tư thế cuối (trúng đòn, ngã, gục, cú đấm, vung dùi cui). */
-const ONCE: readonly NpcClip[] = ['hitChest', 'knockback', 'deathA', 'deathB', 'jab', 'slashA'];
+export const NPC_ONCE: readonly NpcClip[] = ['hitChest', 'knockback', 'deathA', 'deathB', 'jab', 'slashA'];
 /** Cú đấm của NPC dài 0,5 s; động tác gục tua nhanh cho ngã trong ~1,9 s (deathA dài 4,5 s, deathB 1,9 s). */
 const PUNCH_SECONDS = 0.5;
 const DEATH_SECONDS = 1.9;
@@ -124,7 +124,7 @@ export function buildNpc(parent: THREE.Object3D, id: CharacterId, outfit: Outfit
   if (!body) return null;
   const mixer = new THREE.AnimationMixer(body);
   const actions = NPC_CLIPS.map((n) => mixer.clipAction(getNpcClip(n) ?? new THREE.AnimationClip(n, 1, [])));
-  for (const name of ONCE) {
+  for (const name of NPC_ONCE) {
     const action = actions[NPC_ACTION[name]]!;
     action.setLoop(THREE.LoopOnce, 1);
     action.clampWhenFinished = true;

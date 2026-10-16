@@ -47,6 +47,9 @@ export class CharacterBody {
   /** Thời điểm rời đất gần nhất — cho phép nhảy trễ một chút ("coyote time"). */
   private airTime = 0;
   private enabled = true;
+  /** Biến tạm dùng lại mỗi bước: quãng muốn đi, vị trí kế tiếp (Rapier đọc giá trị ngay, không giữ đối tượng). */
+  private readonly desired = { x: 0, y: 0, z: 0 };
+  private readonly next = { x: 0, y: 0, z: 0 };
 
   constructor(
     private readonly RAPIER: Rapier,
@@ -149,7 +152,10 @@ export class CharacterBody {
     }
     this.vy -= CHARACTER.gravity * dt;
 
-    const desired = { x: this.vx * dt, y: this.vy * dt, z: this.vz * dt };
+    const desired = this.desired;
+    desired.x = this.vx * dt;
+    desired.y = this.vy * dt;
+    desired.z = this.vz * dt;
     this.controller.computeColliderMovement(this.collider, desired, this.RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, interaction(GROUP.PLAYER, GROUP.WORLD | GROUP.PROP | GROUP.VEHICLE));
     const moved = this.controller.computedMovement();
     this.grounded = this.controller.computedGrounded();
@@ -160,7 +166,11 @@ export class CharacterBody {
     if (dt > 0) this.actualSpeed = Math.hypot(moved.x, moved.z) / dt;
 
     const t = this.body.translation();
-    this.body.setNextKinematicTranslation({ x: t.x + moved.x, y: t.y + moved.y, z: t.z + moved.z });
+    const next = this.next;
+    next.x = t.x + moved.x;
+    next.y = t.y + moved.y;
+    next.z = t.z + moved.z;
+    this.body.setNextKinematicTranslation(next);
 
     // Quay mặt theo hướng di chuyển.
     if (len > 0.05) {

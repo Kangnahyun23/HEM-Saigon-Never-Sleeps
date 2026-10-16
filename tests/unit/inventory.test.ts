@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BACKPACK_SIZES, Inventory, ITEMS, starterInventory } from '@/systems/inventory';
+import { BACKPACK_SIZES, healGain, Inventory, ITEMS, starterInventory } from '@/systems/inventory';
 
 describe('balo', () => {
   it('xếp chồng theo giới hạn từng món, tràn sang ô trống; đầy thì trả lại số không chứa được', () => {
@@ -28,6 +28,16 @@ describe('balo', () => {
     expect(inv.use(1)).toBeNull();
     expect(inv.use(2)).toBeNull();
     expect(inv.use(3)).toBeNull();
+  });
+
+  it('máu hồi được thêm: không quá chỗ trống tới 100 (trừ phần đồ ăn đang hồi dần); đầy máu thì 0 — khỏi phí món', () => {
+    expect(healGain(ITEMS.banhMi, 100)).toBe(0);
+    expect(healGain(ITEMS.banhMi, 90)).toBe(10);
+    expect(healGain(ITEMS.banhMi, 40)).toBe(20);
+    expect(healGain(ITEMS.comTam, 50, 20)).toBe(30);
+    expect(healGain(ITEMS.comTam, 70, 30)).toBe(0);
+    expect(healGain(ITEMS.thuocDo, 30)).toBe(40);
+    expect(healGain(ITEMS.maTau, 10)).toBe(0);
   });
 
   it('vứt bớt / bỏ hẳn một loại', () => {

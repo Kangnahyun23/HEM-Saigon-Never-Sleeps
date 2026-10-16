@@ -13,13 +13,8 @@ export type WheelEntry =
 export const WHEEL_SLOTS = 8;
 
 export function buildWheel(inv: Inventory): WheelEntry[] {
-  const out: WheelEntry[] = [{ kind: 'hand', label: 'Tay không' }];
-  const seen = new Set<ItemId>();
-  for (const s of inv.slots) {
-    if (!s || seen.has(s.id) || ITEMS[s.id].kind !== 'weapon') continue;
-    seen.add(s.id);
-    out.push({ kind: 'weapon', id: s.id, label: ITEMS[s.id].name, count: inv.count(s.id) });
-  }
+  // Đồ ăn / thuốc chọn trước để chừa chỗ: balo nhiều loại vũ khí thì bớt vũ khí, không mất ô hồi máu.
+  const heals: WheelEntry[] = [];
   for (const kind of ['food', 'medicine'] as const) {
     let best: ItemId | null = null;
     let bestHeal = -1;
@@ -31,9 +26,17 @@ export function buildWheel(inv: Inventory): WheelEntry[] {
         bestHeal = def.heal ?? 0;
       }
     }
-    if (best) out.push({ kind, id: best, label: ITEMS[best].name, count: inv.count(best) });
+    if (best) heals.push({ kind, id: best, label: ITEMS[best].name, count: inv.count(best) });
   }
-  return out.slice(0, WHEEL_SLOTS);
+  const out: WheelEntry[] = [{ kind: 'hand', label: 'Tay không' }];
+  const seen = new Set<ItemId>();
+  for (const s of inv.slots) {
+    if (out.length >= WHEEL_SLOTS - heals.length) break;
+    if (!s || seen.has(s.id) || ITEMS[s.id].kind !== 'weapon') continue;
+    seen.add(s.id);
+    out.push({ kind: 'weapon', id: s.id, label: ITEMS[s.id].name, count: inv.count(s.id) });
+  }
+  return out.concat(heals);
 }
 
 /**

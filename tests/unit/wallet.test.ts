@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Inbox } from '@/systems/inbox';
-import { formatVnd, Wallet } from '@/systems/wallet';
+import { formatVnd, payable, Wallet } from '@/systems/wallet';
 
 describe('Wallet', () => {
   it('nhận, tiêu, trả nợ; không âm tiền; ghi sổ', () => {
@@ -14,6 +14,15 @@ describe('Wallet', () => {
     expect(w.debt).toBe(0);
     expect(w.cash).toBe(1_000_000);
     expect(w.ledger.map((e) => e.amount)).toEqual([250_000, -350_000, 2_000_000, -1_000_000]);
+  });
+
+  it('số trả nợ được ngay: dồn hết tiền mặt, mỗi lần từ 100.000 đ — nợ còn ít hơn thì trả nốt được', () => {
+    expect(payable(500_000, 30_000_000)).toBe(500_000);
+    expect(payable(50_000, 30_000_000)).toBe(0);
+    expect(payable(10_000_000, 50_000)).toBe(50_000);
+    expect(payable(30_000, 50_000)).toBe(0);
+    expect(payable(1_000, 0)).toBe(0);
+    expect(payable(0, 0)).toBe(0);
   });
 
   it('lưu / nạp lại qua JSON', () => {

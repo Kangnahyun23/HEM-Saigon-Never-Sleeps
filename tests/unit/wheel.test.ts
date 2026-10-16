@@ -18,6 +18,19 @@ describe('vòng chọn đồ', () => {
     expect(w.length).toBeLessThanOrEqual(WHEEL_SLOTS);
   });
 
+  it('balo đủ mọi loại vũ khí: vẫn giữ ô đồ ăn và ô thuốc (bớt vũ khí cho vừa vòng)', () => {
+    const inv = new Inventory(16);
+    for (const id of ['maTau', 'gaySat', 'daoBam', 'conNhiKhuc', 'gheNhua', 'muBaoHiem'] as const) inv.add(id);
+    inv.add('banhMi', 2);
+    inv.add('thuocDo', 1);
+    const w = buildWheel(inv);
+    expect(w).toHaveLength(WHEEL_SLOTS);
+    expect(w[0]!.kind).toBe('hand');
+    expect(w.filter((e) => e.kind === 'weapon')).toHaveLength(WHEEL_SLOTS - 3);
+    expect(w.at(-2)).toMatchObject({ kind: 'food', label: 'Bánh mì thịt' });
+    expect(w.at(-1)).toMatchObject({ kind: 'medicine', label: 'Thuốc đỏ + bông băng' });
+  });
+
   it('chọn ô theo hướng rê chuột: đỉnh = ô 0, theo chiều kim đồng hồ; vùng chết giữ ô cũ', () => {
     expect(sectorAt(0, -100, 4, 2)).toBe(0); // lên
     expect(sectorAt(100, 0, 4, 2)).toBe(1); // phải

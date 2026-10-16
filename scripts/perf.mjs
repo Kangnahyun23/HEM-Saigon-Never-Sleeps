@@ -1,9 +1,11 @@
-// Đo hiệu năng trên GPU thật: mở bản build (dist/) trong Chrome cài trên máy (WebGPU; không có thì Chromium của
-// Playwright), tắt khoá vsync, chạy xe qua vài cảnh rồi in thời gian khung hình, logic game, gửi lệnh vẽ, khựng, rác bộ nhớ.
+// Đo hiệu năng trên GPU thật: mở bản build (dist/) trong Chrome cài trên máy (không có thì Chromium của Playwright),
+// tắt khoá vsync, chạy xe qua vài cảnh rồi in thời gian khung hình, logic game, gửi lệnh vẽ, khựng, rác bộ nhớ.
+// Trình duyệt chạy ẨN (headless kiểu mới — vẫn dùng card đồ hoạ thật cho WebGPU / WebGL), không bật cửa sổ lên màn hình.
 //   npm run build && npm run perf                 # mọi cảnh
 //   npm run perf -- night-ride chase              # chỉ vài cảnh
-//   PERF_BROWSER=chromium npm run perf            # Chromium của Playwright (thường là WebGL2)
-// Chỉ chạy được trên máy có màn hình + GPU (không dùng trên CI / cloud).
+//   PERF_BROWSER=chromium npm run perf            # Chromium của Playwright
+//   PERF_WINDOW=1 npm run perf                    # hiện cửa sổ trình duyệt (xem game chạy — cửa sổ sẽ bật lên màn hình)
+// Cần máy có GPU: máy không có (CI / cloud) thì trình duyệt vẽ bằng SwiftShader — số đo vô nghĩa, script báo trước.
 /* global process, fetch, setTimeout, console -- Node */
 /* global window, performance, requestAnimationFrame -- hàm `measure` chạy trong trang */
 import { spawn } from 'node:child_process';
@@ -49,12 +51,25 @@ for (let i = 0; i < 60; i++) {
 }
 
 const useChrome = process.env.PERF_BROWSER !== 'chromium';
-const args = ['--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--disable-gpu-vsync', '--disable-frame-rate-limit'];
+const showWindow = process.env.PERF_WINDOW === '1';
+// --enable-precise-memory-info: performance.memory không làm tròn ⇒ đo rác bộ nhớ đúng hơn.
+const args = ['--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--disable-gpu-vsync', '--disable-frame-rate-limit', '--enable-precise-memory-info'];
 let browser;
-try {
-  browser = await chromium.launch({ headless: false, args, ...(useChrome ? { channel: 'chrome' } : {}) });
-} catch {
-  browser = await chromium.launch({ headless: false, args });
+if (showWindow) {
+  try {
+    browser = await chromium.launch({ headless: false, args, ...(useChrome ? { channel: 'chrome' } : {}) });
+  } catch {
+    browser = await chromium.launch({ headless: false, args });
+  }
+} else {
+  try {
+    if (!useChrome) throw new Error('chromium');
+    // Chrome cài trên máy + `--headless=new` tự thêm (Playwright `headless: true` với Chrome mới làm trình duyệt thoát ngay).
+    browser = await chromium.launch({ headless: false, channel: 'chrome', args: [...args, '--headless=new'] });
+  } catch {
+    // Chromium của Playwright, headless kiểu mới (bản "headless shell" mặc định chỉ có SwiftShader).
+    browser = await chromium.launch({ headless: true, channel: 'chromium', args });
+  }
 }
 const context = await browser.newContext({ viewport: { width: 1707, height: 1067 }, deviceScaleFactor: 1.5 });
 
@@ -146,7 +161,10 @@ try {
     await page.waitForTimeout(3000); // shader biên dịch xong, cảnh ổn định
     const r = await page.evaluate(measure, SECONDS);
     await page.close();
-    if (rows.length === 0) console.info(`${r.backend} · ${r.gpu} · ${r.canvas}\n`);
+    if (rows.length === 0) {
+      console.info(`${r.backend} · ${r.gpu} · ${r.canvas}\n`);
+      if (/swiftshader|llvmpipe|software/i.test(r.gpu)) console.warn('⚠ Trình duyệt không dùng được card đồ hoạ (vẽ bằng phần mềm) — số đo dưới đây không phản ánh máy thật.\n');
+    }
     rows.push({ name, ...r });
   }
 } finally {

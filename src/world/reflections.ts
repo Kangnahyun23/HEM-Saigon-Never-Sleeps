@@ -18,6 +18,12 @@ export function reflective<T extends THREE.MeshStandardNodeMaterial>(material: T
   return material;
 }
 
+/** Bỏ vật liệu khỏi danh sách (vật liệu bị huỷ — xe bị thay chiếc khác); không có trong danh sách thì thôi. */
+export function unreflective(material: THREE.Material): void {
+  const i = materials.indexOf(material as THREE.MeshStandardNodeMaterial);
+  if (i >= 0) materials.splice(i, 1);
+}
+
 /** Ảnh môi trường (PMREM) dùng cho mọi vật liệu phản chiếu. */
 export function setReflectionMap(texture: THREE.Texture | null): void {
   envMap = texture;

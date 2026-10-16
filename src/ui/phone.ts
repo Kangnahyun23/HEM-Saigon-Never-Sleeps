@@ -3,7 +3,7 @@ import { playSfx } from '@/audio/sfx';
 import { TIER_LABELS, type Tier } from '@/systems/hardware';
 import { clampSensitivity, clampVolume, QUALITY_LABELS, sceneTier, type Quality, type Settings } from '@/systems/settings';
 import { formatCount, generateFeed, type FeedContext } from '@/systems/social';
-import { formatVnd, LENDER, type Wallet } from '@/systems/wallet';
+import { formatVnd, LENDER, MIN_PAYMENT, payable, type Wallet } from '@/systems/wallet';
 import type { Minimap } from './minimap';
 
 /** Các app trên điện thoại (phím số mở thẳng app, giữ thứ tự 1–5 như bản cũ). */
@@ -55,6 +55,8 @@ const DAILY_INTEREST = 0.003;
 /** Số ảnh máy giữ được (máy thường / bản Pro mua ở tiệm điện thoại). */
 const MAX_PHOTOS = 6;
 const MAX_PHOTOS_PRO = 12;
+/** Bản đồ trong máy vẽ lại cách nhau ít nhất ngần này mili giây (10 lần / giây). */
+const MAP_REDRAW_MS = 100;
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
 const icon = (id: PhoneTab): string => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
@@ -84,6 +86,8 @@ export class Phone {
   private readonly clock: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly mapCanvas: HTMLCanvasElement;
+  /** Lần vẽ bản đồ gần nhất (performance.now). */
+  private mapDrawnAt = 0;
   private bannerTimeout = 0;
   private dirty = true;
   private lastHour = '';
@@ -282,14 +286,22 @@ export class Phone {
       this.clock.textContent = hourLabel;
       if (this.tab === 'home' || this.tab === 'social') this.dirty = true;
     }
-    if (this.tab === 'map') this.minimap?.drawFull(this.mapCanvas, px, pz);
+    if (this.tab === 'map' && !this.dirty) {
+      // Vẽ lại cả ảnh bản đồ mỗi khung hình là phí: chấm vị trí nhích 10 lần / giây là đủ mượt.
+      const now = performance.now();
+      if (now - this.mapDrawnAt >= MAP_REDRAW_MS) {
+        this.mapDrawnAt = now;
+        this.minimap?.drawFull(this.mapCanvas, px, pz, false);
+      }
+    }
     if (!this.dirty) return;
     this.dirty = false;
     this.screen.dataset.view = this.tab;
     this.screen.innerHTML = this.tab === 'home' ? this.renderHome() : `<div class="app-head"><button type="button" class="back" data-home>‹</button><b>${esc(this.title())}</b></div>${this.render()}`;
     if (this.tab === 'map') {
       this.screen.appendChild(this.mapCanvas);
-      this.minimap?.drawFull(this.mapCanvas, px, pz);
+      this.minimap?.drawFull(this.mapCanvas, px, pz, true);
+      this.mapDrawnAt = performance.now();
     }
   }
 
@@ -380,15 +392,15 @@ export class Phone {
       }
       case 'bank': {
         const w = this.wallet;
-        const canPay = Math.min(w.cash, w.debt);
+        const canPay = payable(w.cash, w.debt);
         const interest = Math.round((w.debt * DAILY_INTEREST) / 1000) * 1000;
         return `<div class="bank-card"><span>${LENDER}</span><b>${formatVnd(w.debt)}</b><small>Lãi "chỉ" 0,3%/ngày ≈ ${formatVnd(interest)} mỗi ngày*</small></div>
           ${
             w.debt <= 0
               ? '<p class="muted">Hết nợ rồi! App vay vẫn sẽ gửi tin mời vay thêm mỗi ngày.</p>'
-              : canPay >= 100_000
+              : canPay > 0
                 ? `<button type="button" class="pay" data-pay="${canPay}">Trả nợ ${formatVnd(canPay)}</button>`
-                : '<p class="muted">Tiền mặt dưới 100.000 đ — chạy thêm kèo rồi quay lại trả.</p>'
+                : `<p class="muted">Tiền mặt dưới ${formatVnd(Math.min(MIN_PAYMENT, w.debt))} — chạy thêm kèo rồi quay lại trả.</p>`
           }
           <h4>Điều khoản (chữ nhỏ)</h4>
           <p class="muted small">*Chưa gồm phí hồ sơ, phí giải ngân, phí nhắc nợ, phí gọi cho người thân, phí "tinh thần". Trễ hạn: đội ngũ chăm sóc khách hàng sẽ ghé thăm tận nhà.</p>`;

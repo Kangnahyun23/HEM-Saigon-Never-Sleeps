@@ -1,10 +1,21 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
+import { licenseFiles } from './scripts/licenses.mjs';
 
 export default defineConfig({
   // Đường dẫn tương đối để cùng một bản build chạy được trên GitHub Pages (/HEM-Saigon-Never-Sleeps/) và itch.io.
   base: './',
+  plugins: [
+    {
+      // Bản phát hành kèm CREDITS.md + giấy phép OFL của font (xem scripts/licenses.mjs).
+      name: 'hem-licenses',
+      apply: 'build',
+      generateBundle() {
+        for (const f of licenseFiles(fileURLToPath(new URL('.', import.meta.url)))) this.emitFile({ type: 'asset', fileName: f.fileName, source: f.source });
+      },
+    },
+  ],
   resolve: {
     alias: [
       // Addon của three (OrbitControls, loaders…) import 'three'; trỏ về bản WebGPU để toàn dự án chỉ có MỘT bản three.

@@ -56,11 +56,17 @@ test('âm thanh: tiếng máy theo ga, tắt tiếng bằng phím M', async ({ p
   await page.waitForTimeout(1500);
   expect(await engineGain()).toBeLessThan(riding / 3);
 
-  // M: tắt tiếng / bật lại, có thông báo.
+  // M: tắt tiếng / bật lại, có thông báo; ghi vào cài đặt (tải lại trang vẫn giữ).
+  const muted = () => page.evaluate(() => (window.__HEM__!.settings as () => { muted: boolean })().muted);
+  const stored = () => page.evaluate(() => (JSON.parse(localStorage.getItem('hem.settings.v1') ?? '{}') as { muted?: boolean }).muted);
   await press(page, 'KeyM');
   await expect(page.locator('.hud-toast')).toContainText('tắt tiếng');
+  expect(await muted()).toBe(true);
+  expect(await stored()).toBe(true);
   await press(page, 'KeyM');
   await expect(page.locator('.hud-toast')).toContainText('bật tiếng');
+  expect(await muted()).toBe(false);
+  expect(await stored()).toBe(false);
 
   // Tiền vào ⇒ âm báo (không lỗi).
   await page.evaluate(() => (window.__HEM__!.game as unknown as { wallet: { earn(n: number, r: string): void } }).wallet.earn(50_000, 'Thử'));

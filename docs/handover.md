@@ -1,6 +1,6 @@
 # Bàn giao dự án — HẺM: Sài Gòn Không Ngủ
 
-Cập nhật: 2026-10-15, sau R3 — người lái xe máy NPC, công an, đàn em có xương; xe truy đuổi chậm lại trong hẻm; công an xuống xe đuổi bộ, đánh được công an (các phiên trước: N4.2 → N7.3, tối ưu P1–P3). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
+Cập nhật: 2026-10-16, sau F1 — review toàn dự án rồi sửa loạt lỗi nhỏ (gameplay, hình, âm thanh, rác bộ nhớ, ghi công font; trước đó R1–R4: người lái NPC, công an, đàn em có xương; công an xuống xe đuổi bộ, đánh được công an). Đọc file này trước, rồi tới `CLAUDE.md` (lệnh, quy ước, bẫy kỹ thuật),
 `docs/plan-v0.2.md` (kế hoạch v0.2 chi tiết + tiến độ) và `docs/gdd.md` (thiết kế đầy đủ).
 
 ## 1. Dự án là gì
@@ -230,7 +230,7 @@ biên dịch shader (D3D11 / FXC chậm).
 Đo bằng `npm run perf` + hồ sơ CPU / lấy mẫu bộ nhớ theo hàm (Chrome thật, WebGPU). Sau P2 phần "logic" (mô phỏng + cập nhật
 hình) còn 1–1,8 ms / khung, nhân vật có xương chiếm phần lớn (`updateMatrixWorld` của xương, `Skeleton.update`, mixer).
 - **Kho NPC dùng chung** `NpcPool` (ai/npcBody.ts): một `KeyedPool` theo mẫu người cho cả người đi bộ gần lẫn người ngồi quán;
-  mỗi thân có sẵn MỌI động tác NPC (`NPC_CLIPS`, 19 clip) nên đổi động tác không cần thân khác. Dựng sẵn lúc tải (`prebuild`,
+  mỗi thân có sẵn MỌI động tác NPC (`NPC_CLIPS`, nay 21 clip) nên đổi động tác không cần thân khác. Dựng sẵn lúc tải (`prebuild`,
   đủ cho số ô của hai LOD) ⇒ lúc chơi không dựng nhân vật mới nữa (trước ~10 ms + pipeline mới mỗi lần); thân ẩn được
   `revealAll` hâm nóng nên bỏ `civilianSamples`. Khựng 40–90 ms khi dịch chuyển xa (bị bắt / tỉnh dậy) hết hẳn: 0 khung > 25 ms.
 - **Bộ xương rút gọn** (assets/slimRig.ts): NPC 66 → 23 xương (bỏ 40 xương ngón tay + 3 xương lá; đỉnh đang bám xương bị bỏ
@@ -313,6 +313,37 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
 - Kiểm tra: `footPolice.test.ts` (7 test), e2e `police` thêm test "đánh công an" (ảnh `police-foot.png`,
   `police-fight.png`); e2e `patrol` đếm cả xe đang đậu cho người lái xuống. Lúc chơi 0 pipeline mới.
 
+### F1 — sửa lỗi nhỏ sau review (nhánh `f1-sua-loi-nho`, tách từ `main` sau PR #40)
+Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; lỗi về bản lưu để PR sau (xem "Việc nhỏ đã dời lại").
+- **Lỗi R3**: xe công an bỏ lại / đỗ giữa đường là vật cản cho xe NPC (`ChaseSim.addObstacles` — mọi xe không ở chế độ
+  'chase'); công an đi bộ + vũng máu đúng cao độ mặt đất (`groundHeight(layout, x, z)` trong layout.ts: vỉa hè / hẻm / bờ
+  sông 0,15 m, mặt đường 0); xe bị bỏ lại quá nhiều thì dời bớt chiếc xa nhất (`chaserCapacity` + `trim`) — trước đây vượt
+  số thân Rapier dựng sẵn thì xe "tàng hình" (không hình, không va chạm).
+- **Gameplay**: té xe văng theo tốc độ ngay trước cú va (`MotorbikePhysics.impactSpeed`); đầy máu thì không ăn (`healGain`,
+  khỏi mất đồ); nút trả nợ chỉ hiện khi trả được (`payable`: ≥ 100.000 ₫ hoặc đủ trả hết); vòng chọn đồ luôn chừa ô đồ ăn
+  + thuốc; bị bắt / gục thì cuộc gọi báo đang dở bỏ hết (`PedestrianSim.calmDown`), đàn em không lục túi thêm lúc đang ở
+  màn hình kết cục, đóng tiệm đang mở; lên xe giữa đòn thì huỷ đòn + cú bấm nối combo.
+- **Hình / âm thanh**: bảng hiệu tiệm + vũng đèn tiệm không còn biến mất ngoài 130 m (bảng tầm vẽ tách ra
+  `world/city/detailDistance.ts`); xe bị thay thì vật liệu bỏ khỏi danh sách phản chiếu (`unreflective`); vệt bảng hiệu trên
+  đường ướt chỉ vẽ khi tối VÀ ướt (`addWetNightOnly`, `setWetLevel`); bật bloom giữa lúc chơi thì làm nóng pipeline ngay;
+  tắt tiếng (M) lưu trong cài đặt (`Settings.muted`); bản đồ trong điện thoại vẽ lại 10 lần / giây; người đi bộ vừa
+  vào tầm vẽ có xương không còn dang tay chữ T vài khung đầu (`NearPedestrianView` đặt thẳng trọng số đích như
+  footPoliceView — thấy rõ trong ảnh `daynight-21h.png` vì test dừng game rồi gọi `update(0)`); người đã gục / bị đánh
+  ngã từ trước mới vào tầm thì nằm sẵn ở cuối động tác ngã (trước đây đứng dậy ngã lại trước mắt người chơi).
+- **Rác bộ nhớ mỗi khung**: `lightingAt` / `applyWeather` ghi vào đối tượng có sẵn (`createLighting`,
+  `createWeatherLighting`), `GameClock.label()` chỉ dựng chuỗi khi sang phút mới, `Input.isDown` / `wasPressed` bỏ tham số
+  rest (tối đa 4 mã phím), `FollowCamera` dùng lại hướng + tia Rapier, `CharacterBody` dùng lại quãng đi / vị trí kế tiếp,
+  game.ts dùng lại ý định đi bộ / vị trí chân / trạng thái động tác / ngữ cảnh nhiệm vụ.
+- **Ghi công font**: 8 font @fontsource (SIL OFL 1.1) có mục riêng trong CREDITS.md (phần mở đầu ở
+  `scripts/credits-header.md`); bản build (Pages + zip itch.io) kèm `CREDITS.md` + `licenses/<font>-OFL.txt`
+  (`scripts/licenses.mjs`, plugin `hem-licenses` trong vite.config.ts).
+- **`npm run perf` chạy ẩn**: không bật cửa sổ trình duyệt lên màn hình (chủ dự án thấy rất phiền). Headless kiểu mới vẫn
+  dùng card đồ hoạ thật (đã kiểm tra: WebGL2 + WebGPU nhận RTX 3060); `PERF_WINDOW=1` mới hiện cửa sổ.
+- Kiểm tra: unit test 333 (thêm `input`, `detailDistance`, `reflections`, `nightGlow`, `bloom`, `nearPedestrians`; mở rộng
+  timeOfDay, weather, settings, assets, package, wheel, wallet, inventory, pedestrians, motorbikePhysics, police, footPolice,
+  chase, cityLayout, blood; hình NPC + kho giả dùng chung ở `tests/unit/fakeNpc.ts`); e2e `backpack` (đầy máu không ăn),
+  `audio` (M lưu vào cài đặt). Lượt e2e đầy đủ ở máy chủ dự án, chạy ẩn `--workers=1`: 32/32 xanh trong 31 phút.
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -331,6 +362,13 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
 5. **N10 hoàn thiện + phát hành 0.2.0** (đo hiệu năng 3 bậc máy, chơi thử tự động, ghi công, zip itch.io cờ 18+).
 
 ### Việc nhỏ đã dời lại (ghi để khỏi quên)
+- **Bản lưu (PR kế tiếp, chủ dự án đã đồng ý)**:
+  - bản lưu hỏng (JSON đúng nhưng trường sai kiểu) có thể làm game không vào được — cần kiểm tra từng trường như `parseSettings`;
+  - lưu trong 30 giây đầu thì mất tin nhắn mở màn (nạp bản lưu bỏ tin mở màn);
+  - lưu lúc đang ở màn hình BỊ BẮT / GỤC thì tải lại thoát phạt;
+  - sao truy nã / Độ Nóng không được lưu (tải lại là sạch);
+  - mở hai tab thì tab sau ghi đè bản lưu của tab trước.
+- **Asset**: mẫu `riot.glb` (công an chống bạo động) tải lúc vào game nhưng chưa dùng — bỏ khỏi danh sách tải hoặc dùng ở 5 sao.
 - **Chiến đấu**:
   - né (Q) và đỡ đòn;
   - công an đi bộ chưa có thân vật lý (Tín đi xuyên qua được; chỉ tự giãn cách nhau), chưa hiện trên bản đồ nhỏ;
@@ -366,6 +404,11 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
 - HUD chỉ cập nhật trong `game.update`: đổi trạng thái lúc đang dừng thì phải `simulate(1/60)` rồi mới kiểm tra DOM.
 - Test `phone` từng hỏng một lần trên CI (3 thay vì 4 tin nhắn) mà không tái hiện được. Test giờ chờ đủ tin và in
   `playTime` + hộp thư nếu thiếu — gặp lại thì đọc thông tin đó.
+- **Không bật cửa sổ trình duyệt lên màn hình chủ dự án** (rất phiền): e2e mặc định đã ẩn — đừng thêm `--headed` /
+  `headless: false`; `npm run perf` chạy ẩn. Playwright `headless: true` + `channel: 'chrome'` (Chrome 155) làm Chrome thoát
+  ngay ⇒ perf.mjs truyền `--headless=new` qua `args`. Bản "headless shell" mặc định của Playwright chỉ có SwiftShader;
+  headless kiểu mới (Chrome thật hoặc `channel: 'chromium'`) mới dùng GPU. Kiểm tra WebGPU trên `http://localhost`:
+  `about:blank` không phải secure context nên không có `navigator.gpu`.
 
 **Shader và đồ hoạ**
 - Shader mặt tiền: biến `base` đã có (màu nền), thuộc tính độ cao khối là `baseY` / `aBase`.
@@ -378,6 +421,12 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   `mixer.update` mỗi khung và chỉ đúng nếu điểm xuất phát là tư thế của clip (Tín: trả xương về `armRest` trước IK).
 - Hình NPC vừa lấy từ kho có mọi trọng số = 0; trộn dần lên thì PropertyMixer trộn cả tư thế gốc chữ T vào (công an vừa
   xuống xe dang tay). Đặt thẳng trọng số đích ở khung đầu (`fresh` trong footPoliceView; nearRiders / seatedPeople đặt lúc lấy).
+
+**Dùng lại đối tượng (không tạo rác mỗi khung)**
+- `camera.forward()`, `lightingAt(h, out)`, `applyWeather(l, w, out)` trả đối tượng DÙNG CHUNG: đọc ngay, đừng giữ qua khung sau
+  (cần giữ thì chép ra). `Input.isDown` / `wasPressed` nhận tối đa 4 mã phím; nhóm dài hơn dùng `axis` / mảng hằng.
+- Bảng tầm vẽ chi tiết (`detailDistance.ts`) khớp theo TIỀN TỐ tên lô: tiền tố ngắn dễ khớp nhầm (từng có `'shop-'` làm bảng
+  hiệu mọi tiệm biến mất ngoài 130 m). Thêm dòng thì thêm cả test cho lô cùng đầu tên.
 
 **Vật lý và truy đuổi**
 - Xe truy đuổi là thân Rapier kinematic: không gì chặn được (xuyên tường) ⇒ đường đi phải tự tránh nhà — đường lớn theo
@@ -392,7 +441,11 @@ Chủ dự án muốn người lái xe trông giống người đi đường (tr
   nhánh `r3b-e2e-cong-an-nhanh` (PR #40): gom vòng chờ vào một `evaluate`, test còn ~50 s ở máy.
   Unit test: 309 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`, `hemNav.test.ts`, `footPolice.test.ts`).
 - Việc chủ dự án giao 2026-10-15 (R1–R4 trong plan-v0.2.md) đã làm hết: người lái xe NPC có xương (R1), công an có xương
-  (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4). Tiếp theo: N7.4–N10.
+  (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4).
+- 2026-10-16: PR #40 đã merge; F1 (sửa lỗi nhỏ sau review, mục 3) trên nhánh `f1-sua-loi-nho`. Tiếp theo: PR sửa bản lưu
+  (mục 4, "Việc nhỏ đã dời lại"), rồi N7.4–N10.
+- Chủ dự án KHÔNG muốn cửa sổ trình duyệt bật lên màn hình khi test: e2e (Playwright mặc định headless) và `npm run perf`
+  (headless kiểu mới, vẫn dùng GPU thật) đều chạy ẩn — đừng thêm `headless: false` / `PERF_WINDOW=1` nếu chưa hỏi.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import type RAPIER from '@dimforge/rapier3d-compat';
 import type { PhysicsWorld } from '@/physics/physics';
 import { GROUP, interaction } from '@/physics/groups';
 
@@ -31,6 +32,10 @@ export class FollowCamera {
   private readonly smoothTarget = new THREE.Vector3();
   private initialized = false;
   private readonly baseFov: number;
+  /** Biến tạm dùng lại mỗi khung hình: hướng ngang, hướng từ điểm nhìn ra camera, tia chống xuyên tường. */
+  private readonly flat = { x: 0, z: -1 };
+  private readonly dir = new THREE.Vector3();
+  private ray: RAPIER.Ray | null = null;
 
   constructor(
     readonly camera: THREE.PerspectiveCamera,
@@ -39,9 +44,11 @@ export class FollowCamera {
     this.baseFov = camera.fov;
   }
 
-  /** Hướng nhìn ngang hiện tại (dùng để quy đổi WASD sang hướng đi trong thế giới). */
-  forward(): { x: number; z: number } {
-    return { x: -Math.sin(this.yaw), z: -Math.cos(this.yaw) };
+  /** Hướng nhìn ngang hiện tại (dùng để quy đổi WASD sang hướng đi trong thế giới). Đối tượng dùng chung: đọc ngay, đừng giữ. */
+  forward(): { readonly x: number; readonly z: number } {
+    this.flat.x = -Math.sin(this.yaw);
+    this.flat.z = -Math.cos(this.yaw);
+    return this.flat;
   }
 
   /** Hệ số độ nhạy chuột (cài đặt). */
@@ -86,11 +93,12 @@ export class FollowCamera {
     }
 
     const want = rig.distance * this.zoom;
-    const dir = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
+    const dir = this.dir.set(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
 
     // Chống xuyên tường: tia từ điểm nhìn ra phía camera, chỉ xét nhà/cột/vật tĩnh.
+    // Tia giữ tham chiếu tới smoothTarget và dir nên tạo một lần là đủ.
     const { RAPIER, world } = this.physics;
-    const ray = new RAPIER.Ray(this.smoothTarget, dir);
+    const ray = (this.ray ??= new RAPIER.Ray(this.smoothTarget, dir));
     const hit = world.castRay(ray, want + 0.3, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC, interaction(GROUP.ALL, GROUP.WORLD));
     let allowed = hit ? Math.max(0.6, hit.timeOfImpact - 0.3) : want;
     // Trong / trước cửa tiệm: không để camera nhô lên quá trần / mái hiên / bảng hiệu (thu gần lại cho vừa).

@@ -1,5 +1,5 @@
 import { createRng, range, type Rng } from '@/core/random';
-import type { Lighting, RGB } from './timeOfDay';
+import { createLighting, type Lighting, type RGB } from './timeOfDay';
 
 /**
  * Thời tiết Sài Gòn mùa mưa (thuần logic, có seed, có unit test): nắng ⇄ mây ⇄ mưa rào.
@@ -80,11 +80,16 @@ function approach(v: number, target: number, step: number): number {
 }
 
 const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
-const mix3 = (a: RGB, b: RGB, t: number): RGB => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
-const grey = (c: RGB): RGB => {
-  const l = c[0] * 0.3 + c[1] * 0.55 + c[2] * 0.15;
-  return [l, l, l];
-};
+/** Độ sáng (xám) của một màu. */
+const grey = (c: RGB): number => c[0] * 0.3 + c[1] * 0.55 + c[2] * 0.15;
+/** Ghi ba số vào mảng của đối tượng ánh sáng (ra ngoài là chỉ đọc; chỉ file này ghi). */
+function set3(out: RGB, x: number, y: number, z: number): void {
+  const o = out as [number, number, number];
+  o[0] = x;
+  o[1] = y;
+  o[2] = z;
+}
+const copy3 = (out: RGB, a: RGB): void => set3(out, a[0], a[1], a[2]);
 
 export interface WeatherLighting extends Lighting {
   fogNear: number;
@@ -92,19 +97,40 @@ export interface WeatherLighting extends Lighting {
   cloud: number;
 }
 
-/** Áp thời tiết lên ánh sáng theo giờ: mây che nắng, trời xám lại, sương dày khi mưa. */
-export function applyWeather(l: Lighting, w: WeatherState): WeatherLighting {
+/** Đối tượng để `applyWeather` ghi vào — tạo một lần, dùng lại mỗi khung hình (không tạo rác). */
+export function createWeatherLighting(): WeatherLighting {
+  return { ...createLighting(), fogNear: 190, fogFar: 760, cloud: 0 };
+}
+
+/**
+ * Áp thời tiết lên ánh sáng theo giờ: mây che nắng, trời xám lại, sương dày khi mưa.
+ * Ghi vào `out` (mặc định tạo mới) và trả lại chính nó; `out` khác `l`.
+ */
+export function applyWeather(l: Lighting, w: WeatherState, out: WeatherLighting = createWeatherLighting()): WeatherLighting {
   const c = w.cloud;
-  return {
-    ...l,
-    lightIntensity: l.lightIntensity * (1 - 0.8 * c),
-    hemiIntensity: l.hemiIntensity * (1 - 0.25 * c),
-    hemiSky: mix3(l.hemiSky, grey(l.hemiSky), c * 0.7),
-    fogColor: mix3(l.fogColor, mix3(grey(l.fogColor), [0.42, 0.45, 0.5], 0.4 * (1 - l.night)), c * 0.8),
-    fogNear: mix(190, 45, w.rain),
-    fogFar: mix(760, 260, w.rain),
-    cloud: c,
-    // Trời mưa tối sớm hơn: đèn đường, cửa sổ bật khi mây dày.
-    night: Math.max(l.night, c * 0.45),
-  };
+  out.hour = l.hour;
+  copy3(out.sunDir, l.sunDir);
+  copy3(out.lightDir, l.lightDir);
+  copy3(out.lightColor, l.lightColor);
+  out.lightIntensity = l.lightIntensity * (1 - 0.8 * c);
+  const sky = l.hemiSky;
+  const skyGrey = grey(sky);
+  const k = c * 0.7;
+  set3(out.hemiSky, mix(sky[0], skyGrey, k), mix(sky[1], skyGrey, k), mix(sky[2], skyGrey, k));
+  copy3(out.hemiGround, l.hemiGround);
+  out.hemiIntensity = l.hemiIntensity * (1 - 0.25 * c);
+  // Sương ngả xám, ban ngày pha thêm xám xanh của trời mưa.
+  const fog = l.fogColor;
+  const fogGrey = grey(fog);
+  const blue = 0.4 * (1 - l.night);
+  const f = c * 0.8;
+  set3(out.fogColor, mix(fog[0], mix(fogGrey, 0.42, blue), f), mix(fog[1], mix(fogGrey, 0.45, blue), f), mix(fog[2], mix(fogGrey, 0.5, blue), f));
+  out.envIntensity = l.envIntensity;
+  out.exposure = l.exposure;
+  out.fogNear = mix(190, 45, w.rain);
+  out.fogFar = mix(760, 260, w.rain);
+  out.cloud = c;
+  // Trời mưa tối sớm hơn: đèn đường, cửa sổ bật khi mây dày.
+  out.night = Math.max(l.night, c * 0.45);
+  return out;
 }

@@ -48,11 +48,10 @@ class Mixer {
     this.apply();
   }
 
-  /** Bật / tắt tiếng (phím M). Trả về trạng thái mới. */
-  toggleMute(): boolean {
-    this.muted = !this.muted;
+  /** Tắt / bật tiếng (phím M, lưu trong cài đặt). */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
     this.apply();
-    return this.muted;
   }
 
   get isMuted(): boolean {

@@ -28,12 +28,15 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | `W A S D` / mũi tên | đi | ga · phanh/lùi · lái |
 | `Shift` | chạy | — |
 | `Space` | nhảy | phanh tay |
-| `F` | lên xe (khi đứng gần) | xuống xe (khi chạy chậm) |
+| `F` | lên xe (khi đứng gần) · cướp ô tô đang dừng | xuống xe (khi chạy chậm) |
+| Chuột trái / phải | đánh (bấm liên tiếp: combo) / đòn mạnh | — |
+| giữ `Tab` · `1`–`4` | vòng chọn đồ (vũ khí, đồ ăn, thuốc) · chọn nhanh | như đi bộ |
+| `I` / `G` / `E` | balo · nhặt đồ (ghế nhựa, mũ bảo hiểm) · mua hàng (đứng trong tiệm) | — |
 | `H` / `L` / `R` | — | bóp còi · đèn pha · dựng lại xe |
 | Chuột / con lăn | xoay camera · zoom | xoay camera · zoom |
-| `P` | điện thoại (Kèo · Bản đồ · Tin nhắn · Ví · Cài đặt), `1`–`5` đổi tab, `Esc` cất | như đi bộ |
-| `M` | tắt / bật tiếng (âm lượng chỉnh trong Cài đặt) | như đi bộ |
-| `Tab` | ẩn/hiện bảng phím | |
+| `P` | điện thoại (Kèo · Bản đồ · Tin nhắn · Ví · Cài đặt · Ngân hàng · Phây · Camera), `1`–`8` mở app, `Esc` lùi / cất | như đi bộ |
+| `M` | tắt / bật tiếng (lưu lại; âm lượng chỉnh trong Cài đặt) | như đi bộ |
+| `F1` | ẩn/hiện bảng phím | như đi bộ |
 
 Game tự lưu (sau mỗi nhiệm vụ, mỗi 30 giây, khi rời trang); muốn chơi lại từ đầu thì mở `?moi=1`.
 
@@ -48,7 +51,8 @@ Muốn đổi: mở điện thoại (`P`) → **Cài đặt** (`5`) → chọn *
 - **Thấp**: tắt bóng đổ, vẽ 0,75× điểm ảnh, ít chi tiết ở xa — cho laptop card onboard (nhanh gần gấp đôi "Tự động").
 - **Vừa** / **Cao**: cố định độ phân giải 1× / 1,5× và có bóng đổ.
 
-Cũng trong Cài đặt: **Hiện FPS** (số khung hình/giây, tỉ lệ điểm ảnh, số lệnh vẽ), độ nhạy chuột, đảo trục dọc.
+Cũng trong Cài đặt: **Hiện FPS** (số khung hình/giây, tỉ lệ điểm ảnh, số lệnh vẽ), độ nhạy chuột, đảo trục dọc,
+âm lượng, máu nhẹ khi đánh nhau.
 Cài đặt được lưu lại (chơi lại từ đầu bằng `?moi=1` vẫn giữ). Laptop có hai card đồ hoạ: chọn trình duyệt chạy bằng
 card rời (Windows: Cài đặt → Hiển thị → Đồ hoạ). Chrome/Edge bản mới chạy WebGPU nhanh hơn Firefox/Safari (đang phải
 lùi về WebGL2).
@@ -56,7 +60,8 @@ lùi về WebGL2).
 ## Bản demo trên itch.io
 Game là trang web tĩnh nên lên itch.io dạng **HTML** (chơi ngay trong trình duyệt). Lấy file zip bằng một trong hai cách:
 - **Tự đóng gói:** `npm run package` → `release/hem-saigon-v<phiên bản>-web.zip` (build, kiểm tra theo giới hạn của
-  itch.io: có `index.html` ở gốc, ≤ 1000 file, đường dẫn tương đối, rồi nén — khoảng 2 MB).
+  itch.io: có `index.html` ở gốc, ≤ 1000 file, đường dẫn tương đối, rồi nén — khoảng 5–6 MB; gói kèm `CREDITS.md`
+  và giấy phép font trong `licenses/`).
 - **Lấy từ CI:** GitHub → tab **Actions** → lần chạy CI mới nhất trên `main` → mục **Artifacts** → `hem-saigon-web-zip`.
   GitHub bọc thêm một lớp zip bên ngoài: giải nén lớp đó ra, lấy file `hem-saigon-v…-web.zip` bên trong để tải lên.
 
@@ -83,7 +88,8 @@ TypeScript · Vite · Three.js (WebGPU, tự lùi về WebGL2) · Rapier physics
 - [Quy ước cho Claude / người đóng góp](CLAUDE.md)
 
 ## Ghi công
-Asset nhập từ ngoài (texture mặt đường, vỉa hè, tường…) đều là CC0, ghi nguồn đầy đủ trong [CREDITS.md](CREDITS.md).
+Texture, nhân vật, động tác nhập từ ngoài đều là CC0; font chữ dùng giấy phép SIL OFL 1.1. Nguồn đầy đủ trong
+[CREDITS.md](CREDITS.md).
 
 ## Giấy phép
-Mã nguồn: chưa chọn giấy phép. Asset bên thứ ba (nếu có) ghi rõ nguồn trong `public/assets/CREDITS.md`.
+Mã nguồn: chưa chọn giấy phép. Asset bên thứ ba ghi rõ nguồn và giấy phép trong [CREDITS.md](CREDITS.md).

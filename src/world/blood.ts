@@ -47,8 +47,11 @@ export class BloodSim {
 
   constructor(
     seed = 1,
-    /** Điểm (x, z) có nằm trên mặt đất cùng cao độ với chỗ bị đánh không (vỉa hè) — rơi ra ngoài thì không để vết. */
-    private readonly onFloor: (x: number, z: number) => boolean = () => true,
+    /**
+     * Mặt đất ở (x, z) có đúng cao độ `y` của chỗ bị đánh không — giọt văng sang chỗ cao / thấp hơn (đánh trên vỉa hè,
+     * giọt rơi xuống lòng đường và ngược lại) thì không để vết.
+     */
+    private readonly onFloor: (x: number, z: number, y: number) => boolean = () => true,
   ) {
     this.rng = createRng(seed);
   }
@@ -108,9 +111,9 @@ export class BloodSim {
       this.py[i]! += this.vy[i]! * dt;
       this.pz[i]! += this.vz[i]! * dt;
       if (this.py[i]! <= this.floor[i]!) {
-        // Chạm đất: thành vết nhỏ (1/4 số giọt, khỏi tốn chỗ) — nếu còn trên vỉa hè.
+        // Chạm đất: thành vết nhỏ (1/4 số giọt, khỏi tốn chỗ) — nếu mặt đất chỗ rơi cùng cao độ với chỗ bị đánh.
         this.dropLife[i] = 0;
-        if (this.rng() < 0.25 && this.onFloor(this.px[i]!, this.pz[i]!)) this.splat(this.px[i]!, this.floor[i]!, this.pz[i]!, 0.035 + this.rng() * 0.05);
+        if (this.rng() < 0.25 && this.onFloor(this.px[i]!, this.pz[i]!, this.floor[i]!)) this.splat(this.px[i]!, this.floor[i]!, this.pz[i]!, 0.035 + this.rng() * 0.05);
       }
     }
     for (let i = 0; i < MAX_SPLATS; i++) {

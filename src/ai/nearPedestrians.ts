@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { createRng, pick } from '@/core/random';
 import { lookSeed } from './civilians';
 import { PAD_HEIGHT } from '@/world/city/layout';
-import { CIVILIANS, civiliansAvailable, NPC_ACTION as A, NPC_CLIPS, stepNpc, type NpcBody, type NpcClip, type NpcPool } from './npcBody';
+import { CIVILIANS, civiliansAvailable, NPC_ACTION as A, NPC_CLIPS, stepNpc, type NpcBody, type NpcClip, type NpcSource } from './npcBody';
 import { PedestrianLod } from './pedestrianLod';
 import type { Walker } from './pedestrians';
 
@@ -22,6 +22,8 @@ interface Slot {
   height: number;
   /** Lần trước đang vung tay đấm (bắt đầu cú mới ⇒ phát lại động tác đấm). */
   punching: boolean;
+  /** Vừa lấy hình: vào ngay tư thế đích (không trộn dần từ tư thế gốc chữ T). */
+  fresh: boolean;
   /** Chỉ số action đứng (kiểu riêng từng người), đi, chạy (nam / nữ), gục (theo mẫu người). */
   idle: number;
   walk: number;
@@ -76,7 +78,7 @@ export class NearPedestrianView {
   /** `pool`: kho hình NPC dùng chung (đổi người khỏi phải nhân bản lại; số hình chỉ bằng số người hiện cùng lúc). */
   constructor(
     capacity: number,
-    private readonly pool: NpcPool,
+    private readonly pool: NpcSource,
   ) {
     this.lod = new PedestrianLod(capacity, NEAR_RADIUS);
     const iconMat = callIconMaterial();
@@ -85,7 +87,7 @@ export class NearPedestrianView {
       callIcon.visible = false;
       callIcon.scale.setScalar(0.4);
       this.root.add(callIcon);
-      this.slots.push({ walker: -1, generation: -1, state: 'calm', npc: null, height: 1.65, punching: false, idle: A.idle, walk: A.walk, run: A.jog, death: A.deathA, callIcon });
+      this.slots.push({ walker: -1, generation: -1, state: 'calm', npc: null, height: 1.65, punching: false, fresh: false, idle: A.idle, walk: A.walk, run: A.jog, death: A.deathA, callIcon });
     }
     this.root.name = 'near-pedestrians';
   }
@@ -121,6 +123,7 @@ export class NearPedestrianView {
     slot.npc = npc;
     slot.height = height;
     slot.punching = false;
+    slot.fresh = true;
     if (npc) {
       npc.body.scale.setScalar(npc.perMeter * height);
       // Lệch pha (có seed) để những người cạnh nhau không bước đều như duyệt binh.
@@ -167,7 +170,11 @@ export class NearPedestrianView {
       if (state !== slot.state) {
         // Vào trạng thái mới: phát động tác một lần từ đầu (trúng đòn, ngã, gục).
         const idx = state === 'dead' ? slot.death : state === 'down' ? A.knockback : state === 'hurt' ? A.hitChest : -1;
-        if (idx >= 0) npc.actions[idx]!.reset().play();
+        if (idx >= 0) {
+          const action = npc.actions[idx]!.reset().play();
+          // Mới vào tầm vẽ mà đã nằm sẵn: tới luôn cuối động tác (không đứng dậy ngã lại trước mắt người chơi).
+          if (slot.fresh && state !== 'hurt') action.time = action.getClip().duration;
+        }
         slot.state = state;
       }
       // Cú đấm mới (người đánh trả) ⇒ phát lại động tác đấm từ đầu.
@@ -197,6 +204,11 @@ export class NearPedestrianView {
       // Nhịp bước theo tốc độ (clip đi khớp ~1,6 m/s, chạy ~3,6 m/s).
       npc.actions[slot.walk]!.timeScale = Math.min(1.4, Math.max(0.6, w.speed / 1.6));
       npc.actions[slot.run]!.timeScale = Math.min(1.4, Math.max(0.7, w.speed / 3.6));
+      if (slot.fresh) {
+        // Hình vừa lấy từ kho có mọi trọng số = 0: trộn dần thì bộ trộn bù phần thiếu bằng tư thế gốc chữ T (dang tay).
+        slot.fresh = false;
+        for (let k = 0; k < t.length; k++) npc.weights[k] = t[k]!;
+      }
       stepNpc(npc, t, state === 'calm' ? 8 : 18, dt);
     }
   }

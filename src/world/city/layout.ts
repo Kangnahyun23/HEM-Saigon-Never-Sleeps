@@ -156,6 +156,21 @@ export const FLOOR_HEIGHT = 3.2;
 export const PARAPET = 0.7;
 export const PAD_HEIGHT = 0.15;
 
+/**
+ * Cao độ mặt đất đi được tại (x, z): nền block (vỉa hè, trong hẻm, sân chợ…) và bờ kè cao PAD_HEIGHT, lòng đường 0.
+ * Cho NPC không có thân vật lý (công an đi bộ) và vết máu đặt đúng mặt đất.
+ */
+export function groundHeight(layout: CityLayout, x: number, z: number): number {
+  const p = layout.river.promenade;
+  if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return PAD_HEIGHT;
+  const blocks = layout.blocks;
+  for (let i = 0; i < blocks.length; i++) {
+    const r = blocks[i]!.rect;
+    if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return PAD_HEIGHT;
+  }
+  return 0;
+}
+
 const ROAD_WIDTH: Record<RoadKind, number> = { avenue: 20, street: 11, edge: 11 };
 const SIDEWALK_WIDTH: Record<RoadKind, number> = { avenue: 5, street: 3.5, edge: 3.5 };
 const MAIN_HEM_WIDTH = 3.4;

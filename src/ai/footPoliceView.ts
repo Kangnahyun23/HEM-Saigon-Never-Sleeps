@@ -37,6 +37,8 @@ export class FootPoliceView {
   constructor(
     capacity: number,
     private readonly pool: NpcSource,
+    /** Cao độ mặt đất tại (x, z): lòng đường 0, vỉa hè / trong hẻm PAD_HEIGHT (công an không có thân vật lý). */
+    private readonly ground: (x: number, z: number) => number = () => PAD_HEIGHT,
   ) {
     for (let k = 0; k < capacity; k++) this.slots.push({ officer: -1, npc: null, state: 'calm', striking: false, run: A.jog, death: A.deathA, fresh: false });
   }
@@ -106,7 +108,9 @@ export class FootPoliceView {
       const npc = slot.npc;
       if (!npc) continue;
       const dyaw = Math.atan2(Math.sin(o.yaw - o.prevYaw), Math.cos(o.yaw - o.prevYaw));
-      npc.body.position.set(o.prevX + (o.x - o.prevX) * alpha, PAD_HEIGHT, o.prevZ + (o.z - o.prevZ) * alpha);
+      const x = o.prevX + (o.x - o.prevX) * alpha;
+      const z = o.prevZ + (o.z - o.prevZ) * alpha;
+      npc.body.position.set(x, this.ground(x, z), z);
       npc.body.quaternion.copy(_q.setFromAxisAngle(_up, o.prevYaw + dyaw * alpha));
       const state: State = o.dead ? 'dead' : o.down > 0 ? 'down' : o.hurt > 0 ? 'hurt' : 'calm';
       if (state !== slot.state) {

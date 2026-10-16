@@ -20,7 +20,7 @@ describe('cài đặt', () => {
     const store = new MemoryStore();
     const s = new SettingsStore(store);
     expect(s.load()).toEqual(DEFAULT_SETTINGS);
-    const mine = { quality: 'low', showFps: true, mouseSensitivity: 1.6, invertY: true, volume: 0.3, blood: false, adultConfirmed: true } as const;
+    const mine = { quality: 'low', showFps: true, mouseSensitivity: 1.6, invertY: true, volume: 0.3, muted: true, blood: false, adultConfirmed: true } as const;
     expect(s.save(mine)).toBe(true);
     expect(s.load()).toEqual(mine);
     expect(store.data.has(SETTINGS_KEY)).toBe(true);
@@ -28,12 +28,13 @@ describe('cài đặt', () => {
 
   it('dữ liệu hỏng: trường nào sai thì trường đó về mặc định', () => {
     expect(parseSettings('{hỏng')).toEqual(DEFAULT_SETTINGS);
-    expect(parseSettings(JSON.stringify({ quality: 'ultra', showFps: 'có', mouseSensitivity: 99, invertY: true, volume: 7, blood: 0 }))).toEqual({
+    expect(parseSettings(JSON.stringify({ quality: 'ultra', showFps: 'có', mouseSensitivity: 99, invertY: true, volume: 7, muted: 1, blood: 0 }))).toEqual({
       quality: 'auto',
       showFps: false,
       mouseSensitivity: 2.5,
       invertY: true,
       volume: 1,
+      muted: false,
       blood: true,
       adultConfirmed: false,
     });
@@ -41,6 +42,8 @@ describe('cài đặt', () => {
     expect(parseSettings(JSON.stringify({ quality: 'low' })).adultConfirmed).toBe(false);
     // Bản cài đặt cũ chưa có âm lượng: lấy mặc định.
     expect(parseSettings(JSON.stringify({ quality: 'low' })).volume).toBe(0.8);
+    // Bản cài đặt cũ chưa lưu tắt tiếng (phím M): có tiếng.
+    expect(parseSettings(JSON.stringify({ quality: 'low' })).muted).toBe(false);
     expect(parseSettings(JSON.stringify({ quality: 'medium' })).quality).toBe('medium');
   });
 

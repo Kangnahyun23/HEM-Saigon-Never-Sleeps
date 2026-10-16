@@ -71,6 +71,15 @@ export class Wallet {
   }
 }
 
+/** Mỗi lần trả nợ trên app tối thiểu ngần này — trừ lần trả nốt khoản nợ còn ít hơn. */
+export const MIN_PAYMENT = 100_000;
+
+/** Số tiền trả nợ được ngay (dồn hết tiền mặt, không quá số nợ); 0 = chưa đủ tiền cho một lần trả. */
+export function payable(cash: number, debt: number): number {
+  const a = Math.min(cash, debt);
+  return a > 0 && (a >= MIN_PAYMENT || a >= debt) ? a : 0;
+}
+
 /** "1.250.000 đ" — dấu chấm phân cách hàng nghìn kiểu Việt Nam. */
 export function formatVnd(amount: number): string {
   const sign = amount < 0 ? '−' : '';

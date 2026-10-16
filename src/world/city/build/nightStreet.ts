@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { InstanceBatch } from '@/render/instancing';
-import { addNightOnly } from '../../nightGlow';
+import { addNightOnly, addWetNightOnly } from '../../nightGlow';
 import { createShopSpillMaterial, createWetStreakMaterial } from '../nightMaterials';
 import { addMesh, GEO, localToWorld, type BuildContext } from './context';
 
@@ -38,9 +38,11 @@ export function buildNightStreet(ctx: BuildContext): void {
     const mesh = batch.build();
     if (!mesh) continue;
     mesh.renderOrder = 1;
-    // Vệt phản chiếu dựng hình trong shader (vươn xa khỏi điểm đặt) ⇒ không dùng khối bao để loại.
-    if (batch === streaks) mesh.frustumCulled = false;
-    addNightOnly(mesh);
+    if (batch === streaks) {
+      // Vệt phản chiếu dựng hình trong shader (vươn xa khỏi điểm đặt) ⇒ không dùng khối bao để loại.
+      mesh.frustumCulled = false;
+      addWetNightOnly(mesh);
+    } else addNightOnly(mesh);
     addMesh(ctx, mesh);
   }
 }

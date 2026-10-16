@@ -113,4 +113,17 @@ describe('MotorbikePhysics', () => {
     expect(maxImpact).toBeGreaterThan(7);
     expect(bike.body.translation().z).toBeLessThan(40);
   });
+
+  it('đâm tường: giữ tốc độ ngay trước cú va (lúc báo va chạm xe đã gần như đứng lại) để tính đà văng người lái', () => {
+    const { world, ground } = makeWorld();
+    world.createCollider(RAPIER.ColliderDesc.cuboid(10, 3, 0.5).setTranslation(0, 3, 40), ground);
+    const bike = new MotorbikePhysics(RAPIER, world, 0, 0, 0, 0);
+    for (let i = 0; i < 6 * 60 && bike.impact <= 7; i++) {
+      bike.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      world.step();
+    }
+    expect(bike.impact).toBeGreaterThan(7);
+    expect(Math.abs(bike.speed)).toBeLessThan(6);
+    expect(bike.impactSpeed).toBeGreaterThan(12);
+  });
 });

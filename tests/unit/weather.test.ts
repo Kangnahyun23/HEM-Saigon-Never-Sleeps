@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lightingAt } from '@/world/timeOfDay';
-import { applyWeather, rainChance, WeatherSim } from '@/world/weather';
+import { applyWeather, createWeatherLighting, rainChance, WeatherSim } from '@/world/weather';
 
 const MINUTE = 1 / 60;
 
@@ -54,5 +54,23 @@ describe('WeatherSim', () => {
     expect(rain.lightIntensity).toBeLessThan(l.lightIntensity * 0.3);
     expect(rain.fogFar).toBeLessThan(300);
     expect(rain.night).toBeGreaterThan(0.4);
+  });
+
+  it('áp thời tiết ghi vào đối tượng có sẵn (dùng lại mỗi khung hình): cùng kết quả như tạo mới, giữ nguyên mảng', () => {
+    const out = createWeatherLighting();
+    const arrays = [out.sunDir, out.lightDir, out.lightColor, out.hemiSky, out.hemiGround, out.fogColor];
+    const skies = [
+      { sky: 'clear', cloud: 0, rain: 0, wet: 0 },
+      { sky: 'rain', cloud: 0.8, rain: 0.6, wet: 1 },
+    ] as const;
+    for (const h of [9, 16, 23]) {
+      const l = lightingAt(h);
+      for (const w of skies) {
+        expect(applyWeather(l, w, out)).toBe(out);
+        expect(out).toEqual(applyWeather(l, w));
+      }
+    }
+    const after = [out.sunDir, out.lightDir, out.lightColor, out.hemiSky, out.hemiGround, out.fogColor];
+    after.forEach((a, i) => expect(a).toBe(arrays[i]));
   });
 });

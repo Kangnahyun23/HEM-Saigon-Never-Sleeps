@@ -34,6 +34,14 @@ test('balo: mở, ăn bánh mì hồi máu, vứt đồ', async ({ page }) => {
   expect(await page.evaluate(() => (window.__HEM__!.game as { health: number }).health)).toBeCloseTo(70);
   await expect(page.locator('[data-slot="0"] b')).toHaveCount(0); // còn 1 ổ ⇒ không hiện "×n"
   await expect(page.locator('.hud-toast')).toContainText('Bánh mì thịt: +20 máu');
+  // Đầy máu thì không ăn — giữ ổ bánh mì còn lại.
+  const left = await page.evaluate(() => {
+    const g = window.__HEM__!.game as { health: number; inventory: { count(id: string): number } };
+    g.health = 100;
+    return g.inventory.count('banhMi');
+  });
+  await press(page, 'KeyE');
+  expect(await page.evaluate(() => (window.__HEM__!.game as { inventory: { count(id: string): number } }).inventory.count('banhMi'))).toBe(left);
 
   // Giấy tờ xe là đồ quan trọng: không vứt được.
   await page.locator('.bp-slot', { hasText: 'Giấy tờ xe' }).click();

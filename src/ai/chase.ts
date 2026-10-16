@@ -1,6 +1,7 @@
 import { createRng, range, type Rng } from '@/core/random';
 import type { SightGrid } from '@/systems/heat';
 import type { HemMap } from './hemNav';
+import type { Obstacle } from './traffic';
 import { lanePoint, type TrafficLane, type TrafficNetwork } from './trafficNetwork';
 
 /**
@@ -136,6 +137,16 @@ export const POLICE_CHASE: ChaseConfig = {
   roadblock: { level: 3, distance: 140, minSpeed: 8, cooldown: 30, life: 45, passed: 25 },
 };
 
+/**
+ * Số xe mỗi loại có cùng lúc tối đa — cỡ bể thân vật lý + lớp vẽ ở ChaseSystem. Xe máy: số xe nhiều nhất theo cấp + vài
+ * chỗ cho xe đang rút lui / bỏ lại. Ô tô: số ô tô nhiều nhất + một chốt chặn (tối đa 3 xe) + vài chỗ cho xe đang rút lui.
+ */
+export function chaserCapacity(config: ChaseConfig): { bike: number; car: number } {
+  const bike = Math.max(...config.perLevel) + 3;
+  const car = config.car ? Math.max(0, ...(config.carsPerLevel ?? [0])) + (config.roadblock ? 3 : 0) + 3 : 0;
+  return { bike, car };
+}
+
 /** Số xe truy đuổi theo cấp Độ Nóng. */
 export const CHASERS_PER_LEVEL = [0, 2, 3, 5] as const;
 export const CHASE: ChaseConfig = {
@@ -161,6 +172,10 @@ const BIKE_RADIUS = 1;
 const BLOCK_RETRY = 2;
 /** Xe trong hẻm mất dấu Tín: còn nhớ chỗ thấy lần cuối trong ngần này giây. */
 const LAST_SEEN_TIME = 4;
+/** Vật cản báo cho xe NPC: ô tô đứng giữa đường là hai vòng tròn (đầu + đuôi xe, cách tâm 1,1 m), xe máy một vòng. */
+const CAR_OBSTACLE_OFFSET = 1.1;
+const CAR_OBSTACLE_RADIUS = 1.05;
+const BIKE_OBSTACLE_RADIUS = 0.9;
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -179,6 +194,10 @@ export class ChaseSim {
   private readonly done: Uint8Array;
   /** Điểm ra khỏi hẻm (dùng lại). */
   private readonly exitPoint = { x: 0, z: 0 };
+  /** Vật cản báo cho xe NPC (dùng lại; bể chỉ lớn thêm khi nhiều xe đứng hơn mọi lần trước). */
+  private readonly obstacles: Obstacle[] = [];
+  /** Số xe mỗi loại tối đa (cỡ bể thân vật lý + lớp vẽ) — xe thứ quá sức chứa sẽ không hiện hình, không có thân. */
+  private readonly capacity: { bike: number; car: number };
 
   constructor(
     private readonly network: TrafficNetwork,
@@ -189,6 +208,7 @@ export class ChaseSim {
     private readonly hems: HemMap | null = null,
   ) {
     this.rng = createRng(seed);
+    this.capacity = chaserCapacity(config);
     const n = network.nodes.length;
     this.dist = new Float64Array(n);
     this.prev = new Int32Array(n);
@@ -375,6 +395,10 @@ export class ChaseSim {
       this.blockTimer -= dt;
       if (this.blockTimer <= 0 && player.speed >= rb.minSpeed && !this.blocking) this.blockTimer = this.placeRoadblock(player) ? rb.cooldown : BLOCK_RETRY;
     }
+    // Xe bỏ lại (công an bị hạ) / đang rút lui còn quanh Tín cộng với xe mới gọi tới có thể vượt sức chứa ⇒ xe vượt
+    // không có hình, không có thân mà vẫn đuổi, vẫn bắt được. Bỏ bớt xe đang rút lui ở xa Tín nhất.
+    this.trim('bike', this.capacity.bike, player);
+    this.trim('car', this.capacity.car, player);
 
     this.seen = false;
     let close = false;
@@ -502,6 +526,57 @@ export class ChaseSim {
       return true;
     }
     return false;
+  }
+
+  /** Quá `max` xe loại `kind`: bỏ bớt xe đang rút lui (kể cả xe bỏ lại) ở xa Tín nhất. */
+  private trim(kind: ChaserKind, max: number, player: ChasePlayer): void {
+    let count = 0;
+    for (const c of this.chasers) if (c.kind === kind) count++;
+    while (count > max) {
+      let far = -1;
+      let farD = -1;
+      for (let i = 0; i < this.chasers.length; i++) {
+        const c = this.chasers[i]!;
+        if (c.kind !== kind || !c.leaving) continue;
+        const d = Math.hypot(c.x - player.x, c.z - player.z);
+        if (d > farD) {
+          farD = d;
+          far = i;
+        }
+      }
+      if (far < 0) return;
+      this.chasers.splice(far, 1);
+      count--;
+    }
+  }
+
+  /**
+   * Thêm vào `out` vật cản của các xe đứng giữa đường — ô tô chốt chặn, xe dừng cho công an xuống, xe bỏ lại khi người
+   * lái bị hạ — để xe NPC dừng / lách quanh thay vì chạy xuyên qua. Xe đang chạy thì không tính.
+   */
+  addObstacles(out: Obstacle[]): void {
+    let k = 0;
+    for (const c of this.chasers) {
+      if (c.mode === 'chase') continue;
+      if (c.kind === 'car') {
+        const fx = Math.sin(c.yaw) * CAR_OBSTACLE_OFFSET;
+        const fz = Math.cos(c.yaw) * CAR_OBSTACLE_OFFSET;
+        out.push(this.obstacle(k++, c.x + fx, c.z + fz, CAR_OBSTACLE_RADIUS), this.obstacle(k++, c.x - fx, c.z - fz, CAR_OBSTACLE_RADIUS));
+      } else out.push(this.obstacle(k++, c.x, c.z, BIKE_OBSTACLE_RADIUS));
+    }
+  }
+
+  /** Vật cản thứ `k` trong bể, ghi chỗ mới. */
+  private obstacle(k: number, x: number, z: number, radius: number): Obstacle {
+    let o = this.obstacles[k];
+    if (!o) {
+      o = { x: 0, z: 0, radius: 0 };
+      this.obstacles.push(o);
+    }
+    o.x = x;
+    o.z = z;
+    o.radius = radius;
+    return o;
   }
 
   /** Dừng xe cho công an xuống đuổi bộ (FootPolice): phanh tới khi đứng yên, không bám / bắt ai nữa. */
