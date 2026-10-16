@@ -1,6 +1,6 @@
 # Kế hoạch v0.2 — "Sài Gòn thật hơn, chơi đã hơn"
 
-Cập nhật: 2026-10-10. v0.1 = M0–M4 (khu Trung Tâm, Hồi 1, xe máy, Độ Nóng, điện thoại, âm thanh, bản demo itch.io).
+Cập nhật: 2026-10-16 (lập kế hoạch 2026-10-10). v0.1 = M0–M4 (khu Trung Tâm, Hồi 1, xe máy, Độ Nóng, điện thoại, âm thanh, bản demo itch.io).
 Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự án, chia thành các PR nhỏ merge dần vào `main`.
 
 **Tiến độ:**
@@ -101,6 +101,10 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   - [x] R4 vào hẻm thì xe truy đuổi (công an, đàn em) chậm lại hẳn — ngoài đường lớn vẫn nhanh như cũ: xe máy trong hẻm
     ≤ 5 m/s (Tín chạy bộ 6,4 m/s ⇒ chạy là bỏ được, đứng lại vẫn bị bắt), phanh trước miệng hẻm; ô tô dừng ở miệng hẻm;
     mất dấu trong hẻm thì tới chỗ thấy Tín lần cuối rồi men theo hẻm ra (trước đây lao thẳng về giao lộ xuyên qua nhà);
+- [x] F1 (2026-10-16, theo yêu cầu chủ dự án sau buổi review toàn dự án): sửa loạt lỗi nhỏ — xe công an bỏ lại là vật cản,
+  công an / máu đúng cao độ mặt đất, hết xe đuổi tàng hình; té xe, ăn khi đầy máu, nút trả nợ, vòng chọn đồ, cuộc gọi báo
+  sau khi bị bắt; bảng hiệu tiệm biến mất ngoài 130 m, vệt đường ướt vẽ cả đêm khô, bloom bật giữa chừng, tắt tiếng không
+  lưu; rác bộ nhớ mỗi khung; ghi công font OFL; `npm run perf` chạy ẩn. Lỗi bản lưu để PR kế tiếp;
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
@@ -301,8 +305,8 @@ Cỡ PR: S ≈ nửa ngày, M ≈ 1 ngày, L ≈ 2 ngày. Mỗi PR tuân theo qu
   - chơi thử tự động (fuzz) với chiến đấu, truy nã và nội thất;
   - âm thanh mới: còi hụ, đánh nhau, chợ, karaoke (tổng hợp WebAudio).
 - **N10.2 (S) Phát hành:**
-  - màn hình ghi công (`CREDITS.md`);
-  - đánh lại phiên bản theo bản phát hành: v0.1 = M0–M4, nên `package.json` → 0.2.0;
+  - màn hình ghi công (`CREDITS.md`; bản build đã kèm file này + giấy phép font từ F1);
+  - đánh lại phiên bản theo bản phát hành: v0.1 = M0–M4, nên `package.json` (đang là 0.4.0, đánh theo mốc M4) → 0.2.0;
   - zip itch.io có cờ nội dung 18+; ảnh chụp mới cho README.
 
 ## 6. Phím điều khiển dự kiến (máy tính)

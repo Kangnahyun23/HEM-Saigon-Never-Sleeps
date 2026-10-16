@@ -29,11 +29,17 @@ Cảnh báo 18+ hiện lần đầu vào game (game đứng yên tới khi xác 
 Asset nhập ngoài: thêm dòng vào `SOURCES` (scripts/assets.mjs) rồi `npm run assets`; file nén trong `public/media/` có commit
 (ngân sách `MEDIA_BUDGET` 25 MB, test `assets.test.ts` kiểm tra), bản gốc chỉ ở `.cache/assets/`. Code lấy texture bằng
 `getTextures(id)` (src/assets/textures.ts) — luôn có đường lùi về vẽ thủ tục khi ảnh chưa tải được.
-Hiệu năng: chi tiết nhỏ mới thì thêm tên lô vào `DETAIL_DISTANCE` (city/buildCity.ts); khối tĩnh trong một nhóm nên dùng chung vật liệu để `mergeStaticMeshes` gộp được.
+Hiệu năng: chi tiết nhỏ mới thì thêm tên lô vào `DETAIL_DISTANCE` (world/city/detailDistance.ts — khớp theo tiền tố, coi chừng
+khớp nhầm lô khác cùng đầu tên; có unit test); khối tĩnh trong một nhóm nên dùng chung vật liệu để `mergeStaticMeshes` gộp được.
 Vòng lặp mỗi khung hình KHÔNG tạo đối tượng / mảng / closure mới (dùng lại biến tạm) — rác bộ nhớ gây khựng khi trình duyệt dọn.
+Hàm trả đối tượng dùng chung — đọc ngay, đừng giữ: `camera.forward()`, `lightingAt(h, out)` / `applyWeather(l, w, out)`
+(`createLighting` / `createWeatherLighting` tạo `out` một lần). `Input.isDown` / `wasPressed` nhận tối đa 4 mã phím (không rest).
 Game chậm lại (vòng chọn đồ 30 %, dừng hình khi trúng đòn) qua `game.tickScale(dt)` ở vòng lặp main.ts — `simulate()` không áp hệ số này.
 Bước vật lý luôn qua `physics.step()` / `stepWorld()` — đừng gọi `world.step()` (Rapier 0.21 duyệt lại mọi collider, ~300 KB rác/bước).
-Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ.
+Vật chỉ dùng ban đêm (phát sáng cộng màu, trong suốt) đăng ký `addNightOnly()` để ban ngày khỏi vẽ; vật chỉ có tác dụng
+khi tối VÀ đường ướt (vệt bảng hiệu phản chiếu) đăng ký `addWetNightOnly()` — độ ướt đặt qua `setWetLevel()` (nightGlow.ts).
+Vật liệu bọc `reflective()` mà bị huỷ (xe bị thay) thì gọi `unreflective()` trước khi `dispose()`.
+NPC / máu đặt trên mặt đất theo `groundHeight(layout, x, z)` (layout.ts: vỉa hè, hẻm, bờ sông cao `PAD_HEIGHT`, mặt đường 0).
 Vật đổ bóng KHÔNG dùng `alphaTest` (để `castShadow: false`): lượt vẽ bóng dùng chung một vật liệu bóng, vật có / không
 alphaTest xen nhau làm nó tăng `version` ⇒ mọi vật đổ bóng tính lại khoá vật liệu mỗi khung (từng ăn ~16 % CPU + nửa rác bộ nhớ).
 NPC có xương lấy / trả qua kho chung `NpcPool` (ai/npcBody.ts — `KeyedPool` theo mẫu người, dựng sẵn lúc tải bằng
@@ -84,7 +90,11 @@ chạy `npm run e2e` rồi **xem ảnh chụp** để tự kiểm tra trước k
 - `window.__HEM__` chỉ để test/debug, không dùng trong logic game.
 - Code và tên biến bằng tiếng Anh; comment, text hiển thị và tài liệu bằng tiếng Việt.
 - Tên khu, đường, thương hiệu trong game đều hư cấu. Không dùng asset/nhạc có bản quyền; chỉ CC0 hoặc tự làm
-  (không Mixamo, không Quaternius bản QAL); asset nhập ngoài phải ghi nguồn trong CREDITS.md.
+  (không Mixamo, không Quaternius bản QAL); asset nhập ngoài phải ghi nguồn trong CREDITS.md. Riêng font chữ: SIL OFL 1.1
+  (gói @fontsource) — ghi trong mục "Font chữ" của `scripts/credits-header.md`; bản build tự kèm CREDITS.md + giấy phép
+  từng font (`scripts/licenses.mjs`); test `assets.test.ts` kiểm tra font nào trong `ui/fonts.ts` cũng có dòng ghi công.
+- Chạy trình duyệt tự động (e2e, `npm run perf`, kiểm tra nhanh) luôn ở chế độ ẩn — không bật cửa sổ lên màn hình chủ dự án.
+  `npm run perf` mặc định ẩn (headless kiểu mới vẫn dùng GPU thật); `PERF_WINDOW=1` mới hiện cửa sổ.
 - Nội dung: v0.1 không máu; từ v0.2 cận chiến có máu nhẹ (tắt được trong Cài đặt), nhãn 18+, không súng (xem mục Rủi ro trong GDD).
 - Kế hoạch đang làm: `docs/plan-v0.2.md` — làm theo thứ tự N1 → N10, mỗi mục một PR nhỏ.
 
@@ -148,15 +158,17 @@ src/
                      Thêm loại xe: một dòng trong VEHICLE_SPECS + mẫu khối trong npcVehicleModels + chỗ trong CAR_MIX / SLOW_MIX.
                      Đổi luật giao thông thì chạy trafficFleet.test.ts — nó đo cả đàn 150 giây (tốc độ trung bình, xe đứng ì, chồng xe)
                      pedestrians (người đi bộ vòng vỉa hè, lách vật cản, né xe; thấy đánh nhau thì bỏ chạy / la / quay video /
-                     gọi báo / đánh trả — có unit test), civilians (mẫu người dùng chung cho mô phỏng + hình), pedestrianView (khối hộp instanced),
+                     gọi báo / đánh trả; Tín bị bắt / gục thì `calmDown()` bỏ mọi cuộc gọi dở — có unit test),
+                     civilians (mẫu người dùng chung cho mô phỏng + hình), pedestrianView (khối hộp instanced),
                      nearPedestrians + pedestrianLod (K người gần camera vẽ bằng nhân vật có xương, có giữ chỗ — có unit test),
                      seatedPeople (người ngồi quán cóc / người bán xe đẩy quanh camera, đông vắng theo giờ), npcBody (dựng NPC có xương + kho chung NpcPool;
                      dùi cui gắn tay phải `npc.baton`, ẩn khi trả về kho)
                      chase (xe truy đuổi theo mạng đường, mất dấu khi khuất tầm nhìn — có unit test; cấu hình CHASE cho đàn em
                      Phát, POLICE_CHASE cho công an: từ 3 sao có ô tô (`carsPerLevel`) và chốt chặn ô tô đỗ ngang đường phía
                      trước — `placeRoadblock`, chaser `mode: 'block'`; xe dừng cho người lái xuống: `mode: 'parked'`, `rider` =
-                     còn người trên xe), chaseSystem (thân Rapier + hình theo loại xe máy / ô tô;
-                     công an có đèn chớp đỏ – xanh; chốt chặn là vật cản cho xe NPC qua `addObstacles`; xe máy gần camera
+                     còn người trên xe; mọi xe không ở 'chase' — chốt chặn, xe đỗ, xe bỏ lại — là vật cản cho xe NPC qua
+                     `addObstacles`; số xe giới hạn theo thân Rapier dựng sẵn `chaserCapacity`, thừa thì dời xe bỏ lại xa nhất),
+                     chaseSystem (thân Rapier + hình theo loại xe máy / ô tô; công an có đèn chớp đỏ – xanh; xe máy gần camera
                      có người lái có xương — `chaseSystem.riders`: công an `POLICE_RIDERS`, đàn em `GANG_RIDERS` từ kho
                      riêng `game.gangPool`; xe truy đuổi đánh số theo chỗ trong mảng nên chọn người theo `generation`),
                      hemNav (HemMap — xe truy đuổi trong hẻm: xe máy ≤ `hemSpeed`, chậm hơn Tín chạy bộ; ô tô dừng ở miệng
@@ -179,7 +191,8 @@ src/
                      có unit test), minimap (+ minimapMath có unit test)
                      phone (điện thoại "Sầu Riêng S9" cầm tay, phím P: màn hình chính + 8 app — Kèo, Bản đồ, Tin nhắn, Ví,
                      Cài đặt, Ngân hàng, Phây, Camera; phím 1–8 mở app, Backspace/Esc lùi), ageGate (cảnh báo 18+ lần đầu), outcome (màn hình BỊ BẮT / GỤC)
-  systems/           wallet (tiền mặt + nợ app vay), inbox (tin nhắn), heat (Độ Nóng + tầm nhìn),
+  systems/           wallet (tiền mặt + nợ app vay; `payable` = số trả được: ≥ `MIN_PAYMENT` hoặc đủ trả hết), inbox (tin nhắn),
+                     heat (Độ Nóng + tầm nhìn),
                      economy (mức phạt khi bị bắt / viện phí / bị lục túi: phần trăm tiền mặt có sàn + trần — có unit test;
                      đổi giá, tiền công, mức phạt thì chạy economy.test.ts: mô hình chơi thử tests/unit/economySim.ts),
                      combat (đòn nhẹ / mạnh theo vũ khí, combo, quạt trúng đòn, máu → đau / ngã / gục, lượng máu bắn — có unit test),
@@ -191,13 +204,16 @@ src/
                      `game.assaultPolice`; vùng tìm kiếm theo sao, khuất mặt đủ lâu — nhanh
                      hơn khi ra khỏi vùng / trốn trong hẻm — thì thoát; có unit test),
                      social (bảng tin "Phây" châm biếm, phản ứng theo diễn biến game — có unit test),
-                     inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu — có unit test; giao diện ui/backpack, phím I),
+                     inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu; `healGain` = máu hồi thật, đầy máu thì 0 —
+                     game không cho ăn — có unit test; giao diện ui/backpack, phím I),
                      wheel (vòng chọn đồ: danh sách ô + chọn theo hướng chuột — có unit test; ui/weaponWheel, giữ Tab),
                      save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
-                     settings (cài đặt người chơi + bảng mức chất lượng Tự động/Thấp/Vừa/Cao),
+                     settings (cài đặt người chơi — cả tắt tiếng phím M — + bảng mức chất lượng Tự động/Thấp/Vừa/Cao; đổi
+                     cài đặt từ chỗ khác app Cài đặt thì qua `changeSettings` ở main.ts để điện thoại cập nhật bản sao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test
                      fallGuard (lưới an toàn: rơi xuống sông / lọt khe quá lâu thì đưa lên chỗ đứng vững gần nhất — có unit test)
-scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test)
+scripts/             setup.mjs (tự cài thư viện), assets.mjs (tải + nén asset CC0, sinh manifest + CREDITS.md), package.mjs + zip.mjs (đóng gói zip cho itch.io — zip.mjs có unit test),
+                     licenses.mjs (CREDITS.md + giấy phép font đưa vào dist/ — có unit test), perf.mjs (đo fps / rác trên GPU thật, chạy ẩn)
 tests/unit/          Vitest (bố cục, nhân vật, xe máy chạy trong Node với Rapier thật, giao thông NPC: traffic + trafficFleet)
 tests/e2e/           Playwright: smoke, views, gameplay, traffic, dayNight, phone, weather, pedestrians, missions, chase, story, save, settings, audio, fall, backpack, combat, reactions, police, shops, car, patrol
 ```
