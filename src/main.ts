@@ -170,6 +170,7 @@ async function main(): Promise<void> {
     fpsBox.hidden = !(s.showFps || fpsParam);
     game.setLookOptions(s.mouseSensitivity, s.invertY);
     game.setVolume(s.volume);
+    game.setMuted(s.muted);
     game.setBlood(s.blood);
   };
   applySettings(settings);
@@ -178,8 +179,11 @@ async function main(): Promise<void> {
     settings = next;
     settingsStore.save(next);
     applySettings(next);
+    // App Cài đặt giữ bản sao: đổi từ chỗ khác (phím M, cảnh báo 18+) thì cập nhật luôn, kẻo lần bấm sau ghi đè giá trị cũ.
+    hud.phone?.setSettings(next, changeSettings);
   };
   hud.phone?.setSettings(settings, changeSettings);
+  game.onMuteToggle = (muted) => changeSettings({ ...settings, muted });
   // Cảnh báo 18+ lần đầu vào game (game đứng yên tới khi xác nhận). Chạy tự động thì bỏ qua, trừ khi thêm ?canhbao=1.
   let gated = false;
   if (!settings.adultConfirmed && (!navigator.webdriver || new URLSearchParams(location.search).get('canhbao') === '1')) {
@@ -187,7 +191,6 @@ async function main(): Promise<void> {
     void showAgeGate(document.body, settings.blood).then(({ blood }) => {
       gated = false;
       changeSettings({ ...settings, blood, adultConfirmed: true });
-      hud.phone?.setSettings(settings, changeSettings);
     });
   }
   if (settings.quality === 'auto' && autoTier !== 'high') {

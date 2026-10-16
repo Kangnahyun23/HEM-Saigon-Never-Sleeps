@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { reflective } from '@/world/reflections';
+import { reflective, unreflective } from '@/world/reflections';
 import { CAR, CAR_ROLE_COLORS, CAR_WHEELS, carParts, type CarKind, type CarPart } from './carModel';
 import { CAR_TUNING, rideHeight, type CarPhysics } from './carPhysics';
 
@@ -100,7 +100,9 @@ export class CarView {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      const material = mesh.material as THREE.Material;
+      unreflective(material);
+      material.dispose();
     });
   }
 

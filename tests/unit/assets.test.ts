@@ -29,6 +29,21 @@ describe('asset nhập ngoài (public/media)', () => {
     }
   });
 
+  it('mọi font chữ đi kèm bản build (@fontsource) có dòng ghi công SIL OFL 1.1 trong CREDITS.md và phần mở đầu gốc', () => {
+    const fonts = [...readFileSync(join(root, 'src', 'ui', 'fonts.ts'), 'utf8').matchAll(/@fontsource\/([a-z0-9-]+)\//g)].map((m) => m[1]!);
+    expect(new Set(fonts).size).toBeGreaterThanOrEqual(8);
+    // CREDITS.md sinh lại từ scripts/credits-header.md (npm run assets) ⇒ phần font phải nằm trong phần mở đầu.
+    for (const file of [join(root, 'CREDITS.md'), join(root, 'scripts', 'credits-header.md')]) {
+      const lines = readFileSync(file, 'utf8').split('\n');
+      for (const name of new Set(fonts)) {
+        const row = lines.find((line) => line.startsWith('|') && line.includes(`@fontsource/${name})`));
+        expect(row, `${file}: ${name}`).toBeDefined();
+        expect(row).toContain('| OFL-1.1 |');
+        expect(row).toContain('Copyright');
+      }
+    }
+  });
+
   it('kích thước thật và màu trung bình hợp lệ (shader dùng để tính toạ độ và giữ tông màu gốc)', () => {
     for (const t of entries) {
       expect(t.mean).toBeDefined();

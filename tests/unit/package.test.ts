@@ -1,5 +1,7 @@
+import { join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { licenseFiles } from '../../scripts/licenses.mjs';
 import { checkBundle, createZip, ITCH_LIMITS } from '../../scripts/zip.mjs';
 
 /** Đọc lại zip qua thư mục trung tâm (như các trình giải nén) để kiểm tra file tạo ra. */
@@ -56,5 +58,17 @@ describe('đóng gói bản web cho itch.io', () => {
     expect(checkBundle([...ok, { path: 'big.wasm', size: ITCH_LIMITS.maxFileBytes + 1 }], '')[0]).toContain('quá lớn');
     const many = Array.from({ length: ITCH_LIMITS.maxFiles + 1 }, (_, i) => ({ path: i ? `f${i}` : 'index.html', size: 1 }));
     expect(checkBundle(many, '')[0]).toContain('Quá nhiều file');
+  });
+
+  it('bản build kèm CREDITS.md và toàn văn giấy phép OFL của từng font (OFL buộc mỗi bản phát hành kèm giấy phép)', () => {
+    const files = licenseFiles(join(__dirname, '..', '..'));
+    expect(files.map((f) => f.fileName)).toContain('CREDITS.md');
+    const ofl = files.filter((f) => f.fileName.startsWith('licenses/'));
+    expect(ofl.length).toBeGreaterThanOrEqual(8);
+    for (const f of ofl) {
+      expect(f.fileName).toMatch(/^licenses\/[a-z0-9-]+-OFL\.txt$/);
+      expect(f.source).toContain('SIL Open Font License');
+      expect(f.source).toContain('Copyright');
+    }
   });
 });

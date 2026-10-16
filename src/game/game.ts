@@ -78,7 +78,7 @@ import { Ambience } from '@/audio/ambience';
 import { EngineSound } from '@/audio/engineSound';
 import { mixer } from '@/audio/mixer';
 import { playSfx } from '@/audio/sfx';
-import { wetUniform } from '@/world/nightGlow';
+import { setWetLevel } from '@/world/nightGlow';
 import { Rain } from '@/world/rain';
 import { SCENE_BUDGETS, type SceneBudget } from '@/systems/hardware';
 import { FallGuard, type SafeSpot } from '@/systems/fallGuard';
@@ -1173,6 +1173,14 @@ export class Game {
     mixer.setVolume(volume);
   }
 
+  /** Tắt / bật tiếng từ cài đặt. */
+  setMuted(muted: boolean): void {
+    mixer.setMuted(muted);
+  }
+
+  /** Phím M vừa đổi tắt tiếng — main.ts lưu vào cài đặt (lần chơi sau giữ nguyên). */
+  onMuteToggle: ((muted: boolean) => void) | null = null;
+
   /** Giờ game tính từ lúc vào game (đồ nhặt được có lại theo giờ game). */
   private gameHours(): number {
     return this.clock.day * 24 + this.clock.hour;
@@ -1469,7 +1477,12 @@ export class Game {
     if (input.wheel) this.camera.addZoom(input.wheel);
     if (input.wasPressed('F1')) this.hud.toggleHelp();
     if (input.wasPressed('KeyH')) this.horn.beep();
-    if (input.wasPressed('KeyM')) this.hud.showToast(mixer.toggleMute() ? 'Đã tắt tiếng (M)' : 'Đã bật tiếng (M)', 1.4);
+    if (input.wasPressed('KeyM')) {
+      const muted = !mixer.isMuted;
+      mixer.setMuted(muted);
+      this.onMuteToggle?.(muted);
+      this.hud.showToast(muted ? 'Đã tắt tiếng (M)' : 'Đã bật tiếng (M)', 1.4);
+    }
     if (input.wasPressed('KeyL')) this.headlight = !this.headlight;
 
     // Balo: I bật/tắt; đang mở thì mũi tên chọn ô, E dùng, X vứt, Esc đóng.
@@ -1523,7 +1536,7 @@ export class Game {
     const sky = this.weather.update(dt * this.clock.rate, this.clock.hour);
     const light = applyWeather(lightingAt(this.clock.hour, this.dayLight), sky, this.light);
     this.env.setLighting(light);
-    wetUniform.value = sky.wet;
+    setWetLevel(sky.wet);
     this.traffic.sim.speedFactor = 1 - 0.25 * sky.rain;
     this.rainSound.update(sky.rain);
     // Chuỗi đồng hồ HUD chỉ ghép lại khi đổi phút / đổi trời.

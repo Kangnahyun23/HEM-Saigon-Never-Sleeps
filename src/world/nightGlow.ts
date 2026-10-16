@@ -27,9 +27,37 @@ export function addNightOnly(object: THREE.Object3D): void {
   object.visible = nightUniform.value > NIGHT_VISIBLE;
 }
 
+/**
+ * Vật chỉ có tác dụng khi trời tối VÀ đường ướt (vệt bảng hiệu phản chiếu trên đường): đêm khô chúng sáng bằng 0
+ * mà vẫn tốn công vẽ (vệt kéo dài về phía camera, phủ nhiều điểm ảnh) nên ẩn hẳn.
+ */
+const wetNightOnly: THREE.Object3D[] = [];
+
+/** Ngưỡng độ ướt để hiện các vật chỉ dùng khi đường ướt. */
+export const WET_VISIBLE = 0.002;
+
+const wetNightVisible = (): boolean => nightUniform.value > NIGHT_VISIBLE && wetUniform.value > WET_VISIBLE;
+
+export function addWetNightOnly(object: THREE.Object3D): void {
+  wetNightOnly.push(object);
+  object.visible = wetNightVisible();
+}
+
+function showWetNight(): void {
+  const show = wetNightVisible();
+  for (const o of wetNightOnly) o.visible = show;
+}
+
 /** Gọi khi mức đêm đổi (môi trường gọi mỗi khung hình). */
 export function setNightLevel(level: number): void {
   nightUniform.value = level;
   const show = level > NIGHT_VISIBLE;
   for (const o of nightOnly) o.visible = show;
+  showWetNight();
+}
+
+/** Gọi khi độ ướt mặt đường đổi (game gọi mỗi khung hình theo thời tiết). */
+export function setWetLevel(level: number): void {
+  wetUniform.value = level;
+  showWetNight();
 }

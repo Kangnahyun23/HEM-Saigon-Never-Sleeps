@@ -55,6 +55,8 @@ const DAILY_INTEREST = 0.003;
 /** Số ảnh máy giữ được (máy thường / bản Pro mua ở tiệm điện thoại). */
 const MAX_PHOTOS = 6;
 const MAX_PHOTOS_PRO = 12;
+/** Bản đồ trong máy vẽ lại cách nhau ít nhất ngần này mili giây (10 lần / giây). */
+const MAP_REDRAW_MS = 100;
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
 const icon = (id: PhoneTab): string => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
@@ -84,6 +86,8 @@ export class Phone {
   private readonly clock: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly mapCanvas: HTMLCanvasElement;
+  /** Lần vẽ bản đồ gần nhất (performance.now). */
+  private mapDrawnAt = 0;
   private bannerTimeout = 0;
   private dirty = true;
   private lastHour = '';
@@ -282,14 +286,22 @@ export class Phone {
       this.clock.textContent = hourLabel;
       if (this.tab === 'home' || this.tab === 'social') this.dirty = true;
     }
-    if (this.tab === 'map') this.minimap?.drawFull(this.mapCanvas, px, pz);
+    if (this.tab === 'map' && !this.dirty) {
+      // Vẽ lại cả ảnh bản đồ mỗi khung hình là phí: chấm vị trí nhích 10 lần / giây là đủ mượt.
+      const now = performance.now();
+      if (now - this.mapDrawnAt >= MAP_REDRAW_MS) {
+        this.mapDrawnAt = now;
+        this.minimap?.drawFull(this.mapCanvas, px, pz, false);
+      }
+    }
     if (!this.dirty) return;
     this.dirty = false;
     this.screen.dataset.view = this.tab;
     this.screen.innerHTML = this.tab === 'home' ? this.renderHome() : `<div class="app-head"><button type="button" class="back" data-home>‹</button><b>${esc(this.title())}</b></div>${this.render()}`;
     if (this.tab === 'map') {
       this.screen.appendChild(this.mapCanvas);
-      this.minimap?.drawFull(this.mapCanvas, px, pz);
+      this.minimap?.drawFull(this.mapCanvas, px, pz, true);
+      this.mapDrawnAt = performance.now();
     }
   }
 

@@ -17,6 +17,10 @@ export class NightBloom {
   private readonly strength = uniform(0);
   private readonly node: ReturnType<typeof bloom>;
   private scale = 0;
+  /** Đã qua lượt làm nóng lúc tải (`warm` gọi lần đầu) — bật bloom về sau thì tự làm nóng ngay. */
+  private loaded = false;
+  /** Pipeline bloom đã được vẽ thử (đã biên dịch). */
+  private warmed = false;
 
   constructor(renderer: THREE.WebGPURenderer, scene: THREE.Scene, camera: THREE.Camera) {
     this.pipeline = new THREE.RenderPipeline(renderer);
@@ -28,7 +32,11 @@ export class NightBloom {
 
   setScale(scale: number): void {
     this.scale = scale;
-    if (scale > 0) this.node.setResolutionScale(scale);
+    if (scale <= 0) return;
+    this.node.setResolutionScale(scale);
+    // Vào game ở mức Thấp (bloom tắt, lúc tải chưa làm nóng) rồi lên Vừa / Cao: làm nóng ngay lúc đổi cài đặt,
+    // không thì lượt bloom đầu tiên khi trời tối khựng ~1 s giữa lúc chơi.
+    if (this.loaded) this.warm();
   }
 
   get active(): boolean {
@@ -37,7 +45,9 @@ export class NightBloom {
 
   /** Vẽ một lần qua bloom (kể cả ban ngày) để tạo sẵn pipeline lúc tải — tránh khựng khi trời vừa tối. */
   warm(): void {
-    if (this.scale <= 0) return;
+    this.loaded = true;
+    if (this.scale <= 0 || this.warmed) return;
+    this.warmed = true;
     const s = this.strength.value;
     this.strength.value = 1;
     this.pipeline.render();

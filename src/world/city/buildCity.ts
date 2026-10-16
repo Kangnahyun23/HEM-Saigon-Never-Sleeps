@@ -6,6 +6,7 @@ import type { PhysicsWorld } from '@/physics/physics';
 import { StaticWorld } from '@/physics/staticWorld';
 import type { PickupSpot } from '@/systems/pickups';
 import { cityPlaces, type CityPlaces } from './places';
+import { detailDistance } from './detailDistance';
 import { selectShops, type Shop } from './shops';
 import { buildShopInteriors } from './build/shopInteriors';
 import { buildBuildings } from './build/buildings';
@@ -40,49 +41,6 @@ export interface City {
 
 /** Camera đi được ngần này mét thì chọn lại chi tiết nhỏ quanh nó. */
 const DETAIL_REFRESH = 6;
-
-/**
- * Tầm nhìn tối đa (m) của các lô chi tiết nhỏ: xa hơn thì chỉ còn vài điểm ảnh (và đã chìm trong sương) nên không vẽ.
- * Khớp theo tiền tố tên lô (InstanceBatch `name`). Lô không có trong bảng (mặt tiền, đường, vỉa hè…) luôn vẽ.
- */
-const DETAIL_DISTANCE: Record<string, number> = {
-  'balcony-plants': 120,
-  // Nội thất cửa hàng vào được: chỉ vẽ khi lại gần.
-  'shop-': 130,
-  stools: 90,
-  'ac-units': 120,
-  'roof-stuff': 120,
-  'cable-coils': 120,
-  'pole-hardware': 120,
-  'tree-grates': 90,
-  'parked-bike-': 110,
-  benches: 120,
-  railings: 160,
-  laundry: 110,
-  'sidewalk-': 110,
-  'hem-meters': 90,
-  'hem-pots': 90,
-  'hem-plants': 90,
-  'hem-altars': 110,
-  'hem-bollards': 120,
-  'hem-tarps': 140,
-  'led-signs': 150,
-  'tree-limewash': 120,
-  'water-tanks': 180,
-  'roof-sheets': 160,
-  shrubs: 170,
-  umbrellas: 170,
-  'umbrella-poles': 140,
-  stalls: 170,
-  'river-railing': 160,
-  canopies: 230,
-  'road-marks': 200,
-};
-
-function detailDistance(name: string): number | undefined {
-  for (const [prefix, d] of Object.entries(DETAIL_DISTANCE)) if (name.startsWith(prefix)) return d;
-  return undefined;
-}
 
 /** Sinh bố cục rồi dựng toàn bộ khu phố (hình + va chạm). */
 export function buildCity(scene: THREE.Scene, physics: PhysicsWorld, options: Partial<CityOptions> = {}): City {

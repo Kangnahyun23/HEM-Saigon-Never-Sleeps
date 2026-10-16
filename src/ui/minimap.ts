@@ -169,10 +169,17 @@ export class Minimap {
     g.fillRect(cx - 6.5, cy - 2.5, 13, 5);
   }
 
-  /** Bản đồ toàn khu (hướng Bắc lên trên) cho tab Bản đồ của điện thoại: vị trí người chơi + điểm đánh dấu. */
-  drawFull(canvas: HTMLCanvasElement, px: number, pz: number): void {
+  /** Bề ngang (px CSS) của bản đồ toàn khu lần đo gần nhất. */
+  private fullWidth = 0;
+
+  /**
+   * Bản đồ toàn khu (hướng Bắc lên trên) cho tab Bản đồ của điện thoại: vị trí người chơi + điểm đánh dấu.
+   * `measure`: đo lại cỡ khung (lúc tab vừa dựng) — đọc clientWidth mỗi lần vẽ bắt trình duyệt tính lại bố cục trang.
+   */
+  drawFull(canvas: HTMLCanvasElement, px: number, pz: number, measure = true): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(1, Math.round(canvas.clientWidth || 260));
+    if (measure || this.fullWidth === 0) this.fullWidth = Math.max(1, Math.round(canvas.clientWidth || 260));
+    const w = this.fullWidth;
     const h = Math.round((w * this.image.height) / this.image.width);
     if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
       canvas.width = w * dpr;
@@ -181,15 +188,16 @@ export class Minimap {
     const c = canvas.getContext('2d') as CanvasRenderingContext2D;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.drawImage(this.image, 0, 0, w, h);
-    const s = w / this.image.width;
-    const toU = (x: number): number => (x - this.x0) * PX_PER_M * s;
-    const toV = (z: number): number => (z - this.z0) * PX_PER_M * s;
+    // Mét → px trên khung: u = (x − x0)·k, v = (z − z0)·k.
+    const k = (w / this.image.width) * PX_PER_M;
+    const x0 = this.x0;
+    const z0 = this.z0;
     if (this.waypoint) {
       c.fillStyle = '#ffd23f';
       c.strokeStyle = '#1c1a22';
       c.lineWidth = 2;
       c.beginPath();
-      c.arc(toU(this.waypoint.x), toV(this.waypoint.z), 6, 0, Math.PI * 2);
+      c.arc((this.waypoint.x - x0) * k, (this.waypoint.z - z0) * k, 6, 0, Math.PI * 2);
       c.fill();
       c.stroke();
     }
@@ -197,21 +205,21 @@ export class Minimap {
       const blip = this.blips[i]!;
       c.fillStyle = blip.color;
       c.beginPath();
-      c.arc(toU(blip.x), toV(blip.z), 3.5, 0, Math.PI * 2);
+      c.arc((blip.x - x0) * k, (blip.z - z0) * k, 3.5, 0, Math.PI * 2);
       c.fill();
     }
     for (let i = 0; i < this.policeCount; i++) {
       const u = this.police[i]!;
       c.fillStyle = '#3b7bff';
       c.beginPath();
-      c.arc(toU(u.x), toV(u.z), 3.5, 0, Math.PI * 2);
+      c.arc((u.x - x0) * k, (u.z - z0) * k, 3.5, 0, Math.PI * 2);
       c.fill();
     }
     c.fillStyle = '#ff8c1a';
     c.strokeStyle = '#fff';
     c.lineWidth = 2;
     c.beginPath();
-    c.arc(toU(px), toV(pz), 5.5, 0, Math.PI * 2);
+    c.arc((px - x0) * k, (pz - z0) * k, 5.5, 0, Math.PI * 2);
     c.fill();
     c.stroke();
   }

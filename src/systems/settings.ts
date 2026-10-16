@@ -18,6 +18,8 @@ export interface Settings {
   invertY: boolean;
   /** Âm lượng tổng 0…1 (0 = tắt tiếng). */
   volume: number;
+  /** Tắt tiếng bằng phím M — giữ nguyên ở lần chơi sau. */
+  muted: boolean;
   /** Máu nhẹ khi đánh nhau (giọt bắn, vũng máu) — tắt thì không còn máu. */
   blood: boolean;
   /** Đã xác nhận đủ 18 tuổi ở màn hình cảnh báo (chỉ hỏi lần đầu). */
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   mouseSensitivity: 1,
   invertY: false,
   volume: 0.8,
+  muted: false,
   blood: true,
   adultConfirmed: false,
 };
@@ -65,6 +68,7 @@ export function parseSettings(text: string | null): Settings {
   if (typeof s.mouseSensitivity === 'number' && Number.isFinite(s.mouseSensitivity)) out.mouseSensitivity = clampSensitivity(s.mouseSensitivity);
   if (typeof s.invertY === 'boolean') out.invertY = s.invertY;
   if (typeof s.volume === 'number' && Number.isFinite(s.volume)) out.volume = clampVolume(s.volume);
+  if (typeof s.muted === 'boolean') out.muted = s.muted;
   if (typeof s.blood === 'boolean') out.blood = s.blood;
   if (typeof s.adultConfirmed === 'boolean') out.adultConfirmed = s.adultConfirmed;
   return out;
