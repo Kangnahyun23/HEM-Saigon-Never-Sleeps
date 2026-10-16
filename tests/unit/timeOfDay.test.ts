@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { BLOOM_MAX, bloomStrength, eateryOccupancy, GameClock, lightingAt, nightFactor, shopsClosedFraction, sunDirection, wrapHour } from '@/world/timeOfDay';
+import {
+  BLOOM_MAX,
+  bloomStrength,
+  createLighting,
+  eateryOccupancy,
+  GameClock,
+  lightingAt,
+  nightFactor,
+  shopsClosedFraction,
+  sunDirection,
+  wrapHour,
+} from '@/world/timeOfDay';
 
 describe('timeOfDay', () => {
   it('mặt trời mọc phía đông (+X), lặn phía tây (−X), trưa trên cao, nửa đêm dưới chân trời', () => {
@@ -38,6 +49,22 @@ describe('timeOfDay', () => {
     expect(night.lightIntensity).toBeLessThan(0.5);
     expect(night.hemiIntensity).toBeLessThan(day.hemiIntensity / 4);
     expect(night.fogColor[0] + night.fogColor[1] + night.fogColor[2]).toBeLessThan(0.6);
+  });
+
+  it('ghi vào đối tượng có sẵn (dùng lại mỗi khung hình): cùng kết quả, giữ nguyên mảng, không làm hỏng hằng số', () => {
+    const night = lightingAt(23);
+    const out = createLighting();
+    const arrays = [out.sunDir, out.lightDir, out.lightColor, out.hemiSky, out.hemiGround, out.fogColor];
+    for (const h of [23, 5.8, 6.2, 12, 18.05, 21]) {
+      expect(lightingAt(h, out)).toBe(out);
+      expect(out).toEqual(lightingAt(h));
+    }
+    const after = [out.sunDir, out.lightDir, out.lightColor, out.hemiSky, out.hemiGround, out.fogColor];
+    after.forEach((a, i) => expect(a).toBe(arrays[i]));
+    // Ban đêm màu nắng = màu trăng (hằng số): phải chép ra, ghi đè lúc ban ngày không được sửa hằng số.
+    lightingAt(23, out);
+    lightingAt(12, out);
+    expect(lightingAt(23)).toEqual(night);
   });
 
   it('ánh sáng biến đổi liên tục, không giật cục giữa hai phút liền nhau', () => {

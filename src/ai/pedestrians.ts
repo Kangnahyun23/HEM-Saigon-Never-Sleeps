@@ -271,6 +271,21 @@ export class PedestrianSim {
     }
   }
 
+  /**
+   * Tín bị bắt / gục và được đưa đi chỗ khác: ai đang gọi báo, quay video, xông vào đánh thì thôi (cuộc gọi chưa xong
+   * không tính) — không thì vừa ra khỏi đồn đã bị báo lên sao lại. Sự kiện chưa đọc cũng bỏ.
+   */
+  calmDown(): void {
+    for (const w of this.walkers) {
+      w.react = 'none';
+      w.reactT = 0;
+      w.punch = 0;
+    }
+    this.reports = 0;
+    this.callsStopped = 0;
+    this.damageToPlayer = 0;
+  }
+
   /** Bắt đầu phản ứng `kind` (đứng lại, thôi chạy) — `witness` chọn; test gọi thẳng. */
   startReaction(w: Walker, kind: Reaction, time: number): void {
     w.react = kind;

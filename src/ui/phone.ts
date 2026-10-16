@@ -3,7 +3,7 @@ import { playSfx } from '@/audio/sfx';
 import { TIER_LABELS, type Tier } from '@/systems/hardware';
 import { clampSensitivity, clampVolume, QUALITY_LABELS, sceneTier, type Quality, type Settings } from '@/systems/settings';
 import { formatCount, generateFeed, type FeedContext } from '@/systems/social';
-import { formatVnd, LENDER, type Wallet } from '@/systems/wallet';
+import { formatVnd, LENDER, MIN_PAYMENT, payable, type Wallet } from '@/systems/wallet';
 import type { Minimap } from './minimap';
 
 /** Các app trên điện thoại (phím số mở thẳng app, giữ thứ tự 1–5 như bản cũ). */
@@ -380,15 +380,15 @@ export class Phone {
       }
       case 'bank': {
         const w = this.wallet;
-        const canPay = Math.min(w.cash, w.debt);
+        const canPay = payable(w.cash, w.debt);
         const interest = Math.round((w.debt * DAILY_INTEREST) / 1000) * 1000;
         return `<div class="bank-card"><span>${LENDER}</span><b>${formatVnd(w.debt)}</b><small>Lãi "chỉ" 0,3%/ngày ≈ ${formatVnd(interest)} mỗi ngày*</small></div>
           ${
             w.debt <= 0
               ? '<p class="muted">Hết nợ rồi! App vay vẫn sẽ gửi tin mời vay thêm mỗi ngày.</p>'
-              : canPay >= 100_000
+              : canPay > 0
                 ? `<button type="button" class="pay" data-pay="${canPay}">Trả nợ ${formatVnd(canPay)}</button>`
-                : '<p class="muted">Tiền mặt dưới 100.000 đ — chạy thêm kèo rồi quay lại trả.</p>'
+                : `<p class="muted">Tiền mặt dưới ${formatVnd(Math.min(MIN_PAYMENT, w.debt))} — chạy thêm kèo rồi quay lại trả.</p>`
           }
           <h4>Điều khoản (chữ nhỏ)</h4>
           <p class="muted small">*Chưa gồm phí hồ sơ, phí giải ngân, phí nhắc nợ, phí gọi cho người thân, phí "tinh thần". Trễ hạn: đội ngũ chăm sóc khách hàng sẽ ghé thăm tận nhà.</p>`;

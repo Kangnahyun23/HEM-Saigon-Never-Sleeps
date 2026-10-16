@@ -1,3 +1,10 @@
+/** Phím mà trình duyệt có hành động riêng (cuộn trang, chuyển ô, trang trợ giúp F1) — game chặn lại. */
+const BROWSER_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'F1']);
+
+function anyIn(set: ReadonlySet<string>, a: string, b?: string, c?: string, d?: string): boolean {
+  return set.has(a) || (b !== undefined && set.has(b)) || (c !== undefined && set.has(c)) || (d !== undefined && set.has(d));
+}
+
 /**
  * Bàn phím + chuột. Phím theo `KeyboardEvent.code` (không phụ thuộc bố cục phím / bộ gõ tiếng Việt).
  * Chuột: bấm vào khung game để khoá con trỏ (pointer lock), rê chuột xoay camera, cuộn để zoom.
@@ -19,7 +26,7 @@ export class Input {
   ) {
     target.addEventListener('keydown', (e) => {
       // F1: bảng phím của game (không mở trang trợ giúp của trình duyệt).
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'F1'].includes(e.code)) e.preventDefault();
+      if (BROWSER_KEYS.has(e.code)) e.preventDefault();
       if (!this.down.has(e.code)) this.pressed.add(e.code);
       this.down.add(e.code);
     });
@@ -71,18 +78,24 @@ export class Input {
     return this.element !== null && document.pointerLockElement === this.element;
   }
 
-  isDown(...codes: string[]): boolean {
-    return codes.some((c) => this.down.has(c));
+  // Tối đa 4 mã phím, không dùng tham số rest: gọi nhiều lần mỗi khung hình, rest / closure là rác bộ nhớ.
+  isDown(a: string, b?: string, c?: string, d?: string): boolean {
+    return anyIn(this.down, a, b, c, d);
   }
 
   /** Đúng một lần cho mỗi lần nhấn; gọi `endFrame()` cuối mỗi khung hình. */
-  wasPressed(...codes: string[]): boolean {
-    return codes.some((c) => this.pressed.has(c));
+  wasPressed(a: string, b?: string, c?: string, d?: string): boolean {
+    return anyIn(this.pressed, a, b, c, d);
   }
 
   /** Trục -1..1 từ hai nhóm phím. */
-  axis(negative: string[], positive: string[]): number {
-    return (this.isDown(...positive) ? 1 : 0) - (this.isDown(...negative) ? 1 : 0);
+  axis(negative: readonly string[], positive: readonly string[]): number {
+    return (this.anyDown(positive) ? 1 : 0) - (this.anyDown(negative) ? 1 : 0);
+  }
+
+  private anyDown(codes: readonly string[]): boolean {
+    for (let i = 0; i < codes.length; i++) if (this.down.has(codes[i]!)) return true;
+    return false;
   }
 
   /** Giả lập phím (dùng cho test e2e / điều khiển cảm ứng sau này). */

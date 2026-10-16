@@ -75,7 +75,6 @@ const KEYS: readonly Key[] = [
 ];
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-const lerp3 = (a: RGB, b: RGB, t: number): RGB => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const smooth = (e0: number, e1: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
@@ -86,21 +85,37 @@ export function wrapHour(h: number): number {
   return ((h % 24) + 24) % 24;
 }
 
-function normalize(x: number, y: number, z: number): Vec3 {
+/** Ghi ba số vào mảng của đối tượng ánh sáng (ra ngoài là chỉ đọc; chỉ file này ghi). */
+function set3(out: Vec3, x: number, y: number, z: number): void {
+  const o = out as [number, number, number];
+  o[0] = x;
+  o[1] = y;
+  o[2] = z;
+}
+
+const lerpInto = (out: RGB, a: RGB, b: RGB, t: number): void => set3(out, lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t));
+
+function normalizeInto(out: Vec3, x: number, y: number, z: number): void {
   const l = Math.hypot(x, y, z) || 1;
-  return [x / l, y / l, z / l];
+  set3(out, x / l, y / l, z / l);
+}
+
+function sunInto(out: Vec3, hour: number): void {
+  const a = ((wrapHour(hour) - 6) / 12) * Math.PI;
+  normalizeInto(out, Math.cos(a), Math.sin(a), -0.32 * Math.sin(a));
 }
 
 /** Hướng tới mặt trời: góc quay quanh trục Đông–Tây, 6 giờ ở +X, 18 giờ ở −X; trưa lệch nhẹ về −Z. */
 export function sunDirection(hour: number): Vec3 {
-  const a = ((wrapHour(hour) - 6) / 12) * Math.PI;
-  return normalize(Math.cos(a), Math.sin(a), -0.32 * Math.sin(a));
+  const out: Vec3 = [0, 0, 0];
+  sunInto(out, hour);
+  return out;
 }
 
 /** Trăng: đối diện mặt trời (đơn giản hoá), luôn đặt trên trời khi là nguồn sáng ban đêm. */
-function moonDirection(hour: number): Vec3 {
-  const s = sunDirection(hour);
-  return normalize(-s[0], Math.max(0.35, -s[1]), -s[2] + 0.2);
+function moonInto(out: Vec3, hour: number): void {
+  sunInto(out, hour);
+  normalizeInto(out, -out[0], Math.max(0.35, -out[1]), -out[2] + 0.2);
 }
 
 /** Mức "đêm": 0 ban ngày, 1 khi đã tối hẳn; chuyển dần lúc chạng vạng và rạng sáng. */
@@ -146,7 +161,26 @@ export function bloomStrength(night: number): number {
   return night <= 0.15 ? 0 : BLOOM_MAX * smooth(0.15, 0.7, night);
 }
 
-export function lightingAt(hour: number): Lighting {
+/** Đối tượng ánh sáng để `lightingAt` ghi vào — tạo một lần, dùng lại mỗi khung hình (không tạo rác). */
+export function createLighting(): Lighting {
+  return {
+    hour: 0,
+    sunDir: [0, 1, 0],
+    lightDir: [0, 1, 0],
+    lightColor: [1, 1, 1],
+    lightIntensity: 0,
+    hemiSky: [1, 1, 1],
+    hemiGround: [0, 0, 0],
+    hemiIntensity: 0,
+    fogColor: [1, 1, 1],
+    envIntensity: 0,
+    exposure: 1,
+    night: 0,
+  };
+}
+
+/** Ánh sáng lúc `hour`, ghi vào `out` (mặc định tạo mới) và trả lại chính nó. */
+export function lightingAt(hour: number, out: Lighting = createLighting()): Lighting {
   const h = wrapHour(hour);
   let i = 0;
   while (i < KEYS.length - 2 && (KEYS[i + 1] as Key).h <= h) i++;
@@ -154,27 +188,31 @@ export function lightingAt(hour: number): Lighting {
   const b = KEYS[i + 1] as Key;
   const t = (h - a.h) / (b.h - a.h);
 
-  const sunDir = sunDirection(h);
+  const sunDir = out.sunDir;
+  sunInto(sunDir, h);
   const night = nightFactor(h);
   // Nắng tắt dần khi mặt trời sát chân trời (tránh nhảy cóc lúc đổi nguồn sáng sang trăng).
   const sunI = lerp(a.sunI, b.sunI, t) * smooth(0.0, 0.1, sunDir[1]);
   // Trăng sáng dần khi mặt trời đã tắt hẳn; nguồn sáng đổi sang trăng khi mặt trời xuống dưới chân trời.
   const moonI = 0.32 * night;
   const sunUp = sunDir[1] > 0.02 && sunI > 0.001;
-  return {
-    hour: h,
-    sunDir,
-    lightDir: sunUp ? sunDir : moonDirection(h),
-    lightColor: sunUp ? lerp3(a.sun, b.sun, t) : NIGHT.sun,
-    lightIntensity: sunUp ? sunI : moonI,
-    hemiSky: lerp3(a.sky, b.sky, t),
-    hemiGround: lerp3(a.ground, b.ground, t),
-    hemiIntensity: lerp(a.hemiI, b.hemiI, t),
-    fogColor: lerp3(a.fog, b.fog, t),
-    envIntensity: lerp(a.env, b.env, t),
-    exposure: lerp(a.exposure, b.exposure, t),
-    night,
-  };
+  out.hour = h;
+  if (sunUp) {
+    set3(out.lightDir, sunDir[0], sunDir[1], sunDir[2]);
+    lerpInto(out.lightColor, a.sun, b.sun, t);
+  } else {
+    moonInto(out.lightDir, h);
+    set3(out.lightColor, NIGHT.sun[0], NIGHT.sun[1], NIGHT.sun[2]);
+  }
+  out.lightIntensity = sunUp ? sunI : moonI;
+  lerpInto(out.hemiSky, a.sky, b.sky, t);
+  lerpInto(out.hemiGround, a.ground, b.ground, t);
+  out.hemiIntensity = lerp(a.hemiI, b.hemiI, t);
+  lerpInto(out.fogColor, a.fog, b.fog, t);
+  out.envIntensity = lerp(a.env, b.env, t);
+  out.exposure = lerp(a.exposure, b.exposure, t);
+  out.night = night;
+  return out;
 }
 
 /** Đồng hồ game: mặc định 1 giờ trong game = 1 phút ngoài đời (một ngày ≈ 24 phút). */
@@ -197,11 +235,18 @@ export class GameClock {
     this.hour = wrapHour(next);
   }
 
-  /** "HH:MM" */
+  private labelMinute = -1;
+  private labelText = '';
+
+  /** "HH:MM" — chuỗi chỉ dựng lại khi sang phút mới (HUD gọi mỗi khung hình). */
   label(): string {
     const total = Math.floor(this.hour * 60);
-    const hh = Math.floor(total / 60) % 24;
-    const mm = total % 60;
-    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    if (total !== this.labelMinute) {
+      this.labelMinute = total;
+      const hh = Math.floor(total / 60) % 24;
+      const mm = total % 60;
+      this.labelText = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    }
+    return this.labelText;
   }
 }

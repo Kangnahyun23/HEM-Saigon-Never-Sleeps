@@ -54,8 +54,13 @@ export class MotorbikePhysics {
   wheelSpin = [0, 0];
   /** Biến thiên tốc độ lớn nhất trong bước gần nhất (để phát hiện đâm xe). */
   impact = 0;
-  /** Tốc độ trước bước gần nhất (để tính quán tính khi văng khỏi xe). */
+  /** Tốc độ dọc thân xe ở bước trước (đo biến thiên tốc độ — `impact`). */
   lastSpeed = 0;
+  /**
+   * Tốc độ ngay trước biến thiên `impact` gần nhất — đà văng người lái khi té xe (lúc báo va chạm thì xe đã gần như
+   * đứng lại, `lastSpeed` / `speed` là tốc độ SAU cú va).
+   */
+  impactSpeed = 0;
   /** Số bước bỏ qua phát hiện va chạm (sau khi dựng lại xe). */
   private impactGrace = 0;
   /** Trạng thái hai bước vật lý gần nhất (để nội suy hình ảnh giữa các bước). */
@@ -189,6 +194,7 @@ export class MotorbikePhysics {
     for (let i = 0; i < 2; i++) this.wheelSpin[i] = (this.wheelSpin[i] as number) + (v * dt) / BIKE.wheelRadius;
 
     this.impact = this.impactGrace > 0 ? 0 : Math.abs(v - this.lastSpeed);
+    this.impactSpeed = this.lastSpeed;
     if (this.impactGrace > 0) this.impactGrace--;
     this.lastSpeed = v;
   }
@@ -204,6 +210,7 @@ export class MotorbikePhysics {
     this.lean = 0;
     this.speed = 0;
     this.lastSpeed = 0;
+    this.impactSpeed = 0;
     this.impact = 0;
     this.impactGrace = 3;
     this.world.propagateModifiedBodyPositionsToColliders();

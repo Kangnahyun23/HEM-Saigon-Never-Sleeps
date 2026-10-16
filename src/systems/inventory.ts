@@ -48,6 +48,17 @@ export interface InvSlot {
 /** Các cỡ balo: balo giao hàng mặc định → balo du lịch → balo phượt. */
 export const BACKPACK_SIZES = [12, 16, 24] as const;
 
+/** Máu tối đa của Tín. */
+export const MAX_HEALTH = 100;
+
+/**
+ * Máu món `def` hồi thêm được lúc này (máu `health`, đồ ăn còn đang hồi dần `pending`): không quá chỗ trống tới
+ * MAX_HEALTH. 0 = đã đầy (hoặc món không hồi máu) — nơi gọi giữ món lại, không tiêu hao.
+ */
+export function healGain(def: ItemDef, health: number, pending = 0): number {
+  return Math.min(Math.max(0, MAX_HEALTH - health - pending), def.heal ?? 0);
+}
+
 const isItemId = (v: unknown): v is ItemId => typeof v === 'string' && Object.hasOwn(ITEMS, v);
 
 export class Inventory {

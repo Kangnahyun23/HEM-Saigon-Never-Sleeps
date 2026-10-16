@@ -157,6 +157,22 @@ describe('PedestrianSim', () => {
     expect(sim.reports).toBe(1);
   });
 
+  it('Tín bị bắt / gục rồi được đưa đi: cuộc gọi báo đang dở bỏ luôn (ra khỏi đồn không bị báo lên sao lại)', () => {
+    const sim = new PedestrianSim(city, focus, { count: 10 });
+    const w = sim.walkers[0]!;
+    const v = sim.walkers[1]!;
+    const far = { x: w.x + 8, z: w.z };
+    sim.startReaction(w, 'call', 0);
+    sim.startReaction(v, 'fight', 25);
+    for (let t = 0; t < CALL_TIME - 1; t += STEP) sim.step(STEP, far);
+    sim.calmDown();
+    expect(w.react).toBe('none');
+    expect(v.react).toBe('none');
+    for (let t = 0; t < CALL_TIME + 1; t += STEP) sim.step(STEP, far);
+    expect(sim.reports).toBe(0);
+    expect(sim.damageToPlayer).toBe(0);
+  });
+
   it('đánh trả: xông tới người chơi dọc vỉa hè, đấm trúng làm mất máu; bị đánh yếu thì bỏ chạy', () => {
     const sim = new PedestrianSim(city, focus, { count: 10 });
     const w = sim.walkers[0]!;
