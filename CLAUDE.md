@@ -209,7 +209,10 @@ src/
                      inventory (balo: ô đồ xếp chồng, dùng / vứt, nâng cấp, lưu; `healGain` = máu hồi thật, đầy máu thì 0 —
                      game không cho ăn — có unit test; giao diện ui/backpack, phím I),
                      wheel (vòng chọn đồ: danh sách ô + chọn theo hướng chuột — có unit test; ui/weaponWheel, giữ Tab),
-                     save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng),
+                     save (lưu localStorage, chịu được bộ nhớ bị chặn / dữ liệu hỏng: `parseSave` kiểm tra từng trường,
+                     dòng hỏng thì bỏ riêng dòng đó; lưu cả số tin mở màn đã nhận, kết cục BỊ BẮT / GỤC đang dở, sao truy
+                     nã, Độ Nóng; tab khác đã ghi bản lưu thì tab này thôi lưu — `SaveSlot.conflict`; trường mới phải tuỳ
+                     chọn để bản lưu cũ đọc được — có unit test),
                      settings (cài đặt người chơi — cả tắt tiếng phím M — + bảng mức chất lượng Tự động/Thấp/Vừa/Cao; đổi
                      cài đặt từ chỗ khác app Cài đặt thì qua `changeSettings` ở main.ts để điện thoại cập nhật bản sao),
                      hardware (nhận diện card đồ hoạ / CPU / RAM → bậc máy → ngân sách dựng cảnh) — thuần logic, có unit test

@@ -38,7 +38,8 @@ Bấm vào màn hình để điều khiển camera bằng chuột.
 | `M` | tắt / bật tiếng (lưu lại; âm lượng chỉnh trong Cài đặt) | như đi bộ |
 | `F1` | ẩn/hiện bảng phím | như đi bộ |
 
-Game tự lưu (sau mỗi nhiệm vụ, mỗi 30 giây, khi rời trang); muốn chơi lại từ đầu thì mở `?moi=1`.
+Game tự lưu (sau mỗi nhiệm vụ, mỗi 30 giây, khi rời trang); muốn chơi lại từ đầu thì mở `?moi=1`. Mở game ở hai tab
+cùng lúc thì tab có bản lưu bị tab kia ghi đè sẽ thôi tự lưu (báo trên màn hình) — tải lại trang là chơi tiếp bản mới nhất.
 
 Một ngày trong game dài 24 phút (1 phút = 1 giờ), bắt đầu lúc 16:30. Muốn xem ngay cảnh đêm: mở
 http://localhost:5173/?gio=21 (thêm `&mua=1` để xem phố đêm mưa). Trời Sài Gòn hay đổ mưa rào chiều tối.

@@ -344,6 +344,22 @@ Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; 
   chase, cityLayout, blood; hình NPC + kho giả dùng chung ở `tests/unit/fakeNpc.ts`); e2e `backpack` (đầy máu không ăn),
   `audio` (M lưu vào cài đặt). Lượt e2e đầy đủ ở máy chủ dự án, chạy ẩn `--workers=1`: 32/32 xanh trong 31 phút.
 
+### F2 — sửa bản lưu (nhánh `f2-sua-ban-luu`, tiếp sau F1)
+Phần lỗi bản lưu của buổi review (F1 để lại). Bản lưu vẫn `SAVE_VERSION` 1 — trường mới đều tuỳ chọn, bản lưu cũ đọc được.
+- **Bản lưu hỏng không còn làm game không vào được**: `parseSave` kiểm tra từng trường như `parseSettings` — tin nhắn /
+  dòng sổ ví hỏng thì bỏ riêng dòng đó (người gửi phải có trong `CONTACTS` của inbox.ts, số tin chưa đọc ≤ số tin), giờ đưa
+  về 0–24, số kèo về số nguyên ≥ 0; chỉ trường chính (ví, tiến độ, vị trí) hỏng mới bỏ cả bản lưu. Trước đây một tin nhắn
+  `null` làm `Inbox.restore` văng lỗi ngay trong constructor của Game ⇒ tải lại lần nào cũng hỏng.
+- **Tin nhắn mở màn**: danh sách `INTRO` (game.ts) + số tin đã nhận `intro` trong bản lưu; lưu giữa lúc mở màn (game lưu
+  ngay khung đầu, và mỗi lần chuyển tab) thì lần nạp sau gửi tiếp phần còn thiếu. Bản lưu cũ không có `intro`: coi như đủ.
+- **Lưu giữa màn hình BỊ BẮT / GỤC** (chưa về đồn / trạm): bản lưu ghi `outcome`; nạp lại thì xử luôn (`respawnAfter`:
+  nộp phạt / viện phí, tịch thu vũ khí, về đồn / trạm) rồi lưu ngay — tải lại trang không thoát được phạt.
+- **Sao truy nã + tâm vùng tìm kiếm, Độ Nóng** được lưu (`wanted`, `heat`); nạp lại thì vẫn bị đuổi.
+- **Hai tab**: `SaveSlot` nhớ nội dung lần đọc / ghi gần nhất (`known`); lúc lưu thấy bản lưu đã bị tab khác ghi thì thôi
+  lưu luôn (`conflict`), game báo "Game đang mở ở tab khác nên tab này thôi lưu…" — không đè tiến độ của tab kia.
+- Kiểm tra: `save.test.ts` (+5 test: trường hỏng, giờ / số kèo, trường mới, hai tab, chơi lại từ đầu); e2e `save` thêm test
+  "lưu giữa chừng" (tin mở màn, truy nã, bị bắt, tab khác ghi bản lưu — giả lập bằng cách ghi thẳng localStorage).
+
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
 1. ~~N6.4 cân bằng kinh tế~~ — xong (xem mục 3).
@@ -362,12 +378,8 @@ Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; 
 5. **N10 hoàn thiện + phát hành 0.2.0** (đo hiệu năng 3 bậc máy, chơi thử tự động, ghi công, zip itch.io cờ 18+).
 
 ### Việc nhỏ đã dời lại (ghi để khỏi quên)
-- **Bản lưu (PR kế tiếp, chủ dự án đã đồng ý)**:
-  - bản lưu hỏng (JSON đúng nhưng trường sai kiểu) có thể làm game không vào được — cần kiểm tra từng trường như `parseSettings`;
-  - lưu trong 30 giây đầu thì mất tin nhắn mở màn (nạp bản lưu bỏ tin mở màn);
-  - lưu lúc đang ở màn hình BỊ BẮT / GỤC thì tải lại thoát phạt;
-  - sao truy nã / Độ Nóng không được lưu (tải lại là sạch);
-  - mở hai tab thì tab sau ghi đè bản lưu của tab trước.
+- **Bản lưu**: việc hẹn giờ (`game.schedule` — vd. tin Ngân 3 s sau khi bị bắt) không được lưu; chỉ tin mở màn có lưu
+  (F2). Hai tab: tab bị chặn lưu phải tải lại mới lưu tiếp (chưa có cơ chế "nhường quyền" giữa các tab).
 - **Asset**: mẫu `riot.glb` (công an chống bạo động) tải lúc vào game nhưng chưa dùng — bỏ khỏi danh sách tải hoặc dùng ở 5 sao.
 - **Chiến đấu**:
   - né (Q) và đỡ đòn;
@@ -442,8 +454,8 @@ Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; 
   Unit test: 309 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`, `hemNav.test.ts`, `footPolice.test.ts`).
 - Việc chủ dự án giao 2026-10-15 (R1–R4 trong plan-v0.2.md) đã làm hết: người lái xe NPC có xương (R1), công an có xương
   (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4).
-- 2026-10-16: PR #40 đã merge; F1 (sửa lỗi nhỏ sau review, mục 3) trên nhánh `f1-sua-loi-nho`. Tiếp theo: PR sửa bản lưu
-  (mục 4, "Việc nhỏ đã dời lại"), rồi N7.4–N10.
+- 2026-10-16: PR #40 đã merge; F1 (sửa lỗi nhỏ sau review, mục 3) là PR #41; F2 (sửa bản lưu, mục 3) trên nhánh
+  `f2-sua-ban-luu`. Tiếp theo: N7.4–N10.
 - Chủ dự án KHÔNG muốn cửa sổ trình duyệt bật lên màn hình khi test: e2e (Playwright mặc định headless) và `npm run perf`
   (headless kiểu mới, vẫn dùng GPU thật) đều chạy ẩn — đừng thêm `headless: false` / `PERF_WINDOW=1` nếu chưa hỏi.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy

@@ -99,6 +99,18 @@ const PICKUP_DONE: Partial<Record<ItemId, string>> = {
 const BREAK_TEXT: Partial<Record<ItemId, string>> = { gheNhua: 'Ghế nhựa vỡ tan!', muBaoHiem: 'Mũ bảo hiểm bể làm đôi!' };
 /** Nhịp màn hình kết cục (giây): bắt đầu mờ đen, đưa về đồn / trạm, sáng lại, hết khoá điều khiển. */
 const OUTCOME = { black: 2.6, respawn: 3.2, reveal: 3.5, end: 4.1 } as const;
+/** Tin nhắn mở màn Hồi 1 (giây chơi lúc tới, người gửi, nội dung theo số nợ): Ngân bị siết nợ, app vay đòi tiền, chú Sáu hẹn gặp. */
+const INTRO: readonly { at: number; from: Contact; text: (debt: number) => string }[] = [
+  { at: 4, from: 'Ngân', text: () => 'Anh Tín ơi, người của app vay lại tới nhà. Họ dán giấy đỏ lên cửa, la lối cả xóm nghe.' },
+  { at: 7, from: 'Ngân', text: () => 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...' },
+  {
+    at: 12,
+    from: 'Vay Liền 5S',
+    text: (debt) => `Khoản vay của Quý khách: ${formatVnd(debt)}. Kỳ 1 cần thanh toán ${formatVnd(FIRST_INSTALLMENT)} trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`,
+  },
+  { at: 20, from: 'Chú Sáu', text: () => 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.' },
+  { at: 30, from: 'Tổng đài kèo', text: () => 'Có kèo giao hàng mới quanh bạn. Mở điện thoại (P) › Kèo để nhận. Giao đúng giờ được boa thêm!' },
+];
 /** Số vũng máu chờ loang cùng lúc tối đa. */
 const POOL_QUEUE = 8;
 /** Vũng máu của công an đi bộ: số trong hàng chờ = OFFICER_POOL + id công an (người đi đường: id người đi bộ). */
@@ -378,7 +390,7 @@ export class Game {
     // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
     this.bindBackpack();
     this.loaded = this.restore();
-    if (!this.loaded) this.scheduleIntro();
+    if (!this.loaded) this.scheduleIntro(0);
   }
 
   /** Balo của Tín (phím I). */
@@ -444,6 +456,10 @@ export class Game {
   readonly loaded: boolean;
   private saveTimer = 0;
   private savedProgress = -1;
+  /** Số tin nhắn mở màn đã nhận (lưu lại: lưu giữa lúc mở màn thì lần sau gửi tiếp phần còn thiếu). */
+  private introSent = 0;
+  /** Đã báo "tab khác đang chơi" chưa (bản lưu bị tab khác ghi — tab này thôi lưu). */
+  private conflictWarned = false;
 
   /** Nạp bản lưu (nếu có): tiền, nợ, tin nhắn, tiến độ Hồi 1, giờ, vị trí. */
   private restore(): boolean {
@@ -465,8 +481,19 @@ export class Game {
     this.character.teleport(x, PAD_HEIGHT + 0.3, z, yaw);
     // Xe của Tín đậu ngay cạnh chỗ đứng.
     this.bikes[0]?.phys.reset(x + Math.cos(yaw) * 1.6, PAD_HEIGHT, z - Math.sin(yaw) * 1.6, yaw);
+    // Đang bị truy nã / truy đuổi lúc lưu thì tải lại vẫn bị (không "xoá sao" bằng cách tải lại trang).
+    if (data.wanted) this.wanted.set(data.wanted.level, data.wanted.x, data.wanted.z);
+    if (data.heat !== undefined) this.heat.set(data.heat);
+    // Bản lưu cũ không ghi số tin mở màn: coi như đã nhận đủ.
+    this.introSent = Math.min(INTRO.length, data.intro ?? INTRO.length);
+    if (this.introSent < INTRO.length) this.scheduleIntro(this.introSent);
     this.savedProgress = this.progressKey();
     this.schedule(1, () => this.hud.showToast('Đã tải bản lưu', 2));
+    if (data.outcome) {
+      // Lưu giữa màn hình BỊ BẮT / GỤC: xử luôn (nộp phạt / viện phí, về đồn / trạm y tế) rồi lưu lại kết quả.
+      this.respawnAfter(data.outcome);
+      this.save();
+    }
     return true;
   }
 
@@ -838,8 +865,17 @@ export class Game {
       health: this.health,
       equipped: this.equipped,
       services: [...this.services],
+      intro: this.introSent,
+      // Chưa về tới đồn / trạm y tế: ghi lại để lần nạp sau xử nốt (tải lại trang không thoát được phạt).
+      outcome: this.outcome && !this.outcomeDone ? this.outcome : undefined,
+      wanted: { level: this.wanted.level, x: this.wanted.searchX, z: this.wanted.searchZ },
+      heat: this.heat.level,
     });
-    if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
+    if (!ok && this.saveSlot.conflict) {
+      // Tab khác đã ghi bản lưu: tab này thôi lưu (khỏi đè tiến độ bên kia) — báo một lần, và mỗi lần đáng lẽ báo "đã lưu".
+      if (announce || !this.conflictWarned) this.hud.showToast('Game đang mở ở tab khác nên tab này thôi lưu. Tải lại trang để chơi tiếp bản mới nhất', 6);
+      this.conflictWarned = true;
+    } else if (announce) this.hud.showToast(ok ? 'Đã lưu game' : 'Trình duyệt chặn lưu game', 1.6);
     return ok;
   }
 
@@ -1220,14 +1256,19 @@ export class Game {
     this.scheduled.push({ at: this.playTime + seconds, run });
   }
 
-  /** Tin nhắn mở màn Hồi 1: Ngân bị siết nợ, app vay đòi tiền, chú Sáu hẹn gặp. */
-  private scheduleIntro(): void {
-    const say = (at: number, who: Contact, text: string): void => this.schedule(at, () => this.inbox.receive(who, text, this.clock.hour));
-    say(4, 'Ngân', 'Anh Tín ơi, người của app vay lại tới nhà. Họ dán giấy đỏ lên cửa, la lối cả xóm nghe.');
-    say(7, 'Ngân', 'Em sợ lắm. Tiền học kỳ này em chưa đóng, giờ còn thêm khoản này nữa...');
-    say(12, 'Vay Liền 5S', `Khoản vay của Quý khách: ${formatVnd(this.wallet.debt)}. Kỳ 1 cần thanh toán ${formatVnd(FIRST_INSTALLMENT)} trước 23:59 Chủ nhật. Trễ hạn phí 3%/ngày.`);
-    say(20, 'Chú Sáu', 'Tín hả con. Tối nay ghé xe hủ tiếu chú ở đầu chợ. Chú có mối kèo cho con, mà phải biết đường hẻm mới chạy được.');
-    say(30, 'Tổng đài kèo', 'Có kèo giao hàng mới quanh bạn. Mở điện thoại (P) › Kèo để nhận. Giao đúng giờ được boa thêm!');
+  /**
+   * Hẹn gửi tin nhắn mở màn từ tin thứ `from` (nạp bản lưu lưu giữa lúc mở màn: gửi tiếp phần còn thiếu — tin đầu tiên
+   * còn thiếu tới sau 4 s, các tin sau giữ nhịp cũ).
+   */
+  private scheduleIntro(from: number): void {
+    const shift = (INTRO[from]?.at ?? 0) - INTRO[0]!.at;
+    for (let i = from; i < INTRO.length; i++) {
+      const m = INTRO[i]!;
+      this.schedule(m.at - shift, () => {
+        this.inbox.receive(m.from, m.text(this.wallet.debt), this.clock.hour);
+        this.introSent = i + 1;
+      });
+    }
   }
 
   /** Vị trí người chơi + các xe của người chơi: vật cản mà xe NPC phải phanh / lách. */

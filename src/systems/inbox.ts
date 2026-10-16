@@ -2,7 +2,9 @@
  * Hộp tin nhắn trong điện thoại (thuần logic, có unit test): mỗi người một cuộc trò chuyện, đếm tin chưa đọc.
  */
 
-export type Contact = 'Ngân' | 'Chú Sáu' | 'Bà Tư' | 'Phát CEO' | 'Vy' | 'Tổng đài kèo' | 'Vay Liền 5S';
+/** Danh bạ (cũng dùng kiểm tra bản lưu). */
+export const CONTACTS = ['Ngân', 'Chú Sáu', 'Bà Tư', 'Phát CEO', 'Vy', 'Tổng đài kèo', 'Vay Liền 5S'] as const;
+export type Contact = (typeof CONTACTS)[number];
 
 export interface Message {
   from: Contact | 'Tín';
