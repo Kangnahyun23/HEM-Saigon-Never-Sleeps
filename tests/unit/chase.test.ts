@@ -37,6 +37,17 @@ describe('tầm nhìn', () => {
     expect(segmentHitsRect(3, 0, 5, 5, r)).toBe(false);
   });
 
+  it('nhà trải qua nhiều ô lưới vẫn chặn; nhìn hai chiều như nhau; tra lặp lại cho cùng kết quả; ô trống không lỗi', () => {
+    const grid = new SightGrid([rect(5, 5, 65, 65), rect(100, 0, 110, 10)]);
+    for (let i = 0; i < 3; i++) {
+      expect(grid.clear(0, 35, 80, 35)).toBe(false);
+      expect(grid.clear(80, 35, 0, 35)).toBe(false);
+      expect(grid.clear(0, 80, 80, 80)).toBe(true);
+      expect(grid.clear(95, -5, 115, 15)).toBe(false);
+      expect(grid.clear(-500, -500, -480, -470)).toBe(true);
+    }
+  });
+
   it('dọc lòng đường thấy nhau; xuyên qua dãy nhà thì không', () => {
     const road = city.roads.find((r) => r.axis === 'x' && r.kind === 'street')!;
     expect(sight.clear(-60, road.pos, 60, road.pos)).toBe(true);

@@ -36,6 +36,26 @@ describe('máu nhẹ', () => {
     expect(sim.splats).toBe(0);
   });
 
+  it('đánh nhau dưới lòng đường: vết máu nằm trên mặt đường, giọt văng lên vỉa hè (cao hơn) thì không để vết', () => {
+    // Lòng đường (cao 0) ở x < 0,7; vỉa hè (cao 0,15) từ x = 0,7 — giọt bay 0,3–1 m nên rơi cả hai bên.
+    const ground = (x: number): number => (x < 0.7 ? 0 : 0.15);
+    const sim = new BloodSim(7, (x, _z, y) => Math.abs(ground(x) - y) < 0.01);
+    sim.spray(0, 1.2, 0, 1, 0, 80, 0);
+    // Có giọt bay sang phía vỉa hè (để chắc phần "không để vết chỗ cao hơn" thật sự được thử).
+    let overCurb = false;
+    for (let t = 0; t < 2; t += 1 / 60) {
+      for (let i = 0; i < MAX_DROPS; i++) overCurb ||= sim.dropLife[i]! > 0 && sim.px[i]! >= 0.75;
+      sim.step(1 / 60);
+    }
+    expect(overCurb).toBe(true);
+    expect(sim.splats).toBeGreaterThan(0);
+    for (let i = 0; i < MAX_SPLATS; i++) {
+      if (sim.sage[i]! < 0) continue;
+      expect(sim.sy[i]).toBe(0);
+      expect(sim.sx[i]).toBeLessThan(0.7);
+    }
+  });
+
   it('vũng máu loang dần rồi mờ hẳn sau SPLAT_LIFE giây', () => {
     const sim = new BloodSim(1);
     sim.pool(3, 0.2, 4, 0.6);

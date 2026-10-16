@@ -165,10 +165,10 @@ export class FootPoliceSim {
       o.prevYaw = o.yaw;
       o.speed = 0;
       const d = Math.hypot(player.x - o.x, player.z - o.z);
-      const watched = d < PLAYER_SIGHT && this.sight.clear(player.x, player.z, o.x, o.z);
       if (o.dead) {
         o.deadT += dt;
-        if (d > FAR || (o.deadT > CORPSE_TIME && !watched)) this.officers.splice(i, 1);
+        // Chỉ tra tầm nhìn khi xác đã nằm đủ lâu (tra tầm nhìn tốn — mỗi lần duyệt cả dãy ô lưới).
+        if (d > FAR || (o.deadT > CORPSE_TIME && !this.watches(player, o, d))) this.officers.splice(i, 1);
         continue;
       }
       if (o.down > 0 || o.hurt > 0) {
@@ -184,7 +184,7 @@ export class FootPoliceSim {
       if (o.mode === 'return') {
         o.grab = 0;
         o.strike = 0;
-        if (this.stepReturn(o, vehicle, watched, d, dt)) this.officers.splice(i, 1);
+        if (this.stepReturn(o, vehicle, this.watches(player, o, d), d, dt)) this.officers.splice(i, 1);
         continue;
       }
 
@@ -258,6 +258,11 @@ export class FootPoliceSim {
     this.hostile = false;
     this.grabProgress = 0;
     this.seen = false;
+  }
+
+  /** Tín có trông thấy người này không (cách `d` m): xác / người về xe chỉ biến đi khi khuất mắt Tín. */
+  private watches(player: FootPlayer, o: Officer, d: number): boolean {
+    return d < PLAYER_SIGHT && this.sight.clear(player.x, player.z, o.x, o.z);
   }
 
   find(id: number): Officer | null {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ChaseSim, POLICE_CHASE, type ChasePlayer } from '@/ai/chase';
+import { ChaseSim, chaserCapacity, POLICE_CHASE, type ChasePlayer } from '@/ai/chase';
 import { PATROL, patrolWitness, type PatrolAgent } from '@/ai/patrol';
 import { buildTrafficNetwork, lanePoint, type TrafficLane } from '@/ai/trafficNetwork';
 import { containsPoint } from '@/core/rect';
@@ -64,6 +64,33 @@ describe('ô tô công an truy đuổi', () => {
     const dCar = Math.hypot(car.x - near.x, car.z - near.z);
     expect(dCar).toBeGreaterThan(POLICE_CHASE.car!.stopGap - 0.4);
     expect(dCar).toBeLessThan(POLICE_CHASE.car!.catchRange);
+  });
+
+  it('xe bỏ lại (công an bị hạ) không làm đoàn xe vượt sức chứa: bỏ bớt xe bỏ lại ở xa nhất, xe đuổi vẫn đủ', () => {
+    const cap = chaserCapacity(POLICE_CHASE);
+    const player = runner(avenue, avenue.length / 2, 0);
+    const sim = new ChaseSim(net, sight, 5, POLICE_CHASE);
+    // 16 xe bỏ lại xếp hàng sau lưng Tín (cách 5, 8, 11… m): 8 ô tô, 8 xe máy — như sau một trận hạ nhiều công an.
+    const abandoned = [];
+    for (let k = 0; k < 16; k++) {
+      const p = lanePoint(avenue, avenue.length / 2 - 5 - 3 * k, (avenue.minOffset + avenue.maxOffset) / 2);
+      const c = sim.spawnAt(p.x, p.z, 0, k % 2 ? 'bike' : 'car', 0);
+      c.mode = 'parked';
+      c.rider = false;
+      c.leaving = true;
+      abandoned.push(c);
+    }
+    for (let i = 0; i < 30; i++) {
+      sim.update(STEP, player, 5);
+      expect(sim.chasers.filter((c) => c.kind === 'bike').length).toBeLessThanOrEqual(cap.bike);
+      expect(sim.chasers.filter((c) => c.kind === 'car').length).toBeLessThanOrEqual(cap.car);
+    }
+    expect(sim.chasers.filter((c) => !c.leaving)).toHaveLength(POLICE_CHASE.perLevel[5]!);
+    // Bỏ chiếc xa Tín nhất trước, chiếc gần nhất còn nguyên.
+    expect(sim.chasers).toContain(abandoned[0]);
+    expect(sim.chasers).toContain(abandoned[1]);
+    expect(sim.chasers).not.toContain(abandoned[14]);
+    expect(sim.chasers).not.toContain(abandoned[15]);
   });
 
   it('spawnAt: xe tuần tra quay sang đuổi ngay tại chỗ, giữ hướng và tốc độ', () => {

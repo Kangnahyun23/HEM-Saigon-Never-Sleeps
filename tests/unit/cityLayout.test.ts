@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { containsRect, overlaps } from '@/core/rect';
-import { generateCity, type CityLayout } from '@/world/city/layout';
+import { centerX, centerZ, containsRect, overlaps } from '@/core/rect';
+import { generateCity, groundHeight, PAD_HEIGHT, type CityLayout } from '@/world/city/layout';
 
 const city: CityLayout = generateCity();
 
@@ -96,5 +96,17 @@ describe('generateCity', () => {
     expect(z).toBeGreaterThan(city.playArea.z0);
     expect(z).toBeLessThan(city.playArea.z1);
     expect(city.lots.some((l) => x > l.rect.x0 && x < l.rect.x1 && z > l.rect.z0 && z < l.rect.z1)).toBe(false);
+  });
+
+  it('cao độ mặt đất: vỉa hè, trong hẻm, bờ kè cao PAD_HEIGHT; lòng đường bằng 0', () => {
+    const block = city.blocks[0]!;
+    expect(groundHeight(city, centerX(block.rect), centerZ(block.rect))).toBe(PAD_HEIGHT);
+    const hem = city.hems[0]!;
+    expect(groundHeight(city, centerX(hem.rect), centerZ(hem.rect))).toBe(PAD_HEIGHT);
+    const shore = city.river.promenade;
+    expect(groundHeight(city, centerX(shore), centerZ(shore))).toBe(PAD_HEIGHT);
+    const street = city.roads.find((r) => r.kind === 'street')!;
+    const along = street.axis === 'x' ? centerX(street.rect) : centerZ(street.rect);
+    expect(street.axis === 'x' ? groundHeight(city, along, street.pos) : groundHeight(city, street.pos, along)).toBe(0);
   });
 });

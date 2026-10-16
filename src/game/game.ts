@@ -67,7 +67,7 @@ import { CAR_TUNING, CarPhysics } from '@/vehicles/carPhysics';
 import { CarView } from '@/vehicles/carView';
 import { carSpots, type CarSpot } from '@/world/city/carSpots';
 import type { City } from '@/world/city/buildCity';
-import { PAD_HEIGHT } from '@/world/city/layout';
+import { groundHeight, PAD_HEIGHT } from '@/world/city/layout';
 import { locate } from '@/world/city/locate';
 import type { Environment } from '@/world/environment';
 import { RainSound } from '@/audio/rainSound';
@@ -204,6 +204,8 @@ export class Game {
   private grabWarned = false;
   /** Lưới che tầm nhìn (nhà cửa) — xe tuần tra có thấy chỗ Tín gây án không. */
   private readonly sight: SightGrid;
+  /** Cao độ mặt đất tại (x, z) (lòng đường 0, vỉa hè PAD_HEIGHT) — công an đi bộ, vết máu. */
+  private readonly ground: (x: number, z: number) => number;
   private readonly siren = new Siren();
   /** Chấm xe đàn em trên bản đồ nhỏ (dùng lại, không tạo mảng mỗi khung hình). */
   private readonly gangBlips: Blip[] = [];
@@ -253,6 +255,7 @@ export class Game {
     /** Số xe NPC / người đi bộ / hạt mưa theo sức máy (hardware.ts). */
     budget: SceneBudget = SCENE_BUDGETS.high,
   ) {
+    this.ground = (x, z) => groundHeight(city.layout, x, z);
     this.rain = new Rain(budget.rain);
     this.clock = new GameClock(startHour);
     this.weather = new WeatherSim(city.layout.seed + 7, startSky ?? 'clear');
@@ -338,7 +341,7 @@ export class Game {
       this.police.riders = new NearRiderView(chaseRiders, this.npcPool, { style: 'police', cast: POLICE_RIDERS, byGeneration: true });
     }
     // Công an đi bộ: cùng kho với người lái công an (xuống xe thì người lái trả hình, người đi bộ lấy đúng mẫu đó).
-    if (footCap > 0) this.footPoliceView = new FootPoliceView(footCap + MAX_CORPSES, this.npcPool);
+    if (footCap > 0) this.footPoliceView = new FootPoliceView(footCap + MAX_CORPSES, this.npcPool, this.ground);
     const policeShown = (this.police.riders ? chaseRiders : 0) + footCap;
     if (policeShown > 0) this.npcPool.prebuild(POLICE_RIDERS.map((c) => c.id), policeShown);
     if (chaseRiders > 0 && NearRiderView.available(GANG_RIDERS)) {
@@ -355,12 +358,8 @@ export class Game {
     this.pickups = new Pickups(city.pickups);
     this.pickupView = new PickupView(this.pickups);
     scene.add(this.pickupView.mesh);
-    // Vết máu chỉ đọng trên vỉa hè (cùng cao độ với chỗ người đi bộ đứng), rơi xuống lòng đường thì thôi.
-    const blocks = city.layout.blocks;
-    this.blood = new BloodSim(city.layout.seed + 23, (x, z) => {
-      for (const b of blocks) if (containsPoint(b.rect, x, z)) return true;
-      return false;
-    });
+    // Vết máu chỉ đọng trên mặt đất cùng cao độ với chỗ bị đánh (đánh trên vỉa hè, giọt rơi xuống lòng đường thì thôi).
+    this.blood = new BloodSim(city.layout.seed + 23, (x, z, y) => Math.abs(this.ground(x, z) - y) < 0.01);
     scene.add(this.bloodView.root);
 
     // Cuối cùng (mọi thứ đã dựng xong): nạp bản lưu, không có thì chạy tin nhắn mở màn.
@@ -528,7 +527,8 @@ export class Game {
         if (this.bloodOn) {
           // Giọt bắn từ ngực / vai nạn nhân theo hướng đòn; gục (hoặc ngã vì lưỡi sắc) thì chờ ngã xong mới loang vũng.
           const b = bloodFor(this.equipped, r);
-          this.blood.spray(w.x, PAD_HEIGHT + 1.2, w.z, w.x - p.x, w.z - p.z, b.drops, PAD_HEIGHT);
+          const gy = this.ground(w.x, w.z);
+          this.blood.spray(w.x, gy + 1.2, w.z, w.x - p.x, w.z - p.z, b.drops, gy);
           if (b.pool > 0) this.queuePool(w.id, w.generation, r === 'dead' ? 1.5 : 0.7, b.pool);
         }
       }
@@ -547,7 +547,8 @@ export class Game {
         }
         if (this.bloodOn) {
           const b = bloodFor(this.equipped, r);
-          this.blood.spray(o.x, PAD_HEIGHT + 1.2, o.z, o.x - p.x, o.z - p.z, b.drops, PAD_HEIGHT);
+          const gy = this.ground(o.x, o.z);
+          this.blood.spray(o.x, gy + 1.2, o.z, o.x - p.x, o.z - p.z, b.drops, gy);
           if (b.pool > 0) this.queuePool(OFFICER_POOL + o.id, 0, r === 'dead' ? 1.5 : 0.7, b.pool);
         }
       }
@@ -691,7 +692,7 @@ export class Game {
       x = this.tmp.x;
       z = this.tmp.z;
     }
-    this.blood.pool(x, PAD_HEIGHT, z, radius);
+    this.blood.pool(x, this.ground(x, z), z, radius);
   }
 
   /** Máu: giọt bay, vết mờ dần; tới giờ thì loang vũng dưới thân người nằm (hông nhân vật có xương, hoặc ước lượng). */
@@ -720,7 +721,7 @@ export class Game {
         x -= Math.sin(w.yaw) * 0.8;
         z -= Math.cos(w.yaw) * 0.8;
       }
-      this.blood.pool(x, PAD_HEIGHT, z, this.poolRadius[i]!);
+      this.blood.pool(x, this.ground(x, z), z, this.poolRadius[i]!);
     }
   }
 

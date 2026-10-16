@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ChaseSim, POLICE_CHASE } from '@/ai/chase';
 import { FOOT_POLICE, FootPoliceSim, type FootPlayer } from '@/ai/footPolice';
 import { HemMap } from '@/ai/hemNav';
+import type { Obstacle } from '@/ai/traffic';
 import { buildTrafficNetwork, lanePoint } from '@/ai/trafficNetwork';
 import { SightGrid } from '@/systems/heat';
 import { generateCity } from '@/world/city/layout';
@@ -19,10 +20,19 @@ const avenue = net.lanes.filter((l) => l.road.kind === 'avenue').reduce((best, l
 const mid = (avenue.minOffset + avenue.maxOffset) / 2;
 const yaw = Math.atan2(avenue.dx, avenue.dz);
 
+/** Lưới tầm nhìn đếm số lần tra (mỗi lần tra duyệt cả dãy ô lưới dọc đường nhìn). */
+class CountingSight extends SightGrid {
+  calls = 0;
+  override clear(ax: number, az: number, bx: number, bz: number): boolean {
+    this.calls++;
+    return super.clear(ax, az, bx, bz);
+  }
+}
+
 /** Tín đứng giữa đại lộ; `bikes` xe máy công an chạy tới từ phía sau (cách 30 m, 36 m…). */
-function scene(level: number, bikes: number, capacity = 3) {
-  const sim = new ChaseSim(net, sight, 5, POLICE_CHASE, hems);
-  const foot = new FootPoliceSim(sim, sight, hems, capacity, 9);
+function scene(level: number, bikes: number, capacity = 3, grid: SightGrid = sight) {
+  const sim = new ChaseSim(net, grid, 5, POLICE_CHASE, hems);
+  const foot = new FootPoliceSim(sim, grid, hems, capacity, 9);
   const at = avenue.length / 2;
   const p = lanePoint(avenue, at, mid);
   const player: FootPlayer = { x: p.x, z: p.z, speed: 0, onFoot: true, dirX: avenue.dx, dirZ: avenue.dz };
@@ -154,6 +164,39 @@ describe('công an xuống xe đuổi bộ', () => {
     for (let i = 0; i < 60 * 15 && !riding.caught; i++) riding.step();
     expect(riding.foot.officers).toHaveLength(0);
     expect(riding.caught).toBe(true);
+  });
+
+  it('xe dừng cho công an xuống, xe bỏ lại là vật cản cho xe NPC (ô tô hai vòng tròn); xe đang chạy thì không', () => {
+    const s = scene(1, 1);
+    const out: Obstacle[] = [];
+    s.sim.addObstacles(out);
+    expect(out).toHaveLength(0);
+    const o = s.untilOfficer();
+    const bike = s.sim.chasers.find((c) => c.id === o.vehicle)!;
+    out.length = 0;
+    s.sim.addObstacles(out);
+    expect(out).toHaveLength(1);
+    expect(Math.hypot(out[0]!.x - bike.x, out[0]!.z - bike.z)).toBeLessThan(0.01);
+    const car = s.sim.spawnAt(bike.x + 30 * avenue.dx, bike.z + 30 * avenue.dz, yaw, 'car', 0);
+    s.sim.park(car);
+    out.length = 0;
+    s.sim.addObstacles(out);
+    expect(out).toHaveLength(3);
+    for (const ob of out.slice(1)) expect(Math.hypot(ob.x - car.x, ob.z - car.z)).toBeCloseTo(1.1, 5);
+  });
+
+  it('mỗi bước: công an đang đuổi chỉ tra tầm nhìn một lần; xác vừa gục thì không tra', () => {
+    const grid = new CountingSight(lots);
+    const s = scene(1, 1, 1, grid);
+    const o = s.untilOfficer();
+    grid.calls = 0;
+    s.foot.update(STEP, s.player, 1);
+    expect(grid.calls).toBe(1);
+    for (let k = 0; k < 10 && !o.dead; k++) s.foot.hit(o.id, 40, s.player.x, s.player.z, false);
+    expect(o.dead).toBe(true);
+    grid.calls = 0;
+    s.foot.update(STEP, s.player, 1);
+    expect(grid.calls).toBe(0);
   });
 
   it('dọn hết khi Tín bị bắt / gục: người còn sống lên lại xe', () => {
