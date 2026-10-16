@@ -326,7 +326,10 @@ Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; 
 - **Hình / âm thanh**: bảng hiệu tiệm + vũng đèn tiệm không còn biến mất ngoài 130 m (bảng tầm vẽ tách ra
   `world/city/detailDistance.ts`); xe bị thay thì vật liệu bỏ khỏi danh sách phản chiếu (`unreflective`); vệt bảng hiệu trên
   đường ướt chỉ vẽ khi tối VÀ ướt (`addWetNightOnly`, `setWetLevel`); bật bloom giữa lúc chơi thì làm nóng pipeline ngay;
-  tắt tiếng (M) lưu trong cài đặt (`Settings.muted`); bản đồ trong điện thoại vẽ lại 10 lần / giây.
+  tắt tiếng (M) lưu trong cài đặt (`Settings.muted`); bản đồ trong điện thoại vẽ lại 10 lần / giây; người đi bộ vừa
+  vào tầm vẽ có xương không còn dang tay chữ T vài khung đầu (`NearPedestrianView` đặt thẳng trọng số đích như
+  footPoliceView — thấy rõ trong ảnh `daynight-21h.png` vì test dừng game rồi gọi `update(0)`); người đã gục / bị đánh
+  ngã từ trước mới vào tầm thì nằm sẵn ở cuối động tác ngã (trước đây đứng dậy ngã lại trước mắt người chơi).
 - **Rác bộ nhớ mỗi khung**: `lightingAt` / `applyWeather` ghi vào đối tượng có sẵn (`createLighting`,
   `createWeatherLighting`), `GameClock.label()` chỉ dựng chuỗi khi sang phút mới, `Input.isDown` / `wasPressed` bỏ tham số
   rest (tối đa 4 mã phím), `FollowCamera` dùng lại hướng + tia Rapier, `CharacterBody` dùng lại quãng đi / vị trí kế tiếp,
@@ -336,9 +339,10 @@ Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; 
   (`scripts/licenses.mjs`, plugin `hem-licenses` trong vite.config.ts).
 - **`npm run perf` chạy ẩn**: không bật cửa sổ trình duyệt lên màn hình (chủ dự án thấy rất phiền). Headless kiểu mới vẫn
   dùng card đồ hoạ thật (đã kiểm tra: WebGL2 + WebGPU nhận RTX 3060); `PERF_WINDOW=1` mới hiện cửa sổ.
-- Kiểm tra: unit test 330 (thêm `input`, `detailDistance`, `reflections`, `nightGlow`, `bloom`; mở rộng timeOfDay, weather,
-  settings, assets, package, wheel, wallet, inventory, pedestrians, motorbikePhysics, police, footPolice, chase,
-  cityLayout, blood); e2e `backpack` (đầy máu không ăn), `audio` (M lưu vào cài đặt).
+- Kiểm tra: unit test 333 (thêm `input`, `detailDistance`, `reflections`, `nightGlow`, `bloom`, `nearPedestrians`; mở rộng
+  timeOfDay, weather, settings, assets, package, wheel, wallet, inventory, pedestrians, motorbikePhysics, police, footPolice,
+  chase, cityLayout, blood; hình NPC + kho giả dùng chung ở `tests/unit/fakeNpc.ts`); e2e `backpack` (đầy máu không ăn),
+  `audio` (M lưu vào cài đặt). Lượt e2e đầy đủ ở máy chủ dự án, chạy ẩn `--workers=1`: 32/32 xanh trong 31 phút.
 
 ## 4. Kế hoạch còn lại (theo `docs/plan-v0.2.md`)
 
@@ -437,7 +441,11 @@ Chủ dự án nhờ review kỹ toàn dự án rồi "sửa các lỗi nhỏ"; 
   nhánh `r3b-e2e-cong-an-nhanh` (PR #40): gom vòng chờ vào một `evaluate`, test còn ~50 s ở máy.
   Unit test: 309 (thêm `nearRiders.test.ts`, `armIk.test.ts`, `outfits.test.ts`, `hemNav.test.ts`, `footPolice.test.ts`).
 - Việc chủ dự án giao 2026-10-15 (R1–R4 trong plan-v0.2.md) đã làm hết: người lái xe NPC có xương (R1), công an có xương
-  (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4). Tiếp theo: N7.4–N10.
+  (R2), đánh được công an — công an xuống xe đuổi bộ (R3), xe truy đuổi chậm lại trong hẻm (R4).
+- 2026-10-16: PR #40 đã merge; F1 (sửa lỗi nhỏ sau review, mục 3) trên nhánh `f1-sua-loi-nho`. Tiếp theo: PR sửa bản lưu
+  (mục 4, "Việc nhỏ đã dời lại"), rồi N7.4–N10.
+- Chủ dự án KHÔNG muốn cửa sổ trình duyệt bật lên màn hình khi test: e2e (Playwright mặc định headless) và `npm run perf`
+  (headless kiểu mới, vẫn dùng GPU thật) đều chạy ẩn — đừng thêm `headless: false` / `PERF_WINDOW=1` nếu chưa hỏi.
 - Đo hiệu năng: `npm run perf` (bảng fps / khựng / lệnh vẽ / rác). Đo khựng thật thì đừng gói hàm của three.js giữa lúc chạy
   (V8 bỏ tối ưu ⇒ vài khung chậm giả) và đo ngay khi `ready` (khựng sau tải xảy ra trong 1,5 s chờ của Playwright).
 - Máy Windows của chủ dự án: lần đầu chạy e2e phải `npx playwright install chromium`. Chạy nhiều test song song ở máy này,

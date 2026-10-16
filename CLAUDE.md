@@ -65,7 +65,9 @@ Nhân vật có xương: đừng gọi `skeleton.pose()` (lưới lượng tử 
 xương khi kết quả trộn KHÁC khung trước ⇒ tự ghi tay vào xương rồi trả lại sẽ làm track tĩnh (clip nén một khoá) kẹt ở tư
 thế cũ; phải trả trọng số rồi `mixer.update(0)` để mixer tự ghi lại.
 Hình NPC vừa lấy từ kho có mọi trọng số động tác = 0: đặt thẳng trọng số đích lúc lấy (nearRiders, seatedPeople,
-footPoliceView `fresh`) — trộn dần từ 0 thì PropertyMixer trộn cả tư thế gốc chữ T vào (dang tay vài khung hình).
+footPoliceView + nearPedestrians `fresh`) — trộn dần từ 0 thì PropertyMixer trộn cả tư thế gốc chữ T vào (dang tay vài
+khung hình; test e2e đang dừng game gọi `update(0)` thì dang tay mãi); lấy hình cho người đã nằm sẵn thì tua tới cuối
+động tác ngã (`NPC_ONCE` giữ tư thế cuối). Unit test hình NPC dùng hình / kho giả `tests/unit/fakeNpc.ts`.
 Người lái xe máy (Tín và NPC) ngồi theo `RIDER_POSE` (vehicles/bikeModel.ts): ghim hông lên nửa trước yên, ngả người về
 trước, IK hai đoạn (`reachArm`, player/armIk.ts) đặt cổ tay lên tay nắm ghi-đông — động tác 'drive' gốc là tư thế lái ô tô.
 KHÔNG đặt `scene.environment` (IBL cho mọi điểm ảnh tốn 25–40 % thời gian vẽ): vật liệu kim loại / mặt nước cần phản chiếu

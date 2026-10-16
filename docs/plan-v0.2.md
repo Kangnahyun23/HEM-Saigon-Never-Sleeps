@@ -104,7 +104,8 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
 - [x] F1 (2026-10-16, theo yêu cầu chủ dự án sau buổi review toàn dự án): sửa loạt lỗi nhỏ — xe công an bỏ lại là vật cản,
   công an / máu đúng cao độ mặt đất, hết xe đuổi tàng hình; té xe, ăn khi đầy máu, nút trả nợ, vòng chọn đồ, cuộc gọi báo
   sau khi bị bắt; bảng hiệu tiệm biến mất ngoài 130 m, vệt đường ướt vẽ cả đêm khô, bloom bật giữa chừng, tắt tiếng không
-  lưu; rác bộ nhớ mỗi khung; ghi công font OFL; `npm run perf` chạy ẩn. Lỗi bản lưu để PR kế tiếp;
+  lưu, người đi bộ gần camera dang tay chữ T vài khung đầu, xác người đứng dậy ngã lại khi quay lại gần; rác bộ nhớ mỗi
+  khung; ghi công font OFL; `npm run perf` chạy ẩn. Lỗi bản lưu để PR kế tiếp;
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
