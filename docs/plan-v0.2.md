@@ -106,6 +106,9 @@ Tài liệu này chốt hướng v0.2 theo các lựa chọn của chủ dự á
   sau khi bị bắt; bảng hiệu tiệm biến mất ngoài 130 m, vệt đường ướt vẽ cả đêm khô, bloom bật giữa chừng, tắt tiếng không
   lưu, người đi bộ gần camera dang tay chữ T vài khung đầu, xác người đứng dậy ngã lại khi quay lại gần; rác bộ nhớ mỗi
   khung; ghi công font OFL; `npm run perf` chạy ẩn. Lỗi bản lưu để PR kế tiếp;
+- [x] F2 (2026-10-16, tiếp F1): sửa bản lưu — bản lưu hỏng không làm game không vào được (kiểm tra từng trường), lưu giữa
+  lúc mở màn không mất tin nhắn, lưu giữa màn hình BỊ BẮT / GỤC vẫn bị phạt, lưu cả sao truy nã + Độ Nóng, mở hai tab thì
+  tab bị ghi đè thôi lưu (không đè tiến độ tab kia);
 - [ ] N7.4–N10.
 
 ## 1. Rà soát v0.1 — điểm yếu cần sửa
